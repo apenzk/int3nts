@@ -1,5 +1,5 @@
 module aptos_intent::fa_intent {
-    friend aptos_intent::fa_integration_tests;
+    friend aptos_intent::fa_entryflow_tests;
     use std::error;
     use std::signer;
     use aptos_framework::event;

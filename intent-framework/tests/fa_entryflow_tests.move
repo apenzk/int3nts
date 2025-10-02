@@ -2,7 +2,7 @@
 // These complement `fa_tests.move` by validating solver/offerer
 // transactions interact correctly through `PendingIntent` and shared state.
 #[test_only]
-module aptos_intent::fa_integration_tests {
+module aptos_intent::fa_entryflow_tests {
     use std::signer;
 
     use aptos_framework::fungible_asset::Metadata;
