@@ -1,10 +1,12 @@
 module aptos_intent::fa_intent {
-    friend aptos_intent::fa_entryflow_tests;
     use std::error;
     use std::signer;
+    use std::option::{Self, Option};
+    use std::vector;
     use aptos_framework::event;
     use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata, FungibleStore};
     use aptos_intent::intent::{Self, TradeSession, TradeIntent};
+    use aptos_intent::intent_reservation::{Self, IntentReserved};
     use aptos_framework::object::{Self, DeleteRef, ExtendRef, Object};
     use aptos_framework::primary_fungible_store;
 
@@ -13,6 +15,8 @@ module aptos_intent::fa_intent {
 
     /// The token offered does not meet amount requirement.
     const EAMOUNT_NOT_MEET: u64 = 1;
+    /// The solver signature is invalid and cannot be verified.
+    const EINVALID_SIGNATURE: u64 = 2;
 
     /// Manages a fungible asset store for intent execution.
     /// Contains references needed to withdraw assets from the store.
@@ -65,6 +69,7 @@ module aptos_intent::fa_intent {
         desired_amount: u64,
         expiry_time: u64,
         issuer: address,
+        reservation: Option<IntentReserved>,
     ): Object<TradeIntent<FungibleStoreManager, FungibleAssetLimitOrder>> {
         event::emit(LimitOrderEvent {
             source_metadata: fungible_asset::asset_metadata(&source_fungible_asset),
@@ -93,6 +98,7 @@ module aptos_intent::fa_intent {
             expiry_time,
             issuer,
             FungibleAssetRecipientWitness {},
+            reservation,
         )
     }
 
@@ -116,8 +122,31 @@ module aptos_intent::fa_intent {
         desired_metadata: Object<Metadata>,
         desired_amount: u64,
         expiry_time: u64,
-        _issuer: address,
+        solver: address,
+        solver_signature: vector<u8>,
     ) {
+        let issuer = signer::address_of(account);
+        let reservation = if (vector::is_empty(&solver_signature)) {
+            option::none()  // Explicitly unreserved intent
+        } else {
+            let intent_to_sign = intent_reservation::new_intent_to_sign(
+                source_metadata,
+                source_amount,
+                desired_metadata,
+                desired_amount,
+                expiry_time,
+                issuer,
+                solver,
+            );
+            let result = intent_reservation::verify_and_create_reservation(
+                intent_to_sign,
+                solver_signature,
+            );
+            // Fail if signature verification failed instead of silently falling back
+            assert!(option::is_some(&result), error::invalid_argument(EINVALID_SIGNATURE));
+            result
+        };
+
         let fa = primary_fungible_store::withdraw(account, source_metadata, source_amount);
         create_fa_to_fa_intent(
             fa,
@@ -125,6 +154,7 @@ module aptos_intent::fa_intent {
             desired_amount,
             expiry_time,
             signer::address_of(account),
+            reservation,
         );
     }
 
@@ -140,9 +170,12 @@ module aptos_intent::fa_intent {
     /// - `FungibleAsset`: The unlocked fungible asset
     /// - `TradeSession<Args>`: Trading session containing the conditions
     public fun start_fa_offering_session<Args: store + drop>(
+        solver: &signer,
         intent: Object<TradeIntent<FungibleStoreManager, Args>>
     ): (FungibleAsset, TradeSession<Args>) {
         let (store_manager, session) = intent::start_intent_session(intent);
+        let reservation = intent::get_reservation(&session);
+        intent_reservation::ensure_solver_authorized(solver, reservation);
         (destroy_store_manager(store_manager), session)
     }
 
