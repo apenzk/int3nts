@@ -6,29 +6,17 @@ A framework for creating conditional trading intents. This repository contains t
 
 ```
 intent-framework/
-├── README.md                    # Detailed framework documentation
-├── docs/
-│   └── intent-reservation.md    # Reservation system implementation details
-├── sources/                     # Move modules
-│   ├── intent.move             # Core generic intent framework
-│   ├── fa_intent.move          # Fungible asset implementation
-│   └── intent_reservation.move # Reservation system
-├── tests/                       # Test modules
-└── Move.toml                   # Package configuration
+├── README.md                    # This overview documentation
+├── move-intent-framework/      # Move project with comprehensive docs
+├── build/                      # Build artifacts
+└── aptos.nix                   # Nix development environment
 ```
 
 ## Quick Start
 
-For detailed documentation, API reference, and development setup, see the [intent-framework README](intent-framework/README.md).
+For detailed documentation, API reference, and development setup, see the [move-intent-framework documentation](move-intent-framework/README.md).
 
-### Intent Types
 
-The framework supports two types of intents:
-
-- **Unreserved**: Anyone can solve the intent after it's created
-- **Reserved**: Only a specific solver (chosen off-chain) can solve the intent
-
-For detailed flow descriptions and implementation details, see [intent-framework/README.md](intent-framework/README.md) and [intent-framework/docs/intent-reservation.md](intent-framework/docs/intent-reservation.md).
 
 ## License
 
