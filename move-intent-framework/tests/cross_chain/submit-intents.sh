@@ -76,10 +76,12 @@ echo "   - Oracle public key: $ORACLE_PUBLIC_KEY"
 echo "   - Expiry time: $EXPIRY_TIME"
 
 # Submit escrow intent using Alice's account on Chain 1
+# Note: intent_id parameter is required now - using a placeholder
+DUMMY_INTENT_ID="0x0000000000000000000000000000000000000000000000000000000000000001"
 echo "   - Creating escrow intent using Alice's account..."
 aptos move run --profile alice-chain1 --assume-yes \
     --function-id "0x${CHAIN1_ADDRESS}::intent_as_escrow::create_escrow_from_apt" \
-    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}"
+    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}" "address:${DUMMY_INTENT_ID}"
 
 if [ $? -eq 0 ]; then
     echo "     ✅ Alice-chain1 escrow intent created successfully!"
@@ -94,7 +96,7 @@ echo "🎯 Step 3: Creating escrow intent using Bob's account on Chain 1..."
 echo "   - Creating escrow intent using Bob's account..."
 aptos move run --profile bob-chain1 --assume-yes \
     --function-id "0x${CHAIN1_ADDRESS}::intent_as_escrow::create_escrow_from_apt" \
-    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}"
+    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}" "address:${DUMMY_INTENT_ID}"
 
 if [ $? -eq 0 ]; then
     echo "     ✅ Bob-chain1 escrow intent created successfully!"
@@ -109,7 +111,7 @@ echo "🎯 Step 4: Creating escrow intent using Alice's account on Chain 2..."
 echo "   - Creating escrow intent using Alice's account..."
 aptos move run --profile alice-chain2 --assume-yes \
     --function-id "0x${CHAIN2_ADDRESS}::intent_as_escrow::create_escrow_from_apt" \
-    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}"
+    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}" "address:${DUMMY_INTENT_ID}"
 
 if [ $? -eq 0 ]; then
     echo "     ✅ Alice-chain2 escrow intent created successfully!"
@@ -124,7 +126,7 @@ echo "🎯 Step 5: Creating escrow intent using Bob's account on Chain 2..."
 echo "   - Creating escrow intent using Bob's account..."
 aptos move run --profile bob-chain2 --assume-yes \
     --function-id "0x${CHAIN2_ADDRESS}::intent_as_escrow::create_escrow_from_apt" \
-    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}"
+    --args "u64:1000000" "hex:${ORACLE_PUBLIC_KEY}" "u64:${EXPIRY_TIME}" "address:${DUMMY_INTENT_ID}"
 
 if [ $? -eq 0 ]; then
     echo "     ✅ Bob-chain2 escrow intent created successfully!"
@@ -133,18 +135,9 @@ else
 fi
 
 echo ""
-echo "🎉 ESCROW INTENT SUBMISSION COMPLETE!"
+echo "🎉 ESCROW INTENT SUBMISSION SCRIPT ENDED!"
 echo "====================================="
 echo ""
-echo "Both chains now have escrow intents created!"
-echo "   - Chain 1: http://127.0.0.1:8080"
-echo "   - Chain 2: http://127.0.0.1:8082"
-echo ""
-echo "📋 What we accomplished:"
-echo "   ✅ Used existing Alice and Bob accounts (already funded)"
-echo "   ✅ Created escrow intents with APT tokens on both chains"
-echo "   ✅ Used the deployed Intent Framework contracts"
-echo "   ✅ Each escrow intent contains 1,000,000 octas (0.01 APT)"
 echo ""
 echo "🔑 Oracle Public Key used: $ORACLE_PUBLIC_KEY"
 echo "⏰ Expiry Time: $EXPIRY_TIME ($(date -d "@$EXPIRY_TIME"))"

@@ -9,7 +9,7 @@ cd /home/ap/code/movement/intent-framework
 echo ""
 echo "🔗 Step 1: Setting up dual Docker chains with Alice and Bob accounts..."
 echo " ============================================="
-./infra/setup-docker/test-alice-bob-dual-chains.sh
+./infra/setup-docker/setup-dual-chains-and-test-alice-bob.sh
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to setup dual chains with Alice and Bob accounts"
@@ -19,13 +19,19 @@ fi
 echo ""
 echo "⚙️  Step 2: Configuring Aptos CLI for both chains..."
 echo " ============================================="
+
+# Clean up any existing profiles to ensure fresh addresses each run
+echo "🧹 Cleaning up existing CLI profiles..."
+aptos config delete-profile --profile intent-account-chain1 2>/dev/null || true
+aptos config delete-profile --profile intent-account-chain2 2>/dev/null || true
+
 # Configure Chain 1 (port 8080)
 echo "   - Configuring Chain 1 (port 8080)..."
-aptos init --profile intent-account-chain1 --network local --assume-yes
+printf "\n" | aptos init --profile intent-account-chain1 --network local --assume-yes
 
 # Configure Chain 2 (port 8082)
 echo "   - Configuring Chain 2 (port 8082)..."
-aptos init --profile intent-account-chain2 --network custom --rest-url http://127.0.0.1:8082 --faucet-url http://127.0.0.1:8083 --assume-yes
+printf "\n" | aptos init --profile intent-account-chain2 --network custom --rest-url http://127.0.0.1:8082 --faucet-url http://127.0.0.1:8083 --assume-yes
 
 echo ""
 echo "📦 Step 3: Deploying contracts to Chain 1..."

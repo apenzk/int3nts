@@ -9,6 +9,7 @@ module aptos_intent::fa_intent {
     use aptos_intent::intent_reservation::{Self, IntentReserved};
     use aptos_framework::object::{Self, DeleteRef, ExtendRef, Object};
     use aptos_framework::primary_fungible_store;
+    use aptos_framework::coin;
 
     /// The token offered is not the desired fungible asset.
     const ENOT_DESIRED_TOKEN: u64 = 0;
@@ -41,12 +42,15 @@ module aptos_intent::fa_intent {
     /// Event emitted when a fungible asset limit order intent is created.
     /// Contains all the trading details that solvers need to evaluate the opportunity.
     struct LimitOrderEvent has store, drop {
+        intent_address: address,
+        intent_id: address,  // For cross-chain linking: same as intent_address for regular intents, or shared ID for linked cross-chain intents
         source_metadata: Object<Metadata>,
         source_amount: u64,
         desired_metadata: Object<Metadata>,
         desired_amount: u64,
         issuer: address,
         expiry_time: u64,
+        revocable: bool,
     }
 
     /// Creates a fungible asset to fungible asset trading intent.
@@ -70,16 +74,12 @@ module aptos_intent::fa_intent {
         expiry_time: u64,
         issuer: address,
         reservation: Option<IntentReserved>,
+        revocable: bool,
     ): Object<TradeIntent<FungibleStoreManager, FungibleAssetLimitOrder>> {
-        event::emit(LimitOrderEvent {
-            source_metadata: fungible_asset::asset_metadata(&source_fungible_asset),
-            source_amount: fungible_asset::amount(&source_fungible_asset),
-            desired_metadata,
-            desired_amount,
-            expiry_time,
-            issuer,
-        });
-
+        // Capture metadata and amount before depositing
+        let source_metadata = fungible_asset::asset_metadata(&source_fungible_asset);
+        let source_amount = fungible_asset::amount(&source_fungible_asset);
+        
         let coin_store_ref = object::create_object(issuer);
         let extend_ref = object::generate_extend_ref(&coin_store_ref);
         let delete_ref = object::generate_delete_ref(&coin_store_ref);
@@ -92,15 +92,31 @@ module aptos_intent::fa_intent {
             object::object_from_constructor_ref<FungibleStore>(&coin_store_ref),
             source_fungible_asset
         );
-        intent::create_intent<FungibleStoreManager, FungibleAssetLimitOrder, FungibleAssetRecipientWitness>(
+        let intent_obj = intent::create_intent<FungibleStoreManager, FungibleAssetLimitOrder, FungibleAssetRecipientWitness>(
             FungibleStoreManager { extend_ref, delete_ref},
             FungibleAssetLimitOrder { desired_metadata, desired_amount, issuer },
             expiry_time,
             issuer,
             FungibleAssetRecipientWitness {},
             reservation,
-            true, // revocable by default for fungible asset intents
-        )
+            revocable,
+        );
+
+        // Emit event after creating intent so we have the intent address
+        let intent_addr = object::object_address(&intent_obj);
+        event::emit(LimitOrderEvent {
+            intent_address: intent_addr,
+            intent_id: intent_addr,  // For regular intents, intent_id = intent_address
+            source_metadata,
+            source_amount,
+            desired_metadata,
+            desired_amount,
+            expiry_time,
+            issuer,
+            revocable,
+        });
+
+        intent_obj
     }
 
     /// Entry function to create a fungible asset limit order intent.
@@ -156,6 +172,7 @@ module aptos_intent::fa_intent {
             expiry_time,
             signer::address_of(account),
             reservation,
+            true, // revocable by default for regular intents
         );
     }
 
@@ -231,6 +248,74 @@ module aptos_intent::fa_intent {
         intent::finish_intent_session(session, FungibleAssetRecipientWitness {})
     }
 
+    /// CLI-friendly wrapper for creating a cross-chain request intent.
+    /// This creates an intent that requests tokens without locking any tokens.
+    /// The tokens are locked in an escrow on a different chain.
+    ///
+    /// # Arguments
+    /// - `account`: Signer creating the intent
+    /// - `desired_amount`: Amount of desired tokens
+    /// - `expiry_time`: Unix timestamp when intent expires
+    /// - `intent_id`: Intent ID for cross-chain linking
+    /// 
+    /// # Note
+    /// This function is APT-specific for CLI convenience. For general fungible assets,
+    /// use create_fa_to_fa_intent_entry with proper metadata objects.
+    /// This intent is special: it has 0 tokens locked because tokens are in escrow elsewhere.
+    public fun create_cross_chain_request_intent(
+        account: &signer,
+        desired_amount: u64,
+        expiry_time: u64,
+        intent_id: address,
+    ): address {
+        // Get APT metadata
+        let metadata_opt = coin::paired_metadata<aptos_framework::aptos_coin::AptosCoin>();
+        assert!(option::is_some(&metadata_opt), 9001);
+        let metadata = option::destroy_some(metadata_opt);
+        
+        // Withdraw 0 APT (no tokens locked, just requesting for cross-chain swap)
+        let fa: FungibleAsset = primary_fungible_store::withdraw(account, metadata, 0);
+        
+        let intent_obj = create_fa_to_fa_intent(
+            fa,
+            metadata,
+            desired_amount,
+            expiry_time,
+            signer::address_of(account),
+            option::none(), // Unreserved
+            false, // 🔒 CRITICAL: All parts of a cross-chain intent MUST be non-revocable (including the hub request intent)
+                   // Ensures consistent safety guarantees for verifiers across chains
+        );
+        
+        // Override the event to emit with the provided intent_id
+        let intent_addr = object::object_address(&intent_obj);
+        event::emit(LimitOrderEvent {
+            intent_address: intent_addr,
+            intent_id: intent_id,  // Use the provided intent_id for cross-chain linking
+            source_metadata: metadata,
+            source_amount: 0,
+            desired_metadata: metadata,
+            desired_amount,
+            expiry_time,
+            issuer: signer::address_of(account),
+            revocable: false,
+        });
+        
+        intent_addr
+    }
+    
+    /// Entry function wrapper for CLI convenience
+    /// Accepts intent_id for cross-chain linking
+    public entry fun create_cross_chain_request_intent_entry(
+        account: &signer,
+        desired_amount: u64,
+        expiry_time: u64,
+        intent_id: address,
+    ) {
+        // Create cross-chain request intent with reserved intent_id
+        create_cross_chain_request_intent(account, desired_amount, expiry_time, intent_id);
+    }
+
     /// Entry function to revoke a fungible asset intent and return the locked assets.
     /// 
     /// This function allows the intent owner to cancel their intent and get back
@@ -246,6 +331,41 @@ module aptos_intent::fa_intent {
         let store_manager = intent::revoke_intent(account, intent);
         let fa = destroy_store_manager(store_manager);
         primary_fungible_store::deposit(signer::address_of(account), fa);
+    }
+
+    /// Entry function for solver to fulfill a cross-chain request intent.
+    /// 
+    /// This function:
+    /// 1. Starts the session (unlocks 0 tokens since cross-chain intent has tokens locked on different chain)
+    /// 2. Provides the desired tokens to the intent creator
+    /// 3. Finishes the session to complete the intent
+    /// 
+    /// This is used for cross-chain swaps where tokens are locked in escrow on a different chain.
+    /// 
+    /// # Arguments
+    /// - `solver`: Signer fulfilling the intent
+    /// - `intent`: Object reference to the intent to fulfill
+    /// - `payment_amount`: Amount of tokens to provide
+    public entry fun fulfill_cross_chain_request_intent(
+        solver: &signer,
+        intent: Object<TradeIntent<FungibleStoreManager, FungibleAssetLimitOrder>>,
+        payment_amount: u64,
+    ) {
+        // 1. Start the session (this unlocks 0 tokens, but creates the session)
+        let (unlocked_fa, session) = start_fa_offering_session(solver, intent);
+        
+        // Deposit the unlocked tokens (which are 0 for regular intents)
+        primary_fungible_store::deposit(signer::address_of(solver), unlocked_fa);
+        
+        // 2. Withdraw the desired tokens from solver's account
+        let aptos_metadata_opt = coin::paired_metadata<aptos_framework::aptos_coin::AptosCoin>();
+        assert!(option::is_some(&aptos_metadata_opt), 9001);
+        let aptos_metadata = option::destroy_some(aptos_metadata_opt);
+        
+        let payment_fa = primary_fungible_store::withdraw(solver, aptos_metadata, payment_amount);
+        
+        // 3. Finish the session by providing the payment tokens
+        finish_fa_receiving_session(session, payment_fa);
     }
 
 }

@@ -46,7 +46,7 @@ module aptos_intent::fa_intent_with_oracle {
     }
 
     /// Oracle requirement describing the minimum reported value and signer information.
-    struct OracleSignatureRequirement has store, drop {
+    struct OracleSignatureRequirement has store, drop, copy {
         min_reported_value: u64,
         public_key: ed25519::UnvalidatedPublicKey,
     }
@@ -73,6 +73,8 @@ module aptos_intent::fa_intent_with_oracle {
     /// Mirrors the base event while also surfacing the minimum acceptable
     /// oracle value chosen by the issuer for transparency.
     struct OracleLimitOrderEvent has store, drop {
+        intent_address: address, // The escrow intent address (on connected chain)
+        intent_id: address,      // The original intent ID (from hub chain) - links escrow to hub intent
         source_metadata: Object<Metadata>,
         source_amount: u64,
         desired_metadata: Object<Metadata>,
@@ -80,6 +82,7 @@ module aptos_intent::fa_intent_with_oracle {
         issuer: address,
         expiry_time: u64,
         min_reported_value: u64,
+        revocable: bool,
     }
 
     // ============================================================================
@@ -121,6 +124,7 @@ module aptos_intent::fa_intent_with_oracle {
     /// - `issuer`: Address of the intent creator
     /// - `requirement`: Oracle public key and minimum reported value used for verification
     /// - `revocable`: Whether the intent can be revoked by the owner
+    /// - `intent_id`: The original intent ID from hub chain (for escrows) or same as intent_address (for regular intents)
     ///
     /// # Returns
     /// - `Object<TradeIntent<...>>`: Handle to the created oracle-guarded intent
@@ -132,17 +136,12 @@ module aptos_intent::fa_intent_with_oracle {
         issuer: address,
         requirement: OracleSignatureRequirement,
         revocable: bool,
+        intent_id: address,
     ): Object<TradeIntent<FungibleStoreManager, OracleGuardedLimitOrder>> {
-        event::emit(OracleLimitOrderEvent {
-            source_metadata: fungible_asset::asset_metadata(&source_fungible_asset),
-            source_amount: fungible_asset::amount(&source_fungible_asset),
-            desired_metadata,
-            desired_amount,
-            issuer,
-            expiry_time,
-            min_reported_value: requirement.min_reported_value,
-        });
-
+        // Capture metadata and amount before depositing
+        let source_metadata = fungible_asset::asset_metadata(&source_fungible_asset);
+        let source_amount = fungible_asset::amount(&source_fungible_asset);
+        
         let coin_store_ref = object::create_object(issuer);
         let extend_ref = object::generate_extend_ref(&coin_store_ref);
         let delete_ref = object::generate_delete_ref(&coin_store_ref);
@@ -155,7 +154,7 @@ module aptos_intent::fa_intent_with_oracle {
             object::object_from_constructor_ref<FungibleStore>(&coin_store_ref),
             source_fungible_asset
         );
-        intent::create_intent<FungibleStoreManager, OracleGuardedLimitOrder, OracleGuardedWitness>(
+        let intent_obj = intent::create_intent<FungibleStoreManager, OracleGuardedLimitOrder, OracleGuardedWitness>(
             FungibleStoreManager { extend_ref, delete_ref },
             OracleGuardedLimitOrder { desired_metadata, desired_amount, issuer, requirement },
             expiry_time,
@@ -163,7 +162,23 @@ module aptos_intent::fa_intent_with_oracle {
             OracleGuardedWitness {},
             option::none(),
             revocable,
-        )
+        );
+
+        // Emit event after creating intent so we have the intent address
+        event::emit(OracleLimitOrderEvent {
+            intent_address: object::object_address(&intent_obj),
+            intent_id,  // Pass the intent ID from user (hub chain intent ID for escrows)
+            source_metadata,
+            source_amount,
+            desired_metadata,
+            desired_amount,
+            issuer,
+            expiry_time,
+            min_reported_value: requirement.min_reported_value,
+            revocable,
+        });
+
+        intent_obj
     }
 
     /// Starts a fungible asset offering session by unlocking the stored assets.
