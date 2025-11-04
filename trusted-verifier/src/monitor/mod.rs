@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, error};
+use base64::{Engine as _, engine::general_purpose};
 
 use crate::config::Config;
 use crate::validator::CrossChainValidator;
@@ -624,25 +625,58 @@ impl EventMonitor {
     pub async fn validate_and_approve_fulfillment(&self, fulfillment: &FulfillmentEvent) -> Result<()> {
         info!("Generating approval after fulfillment observed: intent_id {}", fulfillment.intent_id);
         
-        // Find matching escrow by intent_id
+        // Check if this is an Aptos escrow by looking in the escrow cache
+        // Aptos escrows are monitored and cached, EVM escrows are not
         let escrow_cache = self.escrow_cache.read().await;
-        let matching_escrow = escrow_cache.iter().find(|escrow| escrow.intent_id == fulfillment.intent_id);
+        let matching_aptos_escrow = escrow_cache.iter().find(|escrow| escrow.intent_id == fulfillment.intent_id);
         
-        let escrow_id = match matching_escrow {
-            Some(escrow) => escrow.escrow_id.clone(),
-            None => {
-                error!("No matching escrow found for fulfillment: {} (intent_id: {})", 
-                       fulfillment.intent_address, fulfillment.intent_id);
-                return Err(anyhow::anyhow!("No matching escrow found for fulfillment"));
+        // Determine if this is an EVM escrow or Aptos escrow
+        // If we found it in Aptos escrow cache, it's Aptos; otherwise, if EVM is configured, it's EVM
+        let is_evm_escrow = matching_aptos_escrow.is_none() && self.config.evm_chain.is_some();
+        
+        // For EVM escrows, escrow_id is the intent_id (vault is keyed by intent_id)
+        // For Aptos escrows, we use the escrow object address from the cache
+        let escrow_id = if is_evm_escrow {
+            // EVM: Use intent_id as escrow_id (vault key)
+            drop(escrow_cache);
+            fulfillment.intent_id.clone()
+        } else {
+            // Aptos: Use escrow object address from cache
+            match matching_aptos_escrow {
+                Some(escrow) => {
+                    let escrow_id = escrow.escrow_id.clone();
+                    drop(escrow_cache);
+                    escrow_id
+                },
+                None => {
+                    drop(escrow_cache);
+                    error!("No matching escrow found for fulfillment: {} (intent_id: {})", 
+                           fulfillment.intent_address, fulfillment.intent_id);
+                    return Err(anyhow::anyhow!("No matching escrow found for fulfillment"));
+                }
             }
         };
-        drop(escrow_cache);
         
-        // Generate approval signature for escrow release
-        // Both conditions are already met:
-        // - Escrow was validated earlier (or will be validated before solver fulfills)
-        // - Fulfillment was validated by Move contract (event only emitted if valid)
-        let approval_sig = self.crypto.create_approval_signature(true)?;
+        let (approval_value, signature_bytes, timestamp) = if is_evm_escrow {
+            // EVM escrow: Create ECDSA signature
+            info!("Creating ECDSA signature for EVM escrow (intent_id: {})", fulfillment.intent_id);
+            
+            // Remove 0x prefix from intent_id if present
+            let intent_id_hex = fulfillment.intent_id.strip_prefix("0x").unwrap_or(&fulfillment.intent_id);
+            
+            // Create ECDSA signature for EVM
+            let ecdsa_sig_bytes = self.crypto.create_evm_approval_signature(intent_id_hex, 1)?;
+            
+            // Convert bytes to base64 for storage (EscrowApproval expects String)
+            let signature_base64 = general_purpose::STANDARD.encode(&ecdsa_sig_bytes);
+            
+            (1u64, signature_base64, chrono::Utc::now().timestamp() as u64)
+        } else {
+            // Aptos escrow: Create Ed25519 signature (existing flow)
+            info!("Creating Ed25519 signature for Aptos escrow (escrow_id: {})", escrow_id);
+            let approval_sig = self.crypto.create_approval_signature(true)?;
+            (approval_sig.approval_value, approval_sig.signature, approval_sig.timestamp)
+        };
         
         // Store approval signature
         {
@@ -652,12 +686,13 @@ impl EventMonitor {
                 approval_cache.push(EscrowApproval {
                     escrow_id: escrow_id.clone(),
                     intent_id: fulfillment.intent_id.clone(),
-                    approval_value: approval_sig.approval_value,
-                    signature: approval_sig.signature.clone(),
-                    timestamp: approval_sig.timestamp,
+                    approval_value,
+                    signature: signature_bytes,
+                    timestamp,
                 });
                 
-                info!("✅ Generated approval signature for escrow: {} (intent_id: {})", 
+                info!("✅ Generated {} approval signature for escrow: {} (intent_id: {})", 
+                      if is_evm_escrow { "ECDSA" } else { "Ed25519" },
                       escrow_id, fulfillment.intent_id);
             } else {
                 info!("Approval signature already exists for escrow: {}", escrow_id);

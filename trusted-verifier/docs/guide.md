@@ -19,13 +19,13 @@ Keys
 Local dual‑chain setup and full flow (setup + submit + verifier + escrow release):
 
 ```
-./testing-infra/e2e-tests/complete-system/run-cross-chain-verifier.sh 1
+./testing-infra/e2e-tests-apt/run-cross-chain-verifier.sh 1
 ```
 
 Verifier only (assumes chains and intents already created):
 
 ```
-./testing-infra/e2e-tests/complete-system/run-cross-chain-verifier.sh 0
+./testing-infra/e2e-tests-apt/run-cross-chain-verifier.sh 0
 ```
 
 What the script does
@@ -62,8 +62,8 @@ Notes
 - The integration script prints initial and final balances for Alice/Bob on both chains
 - For APT, CLI coin balance is not the FA store balance; scripts focus on consistent before/after checks
 - Useful commands:
-  - `curl -s http://127.0.0.1:3000/health`
-  - `curl -s http://127.0.0.1:3000/public-key`
-  - `curl -s http://127.0.0.1:3000/events | jq`
-  - `curl -s http://127.0.0.1:3000/approvals | jq`
+  - `curl -s http://127.0.0.1:3333/health`
+  - `curl -s http://127.0.0.1:3333/public-key`
+  - `curl -s http://127.0.0.1:3333/events | jq`
+  - `curl -s http://127.0.0.1:3333/approvals | jq`
 

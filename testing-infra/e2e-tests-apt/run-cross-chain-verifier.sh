@@ -2,7 +2,7 @@
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../../common.sh"
+source "$SCRIPT_DIR/../common.sh"
 
 # Setup project root and logging
 setup_project_root
@@ -36,7 +36,7 @@ log ""
 if [ "$1" = "1" ]; then
     log "🚀 Step 0: Running setup and submitting intents..."
     log "================================================="
-    ./testing-infra/e2e-tests/move-intent-framework/submit-cross-chain-intent.sh 1
+    ./testing-infra/e2e-tests-apt/submit-cross-chain-intent.sh 1
     
     if [ $? -ne 0 ]; then
         log_and_echo "❌ Failed to setup and submit intents"
@@ -146,7 +146,7 @@ RETRY_COUNT=0
 MAX_RETRIES=90
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -s -f "http://127.0.0.1:3000/health" > /dev/null 2>&1; then
+    if curl -s -f "http://127.0.0.1:3333/health" > /dev/null 2>&1; then
         log "   ✅ Verifier is ready!"
         break
     fi
@@ -177,7 +177,7 @@ log ""
 log "📋 Verifier Status:"
 log "========================================"
 
-VERIFIER_EVENTS=$(curl -s "http://127.0.0.1:3000/events")
+VERIFIER_EVENTS=$(curl -s "http://127.0.0.1:3333/events")
 
 # Check if verifier has intent events
 INTENT_COUNT=$(echo "$VERIFIER_EVENTS" | jq -r '.data.intent_events | length' 2>/dev/null || echo "0")
@@ -295,7 +295,7 @@ log ""
 log "🔍 Verifier is now monitoring:"
 log "   - Chain 1 (hub) at http://127.0.0.1:8080"
 log "   - Chain 2 (connected) at http://127.0.0.1:8082"
-log "   - API available at http://127.0.0.1:3000"
+log "   - API available at http://127.0.0.1:3333"
 log ""
 
 # Start automatic escrow release monitoring
@@ -317,7 +317,7 @@ else
     
     # Function to check for new approvals and release escrows
     check_and_release_escrows() {
-        APPROVALS_RESPONSE=$(curl -s "http://127.0.0.1:3000/approvals")
+        APPROVALS_RESPONSE=$(curl -s "http://127.0.0.1:3333/approvals")
         
         if [ $? -ne 0 ]; then
             return 1
@@ -338,11 +338,32 @@ else
         # Process each approval
         for i in $(seq 0 $((APPROVALS_COUNT - 1))); do
             ESCROW_ID=$(echo "$APPROVALS_RESPONSE" | jq -r ".data[$i].escrow_id" 2>/dev/null)
+            INTENT_ID=$(echo "$APPROVALS_RESPONSE" | jq -r ".data[$i].intent_id" 2>/dev/null)
             APPROVAL_VALUE=$(echo "$APPROVALS_RESPONSE" | jq -r ".data[$i].approval_value" 2>/dev/null)
             SIGNATURE_BASE64=$(echo "$APPROVALS_RESPONSE" | jq -r ".data[$i].signature" 2>/dev/null)
             
             if [ -z "$ESCROW_ID" ] || [ "$ESCROW_ID" = "null" ] || [ "$APPROVAL_VALUE" != "1" ]; then
                 continue
+            fi
+            
+            # If escrow_id looks like intent_id (might be wrong due to EVM config), look up actual escrow object address
+            # Object addresses are 66 chars (0x + 64 hex), intent_ids are variable length
+            # Also check if we can find it in escrow events
+            if [ ${#ESCROW_ID} -lt 64 ] || ! echo "$ESCROW_ID" | grep -qE '^0x[0-9a-fA-F]{64}$'; then
+                log "   ⚠️  escrow_id from approval looks incorrect ($ESCROW_ID), looking up from escrow events..."
+                # Get escrow events and find matching escrow by intent_id
+                EVENTS_RESPONSE=$(curl -s "http://127.0.0.1:3333/events")
+                ACTUAL_ESCROW_ID=$(echo "$EVENTS_RESPONSE" | jq -r ".data.escrow_events[] | select(.intent_id == \"$INTENT_ID\") | .escrow_id" 2>/dev/null | head -1)
+                if [ -n "$ACTUAL_ESCROW_ID" ] && [ "$ACTUAL_ESCROW_ID" != "null" ] && [ "$ACTUAL_ESCROW_ID" != "$ESCROW_ID" ]; then
+                    log "   ✅ Found correct escrow object address: $ACTUAL_ESCROW_ID (was: $ESCROW_ID)"
+                    ESCROW_ID="$ACTUAL_ESCROW_ID"
+                else
+                    log "   ❌ ERROR: Could not find escrow object address for intent_id: $INTENT_ID"
+                    log "   ❌ This indicates no escrow event was found on the connected chain (Chain 2)"
+                    log "   ❌ Expected escrow event with intent_id: $INTENT_ID"
+                    log "   ❌ Cannot continue without valid escrow object address"
+                    exit 1
+                fi
             fi
             
             # Skip if already released
@@ -353,6 +374,16 @@ else
             log ""
             log "   📦 New approval found for escrow: $ESCROW_ID"
             log "   🔓 Releasing escrow..."
+            
+            # Get Bob's balance before release (to verify funds were received)
+            log "   - Getting Bob's balance before release..."
+            BOB_BALANCE_BEFORE=$(aptos account balance --profile bob-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' 2>/dev/null || echo "0")
+            if [ -z "$BOB_BALANCE_BEFORE" ] || [ "$BOB_BALANCE_BEFORE" = "null" ]; then
+                BOB_BALANCE_BEFORE="0"
+            fi
+            # Remove commas from balance if present
+            BOB_BALANCE_BEFORE=$(echo "$BOB_BALANCE_BEFORE" | tr -d ',')
+            log "   - Bob's balance before release: $BOB_BALANCE_BEFORE Octas"
             
             # Decode base64 signature to hex
             SIGNATURE_HEX=$(echo "$SIGNATURE_BASE64" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
@@ -372,19 +403,70 @@ else
             
             TX_EXIT_CODE=$?
             
+            # Wait a bit for transaction to be processed
+            sleep 2
+            
+            # Get Bob's balance after release
+            log "   - Getting Bob's balance after release..."
+            BOB_BALANCE_AFTER=$(aptos account balance --profile bob-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' 2>/dev/null || echo "0")
+            if [ -z "$BOB_BALANCE_AFTER" ] || [ "$BOB_BALANCE_AFTER" = "null" ]; then
+                BOB_BALANCE_AFTER="0"
+            fi
+            # Remove commas from balance if present
+            BOB_BALANCE_AFTER=$(echo "$BOB_BALANCE_AFTER" | tr -d ',')
+            log "   - Bob's balance after release: $BOB_BALANCE_AFTER Octas"
+            
+            # Calculate balance increase
+            BALANCE_INCREASE=$((BOB_BALANCE_AFTER - BOB_BALANCE_BEFORE))
+            
+            # Expected amount: 100000000 tokens (locked in escrow) minus gas fees
+            # We expect at least 99% of the locked amount to be received (allowing for gas)
+            EXPECTED_MIN_AMOUNT=99000000
+            
             if [ $TX_EXIT_CODE -eq 0 ]; then
-                log "   ✅ Escrow released successfully!"
+                log "   ✅ Escrow release transaction succeeded!"
+                
+                # Verify Bob received the funds
+                if [ "$BALANCE_INCREASE" -lt "$EXPECTED_MIN_AMOUNT" ]; then
+                    log_and_echo "   ❌ ERROR: Bob did not receive escrow funds!"
+                    log_and_echo "      Balance increase: $BALANCE_INCREASE Octas"
+                    log_and_echo "      Expected minimum: $EXPECTED_MIN_AMOUNT Octas (100000000 minus gas)"
+                    log_and_echo "      Bob balance before: $BOB_BALANCE_BEFORE Octas"
+                    log_and_echo "      Bob balance after: $BOB_BALANCE_AFTER Octas"
+                    log_and_echo "      Escrow ID: $ESCROW_ID"
+                    exit 1
+                fi
+                
+                log "   ✅ Bob received $BALANCE_INCREASE Octas (expected ~100000000 minus gas)"
                 RELEASED_ESCROWS="${RELEASED_ESCROWS}${RELEASED_ESCROWS:+ }${ESCROW_ID}"
             else
                 # Check the log file for error messages
                 ERROR_MSG=$(tail -100 "$LOG_FILE" | grep -oE "EOBJECT_DOES_NOT_EXIST|OBJECT_DOES_NOT_EXIST" || echo "")
                 if [ -n "$ERROR_MSG" ]; then
-                    # Escrow already released (object doesn't exist), mark as processed
-                    log "   ℹ️  Escrow already released (object no longer exists)"
+                    # Escrow already released (object doesn't exist), verify Bob got the funds
+                    log "   ℹ️  Escrow object no longer exists (may already be released)"
+                    
+                    # Verify Bob received the funds even though the object doesn't exist
+                    if [ "$BALANCE_INCREASE" -lt "$EXPECTED_MIN_AMOUNT" ]; then
+                        log_and_echo "   ❌ ERROR: Escrow object doesn't exist but Bob did NOT receive funds!"
+                        log_and_echo "      Balance increase: $BALANCE_INCREASE Octas"
+                        log_and_echo "      Expected minimum: $EXPECTED_MIN_AMOUNT Octas (100000000 minus gas)"
+                        log_and_echo "      Bob balance before: $BOB_BALANCE_BEFORE Octas"
+                        log_and_echo "      Bob balance after: $BOB_BALANCE_AFTER Octas"
+                        log_and_echo "      Escrow ID: $ESCROW_ID"
+                        log_and_echo "      This indicates the escrow was released but funds went to wrong address or were lost"
+                        exit 1
+                    fi
+                    
+                    log "   ✅ Verified: Bob received $BALANCE_INCREASE Octas (escrow was already released)"
                     RELEASED_ESCROWS="${RELEASED_ESCROWS}${RELEASED_ESCROWS:+ }${ESCROW_ID}"
                 else
                     log "   ❌ Failed to release escrow"
                     log "      See log file for details: $LOG_FILE"
+                    log_and_echo "   ❌ ERROR: Escrow release failed and Bob did not receive funds"
+                    log_and_echo "      Balance increase: $BALANCE_INCREASE Octas"
+                    log_and_echo "      Expected minimum: $EXPECTED_MIN_AMOUNT Octas"
+                    exit 1
                 fi
             fi
         done
@@ -401,7 +483,7 @@ else
     log ""
     log "   ℹ️  The verifier will continue monitoring in the background"
     log "      To manually check and release escrows, use:"
-    log "      curl -s http://127.0.0.1:3000/approvals | jq"
+    log "      curl -s http://127.0.0.1:3333/approvals | jq"
 fi
 
 # Check final balances using common function
@@ -409,9 +491,9 @@ display_balances
 
 log_and_echo ""
 log_and_echo "📝 Useful commands:"
-log_and_echo "   View events:      curl -s http://127.0.0.1:3000/events | jq"
-log_and_echo "   View approvals:  curl -s http://127.0.0.1:3000/approvals | jq"
-log_and_echo "   Health check:     curl -s http://127.0.0.1:3000/health"
+log_and_echo "   View events:      curl -s http://127.0.0.1:3333/events | jq"
+log_and_echo "   View approvals:  curl -s http://127.0.0.1:3333/approvals | jq"
+log_and_echo "   Health check:     curl -s http://127.0.0.1:3333/health"
 log_and_echo "   View logs:        tail -f $VERIFIER_LOG"
 log_and_echo "   Stop verifier:    kill $VERIFIER_PID"
 log_and_echo ""

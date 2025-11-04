@@ -26,7 +26,7 @@ setup_project_root() {
     # Scripts in testing-infra/*/* need to go up 2 levels
     # Scripts in testing-infra/* need to go up 1 level
     if [[ "$script_dir" == *"/testing-infra/"*"/"* ]]; then
-        # Script is in a subdirectory (e.g., testing-infra/e2e-tests/move-intent-framework/)
+        # Script is in a subdirectory (e.g., testing-infra/e2e-tests-apt/)
         PROJECT_ROOT="$( cd "$script_dir/../../.." && pwd )"
     else
         # Script is directly in testing-infra/
@@ -62,14 +62,16 @@ log_and_echo() {
 
 # Helper function to write only to log file (not terminal)
 log() {
+    echo "$@"
     [ -n "$LOG_FILE" ] && echo "$@" >> "$LOG_FILE"
 }
 
 # Fetch and display balances
 # Usage: display_balances
 # Fetches balances from aptos CLI and displays them on both terminal and log file
+# Also shows EVM chain balances if EVM chain is running
 display_balances() {
-    # Fetch balances
+    # Fetch Aptos balances
     local alice1=$(aptos account balance --profile alice-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
     local alice2=$(aptos account balance --profile alice-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
     local bob1=$(aptos account balance --profile bob-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
@@ -82,6 +84,42 @@ display_balances() {
     log_and_echo "   Chain 2 (Connected):"
     log_and_echo "      Alice: $alice2 Octas"
     log_and_echo "      Bob:   $bob2 Octas"
+    
+    # Fetch EVM balances if EVM chain is running
+    if curl -s -X POST http://127.0.0.1:8545 \
+        -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+        >/dev/null 2>&1; then
+        cd "$PROJECT_ROOT/evm-intent-framework"
+        
+        # Use the actual script files instead of inline heredoc (Hardhat doesn't support inline scripts)
+        local alice_evm_output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=0 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+        local alice_evm=$(echo "$alice_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
+        
+        local solver_evm_output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+        local solver_evm=$(echo "$solver_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
+        
+        cd "$PROJECT_ROOT"
+        
+        # Always show Chain 3 (EVM) header when EVM chain is running
+        log_and_echo "   Chain 3 (EVM):"
+        
+        # Format EVM balances (show both ETH and wei)
+        if [ "$alice_evm" != "0" ] && [ -n "$alice_evm" ]; then
+            local alice_eth=$(echo "scale=4; $alice_evm / 1000000000000000000" | bc 2>/dev/null || echo "N/A")
+            log_and_echo "      Alice (Acc 0): ${alice_eth} ETH"
+        else
+            log_and_echo "      Alice (Acc 0): 0 ETH"
+        fi
+        
+        if [ "$solver_evm" != "0" ] && [ -n "$solver_evm" ]; then
+            local bob_eth=$(echo "scale=4; $solver_evm / 1000000000000000000" | bc 2>/dev/null || echo "N/A")
+            log_and_echo "      Bob (Acc 1): ${bob_eth} ETH"
+        else
+            log_and_echo "      Bob (Acc 1): 0 ETH"
+        fi
+    fi
+    
     log_and_echo ""
 }
 
