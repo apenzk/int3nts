@@ -2,51 +2,18 @@
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../common.sh"
+source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../util_apt.sh"
 
 # Setup project root and logging
 setup_project_root
 setup_logging "verifier_and_escrow_release"
 cd "$PROJECT_ROOT"
 
-# Validate parameter
-if [ -z "$1" ] || ([ "$1" != "0" ] && [ "$1" != "1" ]); then
-    log_and_echo "🔍 CROSS-CHAIN VERIFIER - USAGE"
-    log_and_echo "=============================================="
-    log_and_echo ""
-    log_and_echo "Usage: $0 <parameter>"
-    log_and_echo ""
-    log_and_echo "Options:"
-    log_and_echo "  0: Run verifier only (use existing running networks)"
-    log_and_echo "  1: Run full setup + submit intents + verifier"
-    log_and_echo ""
-    log_and_echo "Examples:"
-    log_and_echo "  $0 0    # Run verifier on existing networks"
-    log_and_echo "  $0 1    # Setup, deploy, submit intents, then run verifier"
-    log_and_echo ""
-    exit 1
-fi
-
 echo "🔍 CROSS-CHAIN VERIFIER - STARTING MONITORING"
 log "=============================================="
 log_and_echo "📝 All output logged to: $LOG_FILE"
 log ""
-
-# If option 1, run submit script first (which does setup + submit)
-if [ "$1" = "1" ]; then
-    log "🚀 Step 0: Running setup and submitting intents..."
-    log "================================================="
-    ./testing-infra/e2e-tests-apt/submit-cross-chain-intent.sh 1
-    
-    if [ $? -ne 0 ]; then
-        log_and_echo "❌ Failed to setup and submit intents"
-        exit 1
-    fi
-    
-    log ""
-    log "✅ Setup and intent submission complete!"
-    log ""
-fi
 
 log "This script will:"
 log "  1. Start the trusted verifier service"
@@ -56,26 +23,14 @@ log "  4. Wait for hub intent to be fulfilled by solver"
 log "  5. Provide approval signatures for escrow release after hub fulfillment"
 log ""
 
-# Check if verifier is already running and stop it
-log "   Checking for existing verifiers..."
-# Look for the actual cargo/rust processes, not the script
-if pgrep -f "cargo.*trusted-verifier" > /dev/null || pgrep -f "target/debug/trusted-verifier" > /dev/null; then
-    log "   ⚠️  Found existing verifier processes, stopping them..."
-    pkill -f "cargo.*trusted-verifier"
-    pkill -f "target/debug/trusted-verifier"
-    sleep 2
-else
-    log "   ✅ No existing verifier processes"
-fi
-
 # Get Alice and Bob addresses
 log "   - Getting Alice and Bob account addresses..."
-ALICE_CHAIN1_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["alice-chain1"].account')
-ALICE_CHAIN2_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["alice-chain2"].account')
-BOB_CHAIN1_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["bob-chain1"].account')
-BOB_CHAIN2_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["bob-chain2"].account')
-CHAIN1_DEPLOY_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["intent-account-chain1"].account')
-CHAIN2_DEPLOY_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["intent-account-chain2"].account')
+ALICE_CHAIN1_ADDRESS=$(get_profile_address "alice-chain1")
+ALICE_CHAIN2_ADDRESS=$(get_profile_address "alice-chain2")
+BOB_CHAIN1_ADDRESS=$(get_profile_address "bob-chain1")
+BOB_CHAIN2_ADDRESS=$(get_profile_address "bob-chain2")
+CHAIN1_DEPLOY_ADDRESS=$(get_profile_address "intent-account-chain1")
+CHAIN2_DEPLOY_ADDRESS=$(get_profile_address "intent-account-chain2")
 
 log "   ✅ Alice Chain 1: $ALICE_CHAIN1_ADDRESS"
 log "   ✅ Alice Chain 2: $ALICE_CHAIN2_ADDRESS"
@@ -92,17 +47,8 @@ display_balances
 # Update verifier config with current deployed addresses and account addresses
 log "   - Updating verifier configuration..."
 
-# Use verifier_testing.toml for tests - required, panic if not found
-VERIFIER_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier_testing.toml"
-
-if [ ! -f "$VERIFIER_TESTING_CONFIG" ]; then
-    log_and_echo "❌ ERROR: verifier_testing.toml not found at $VERIFIER_TESTING_CONFIG"
-    log_and_echo "   Tests require trusted-verifier/config/verifier_testing.toml to exist"
-    exit 1
-fi
-
-# Export config path for Rust code to use (absolute path so verifier can find it)
-export VERIFIER_CONFIG_PATH="$VERIFIER_TESTING_CONFIG"
+# Setup verifier config
+setup_verifier_config
 
 # Update hub_chain intent_module_address
 sed -i "/\[hub_chain\]/,/\[connected_chain\]/ s|intent_module_address = .*|intent_module_address = \"0x$CHAIN1_DEPLOY_ADDRESS\"|" "$VERIFIER_TESTING_CONFIG"
@@ -131,46 +77,9 @@ log ""
 log "🚀 Starting Trusted Verifier Service..."
 log "========================================"
 
-# Change to trusted-verifier directory and start the verifier
-pushd trusted-verifier > /dev/null
-VERIFIER_LOG="$LOG_DIR/verifier.log"
-RUST_LOG=info cargo run --bin trusted-verifier > "$VERIFIER_LOG" 2>&1 &
-VERIFIER_PID=$!
-popd > /dev/null
+# Start verifier (function handles stopping existing, starting, health checks, and initial polling wait)
+start_verifier "$LOG_DIR/verifier.log" "info"
 
-log "   ✅ Verifier started with PID: $VERIFIER_PID"
-
-# Wait for verifier to be ready
-log "   - Waiting for verifier to initialize..."
-RETRY_COUNT=0
-MAX_RETRIES=90
-
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -s -f "http://127.0.0.1:3333/health" > /dev/null 2>&1; then
-        log "   ✅ Verifier is ready!"
-        break
-    fi
-    
-    sleep 1
-    RETRY_COUNT=$((RETRY_COUNT + 1))
-    
-    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-        log_and_echo "   ❌ Verifier failed to start after $MAX_RETRIES seconds"
-        log_and_echo "   Verifier log:"
-        if [ -f "$VERIFIER_LOG" ]; then
-            log_and_echo "   $(cat "$VERIFIER_LOG")"
-        else
-            log_and_echo "   Log file not found at: $VERIFIER_LOG"
-        fi
-        exit 1
-    fi
-done
-
-log ""
-log "📊 Monitoring verifier events..."
-log "   Waiting 5 seconds for verifier to poll and collect events..."
-
-sleep 5
 
 # Query verifier events
 log ""
@@ -303,7 +212,7 @@ log "🔓 Starting automatic escrow release monitoring..."
 log "=================================================="
 
 # Get Chain 2 deployer address for function calls
-CHAIN2_DEPLOY_ADDRESS=$(aptos config show-profiles | jq -r '.["Result"]["intent-account-chain2"].account')
+CHAIN2_DEPLOY_ADDRESS=$(get_profile_address "intent-account-chain2")
 if [ -z "$CHAIN2_DEPLOY_ADDRESS" ] || [ "$CHAIN2_DEPLOY_ADDRESS" = "null" ]; then
     log_and_echo "   ❌ ERROR: Could not find Chain 2 deployer address"
     log_and_echo "      Automatic escrow release requires a valid deployer address"
@@ -349,6 +258,7 @@ else
             # If escrow_id looks like intent_id (might be wrong due to EVM config), look up actual escrow object address
             # Object addresses are 66 chars (0x + 64 hex), intent_ids are variable length
             # Also check if we can find it in escrow events
+            EVENTS_RESPONSE=""
             if [ ${#ESCROW_ID} -lt 64 ] || ! echo "$ESCROW_ID" | grep -qE '^0x[0-9a-fA-F]{64}$'; then
                 log "   ⚠️  escrow_id from approval looks incorrect ($ESCROW_ID), looking up from escrow events..."
                 # Get escrow events and find matching escrow by intent_id
@@ -358,10 +268,10 @@ else
                     log "   ✅ Found correct escrow object address: $ACTUAL_ESCROW_ID (was: $ESCROW_ID)"
                     ESCROW_ID="$ACTUAL_ESCROW_ID"
                 else
-                    log "   ❌ ERROR: Could not find escrow object address for intent_id: $INTENT_ID"
-                    log "   ❌ This indicates no escrow event was found on the connected chain (Chain 2)"
-                    log "   ❌ Expected escrow event with intent_id: $INTENT_ID"
-                    log "   ❌ Cannot continue without valid escrow object address"
+                    log_and_echo "   ❌ ERROR: Could not find escrow object address for intent_id: $INTENT_ID"
+                    log_and_echo "   ❌ This indicates no escrow event was found on the connected chain (Chain 2)"
+                    log_and_echo "   ❌ Expected escrow event with intent_id: $INTENT_ID"
+                    log_and_echo "   ❌ Cannot continue without valid escrow object address"
                     exit 1
                 fi
             fi
@@ -393,9 +303,23 @@ else
                 continue
             fi
             
+            # Get desired_amount from escrow events (reuse if already fetched)
+            if [ -z "$EVENTS_RESPONSE" ]; then
+                EVENTS_RESPONSE=$(curl -s "http://127.0.0.1:3333/events")
+            fi
+            DESIRED_AMOUNT=$(echo "$EVENTS_RESPONSE" | jq -r ".data.escrow_events[] | select(.escrow_id == \"$ESCROW_ID\") | .desired_amount" 2>/dev/null | head -1)
+            
+            if [ -z "$DESIRED_AMOUNT" ] || [ "$DESIRED_AMOUNT" = "null" ] || [ "$DESIRED_AMOUNT" = "0" ]; then
+                log "   ❌ ERROR: Could not determine desired_amount for escrow $ESCROW_ID"
+                log "   ❌ Cannot complete escrow without knowing the required payment amount"
+                exit 1
+            fi
+            
+            PAYMENT_AMOUNT="$DESIRED_AMOUNT"
+            log "   - Payment amount: $PAYMENT_AMOUNT (from escrow desired_amount)"
+            
             # Submit escrow release transaction
             # Using bob-chain2 as solver (needs to have APT for payment)
-            PAYMENT_AMOUNT=1  # Placeholder amount
             
             aptos move run --profile bob-chain2 --assume-yes \
                 --function-id "0x${CHAIN2_DEPLOY_ADDRESS}::intent_as_escrow_entry::complete_escrow_from_fa" \

@@ -2,11 +2,11 @@
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../common.sh"
+source "$SCRIPT_DIR/../util.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "stop-evm-chain"
+setup_logging "stop-chain"
 cd "$PROJECT_ROOT"
 
 log "🛑 EVM CHAIN CLEANUP"

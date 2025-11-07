@@ -2,27 +2,34 @@
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../common.sh"
+source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "release-evm-escrow"
+setup_logging "release-escrow-evm"
 cd "$PROJECT_ROOT"
 
 log "🔓 EVM ESCROW RELEASE"
 log "====================="
 log_and_echo "📝 All output logged to: $LOG_FILE"
+log ""
 
-# Check if verifier is running
-if ! curl -s http://127.0.0.1:3333/health >/dev/null 2>&1; then
-    log_and_echo "❌ Verifier is not running. Please start it first:"
-    log_and_echo "   ./testing-infra/e2e-tests-apt/run-cross-chain-verifier.sh"
-    exit 1
-fi
+log "This script will:"
+log "  1. Start the trusted verifier service"
+log "  2. Monitor events on Chain 1 (hub) for intents and fulfillments"
+log "  3. When fulfillment detected, create ECDSA signature"
+log "  4. Release escrow on Chain 3 (EVM)"
+log ""
+
+# Start verifier (function handles stopping existing, starting, health checks, and initial polling wait)
+start_verifier "$LOG_DIR/verifier-evm.log"
+
+log ""
 
 # Get EVM vault address
 cd evm-intent-framework
-VAULT_ADDRESS=$(grep -i "IntentVault deployed to" "$PROJECT_ROOT/tmp/intent-framework-logs/deploy-vault"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
+VAULT_ADDRESS=$(grep -i "IntentVault deployed to" "$PROJECT_ROOT/tmp/intent-framework-logs/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
 cd ..
 
 if [ -z "$VAULT_ADDRESS" ]; then
@@ -75,10 +82,8 @@ check_and_release_escrows() {
         log "   📦 New approval found for escrow: $ESCROW_ID"
         log "   🔓 Releasing escrow on EVM chain..."
         
-        # Convert intent_id to EVM format (remove 0x, pad to 64 chars)
-        INTENT_ID_HEX=$(echo "$INTENT_ID" | sed 's/^0x//')
-        INTENT_ID_HEX=$(printf "%064s" "$INTENT_ID_HEX" | tr ' ' '0')
-        INTENT_ID_EVM="0x$INTENT_ID_HEX"
+        # Convert intent_id to EVM format
+        INTENT_ID_EVM=$(convert_intent_id_to_evm "$INTENT_ID")
         
         # Convert signature from base64 to hex for EVM
         # The verifier provides ECDSA signature as base64-encoded bytes (65 bytes: r || s || v)
@@ -98,7 +103,7 @@ check_and_release_escrows() {
         # Get Bob's balance before claiming (to verify funds were received)
         log "   - Getting Bob's balance before claim..."
         cd evm-intent-framework
-        BOB_BALANCE_BEFORE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+        BOB_BALANCE_BEFORE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
         BOB_BALANCE_BEFORE=$(echo "$BOB_BALANCE_BEFORE_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
         cd ..
         
@@ -140,7 +145,7 @@ check_and_release_escrows() {
         # Get Bob's balance after claiming (to verify funds were received)
         log "   - Getting Bob's balance after claim..."
         cd evm-intent-framework
-        BOB_BALANCE_AFTER_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+        BOB_BALANCE_AFTER_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
         BOB_BALANCE_AFTER=$(echo "$BOB_BALANCE_AFTER_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
         cd ..
         
