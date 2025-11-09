@@ -14,11 +14,13 @@ async function main() {
   const intentId = BigInt(intentIdHex);
   const amount = BigInt(amountWei);
   
-  // Deposit ETH (pass value in transaction)
+  // Use address(0) for ETH
   // Account 0 = deployer, Account 1 = Alice, Account 2 = Bob
-  const tx = await escrow.connect(signers[1]).deposit(intentId, amount, { value: amount });
-  await tx.wait();
-  console.log("Deposited", amount.toString(), "wei (ETH) into escrow");
+  // Expiry is contract-defined
+  const ethAddress = "0x0000000000000000000000000000000000000000";
+  
+  await escrow.connect(signers[1]).createEscrow(intentId, ethAddress, amount, { value: amount });
+  console.log("Escrow created for intent (ETH):", intentId.toString());
 }
 
 main()
