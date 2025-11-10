@@ -2,7 +2,14 @@
 
 Infrastructure setup for running chains for development and testing.
 
-📚 **Full documentation: [docs/testing-infra/](../docs/testing-infra/README.md)**
+## Resources
+
+- [Testing Guide](./testing-guide.md) - Testing and validation commands
+
+## Verifier API
+
+- API: `http://127.0.0.1:3333`
+- Port: 3333 (configurable in `trusted-verifier/config/verifier_testing.toml`)
 
 ## E2E Tests
 
