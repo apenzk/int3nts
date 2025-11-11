@@ -32,14 +32,15 @@ CHAIN2_ADDRESS=$(get_profile_address "intent-account-chain2")
 
 log "   - Deploying to Chain 2 with address: $CHAIN2_ADDRESS"
 cd move-intent-framework
-aptos move publish --dev --profile intent-account-chain2 --named-addresses aptos_intent=$CHAIN2_ADDRESS --assume-yes >> "$LOG_FILE" 2>&1
+aptos move publish --dev --profile intent-account-chain2 --named-addresses mvmt_intent=$CHAIN2_ADDRESS --assume-yes >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
     log "   ✅ Chain 2 deployment successful!"
     log_and_echo "✅ Connected chain contracts deployed"
 else
     log_and_echo "   ❌ Chain 2 deployment failed!"
-    log_and_echo "   See log file for details: $LOG_FILE"
+    log_and_echo "   Log file contents:"
+    cat "$LOG_FILE"
     exit 1
 fi
 

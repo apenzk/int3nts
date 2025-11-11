@@ -5,6 +5,7 @@ A framework for creating conditional trading intents with the following componen
 - [move-intent-framework](docs/move-intent-framework/README.md)
 - [evm-intent-framework](docs/evm-intent-framework/README.md)
 - [trusted verifier](docs/trusted-verifier/README.md)
+- [solver tools](docs/solver/README.md)
 - [testing infrastructure](docs/testing-infra/README.md)
 
 For complete documentation, see [docs/](docs/README.md).
@@ -26,9 +27,10 @@ nix develop
 Run from project root:
 
 ```bash
-nix develop -c bash -c "cd move-intent-framework && aptos move test --dev --named-addresses aptos_intent=0x123"
+nix develop -c bash -c "cd move-intent-framework && aptos move test --dev --named-addresses mvmt_intent=0x123"
 nix develop -c bash -c "cd trusted-verifier && cargo test"
 nix develop -c bash -c "cd evm-intent-framework && npm test"
+nix develop -c bash -c "cd solver && cargo test"
 ```
 
 #### E2E Integration Tests (requires Docker)

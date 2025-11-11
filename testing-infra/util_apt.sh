@@ -330,7 +330,7 @@ extract_apt_metadata() {
     fi
     
     # Run aptos move command to get APT metadata
-    local aptos_cmd="aptos move run --profile $profile --assume-yes --function-id \"0x${chain_address}::test_fa_helper::get_apt_metadata_address\""
+    local aptos_cmd="aptos move run --profile $profile --assume-yes --function-id \"0x${chain_address}::e2e_utils::get_apt_metadata_address\""
     
     if [ -n "$log_file" ]; then
         if ! eval "$aptos_cmd >> \"$log_file\" 2>&1"; then
@@ -359,5 +359,84 @@ extract_apt_metadata() {
     
     # Output metadata address
     echo "$metadata"
+}
+
+# Generate solver signature for IntentToSign
+# Usage: generate_solver_signature <profile> <chain_address> <source_metadata> <desired_metadata> <desired_amount> <expiry_time> <issuer> <solver> <chain_num> [log_file]
+# Example: generate_solver_signature "bob-chain1" "$CHAIN1_ADDRESS" "$SOURCE_FA_METADATA_CHAIN1" "$DESIRED_FA_METADATA_CHAIN1" "100000000" "$EXPIRY_TIME" "$ALICE_CHAIN1_ADDRESS" "$BOB_CHAIN1_ADDRESS" "1"
+# Returns the signature as hex string (with 0x prefix)
+generate_solver_signature() {
+    local profile="$1"
+    local chain_address="$2"
+    local source_metadata="$3"
+    local desired_metadata="$4"
+    local desired_amount="$5"
+    local expiry_time="$6"
+    local issuer="$7"
+    local solver="$8"
+    local chain_num="$9"
+    local log_file="${10:-$LOG_FILE}"
+
+    if [ -z "$profile" ] || [ -z "$chain_address" ] || [ -z "$source_metadata" ] || [ -z "$desired_metadata" ] || [ -z "$desired_amount" ] || [ -z "$expiry_time" ] || [ -z "$issuer" ] || [ -z "$solver" ] || [ -z "$chain_num" ]; then
+        log_and_echo "❌ ERROR: generate_solver_signature() requires all parameters"
+        exit 1
+    fi
+
+    # Ensure PROJECT_ROOT is set
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+
+    # Run the Rust binary to generate signature
+    # Use a temp file to capture output while also logging
+    local temp_output_file
+    temp_output_file=$(mktemp)
+    
+    local exit_code
+    if [ -n "$log_file" ]; then
+        # Run command, log everything, and capture to temp file
+        # Pass HOME environment variable to ensure Aptos config can be found
+        (cd "$PROJECT_ROOT" && env HOME="${HOME}" nix develop -c bash -c "cd solver && cargo run --bin sign_intent -- --profile \"$profile\" --chain-address \"$chain_address\" --source-metadata \"$source_metadata\" --source-amount 0 --desired-metadata \"$desired_metadata\" --desired-amount \"$desired_amount\" --expiry-time \"$expiry_time\" --issuer \"$issuer\" --solver \"$solver\" --chain-num \"$chain_num\" 2>&1" | tee -a "$log_file" > "$temp_output_file")
+        exit_code=${PIPESTATUS[0]}
+    else
+        # Run command and capture to temp file
+        # Pass HOME environment variable to ensure Aptos config can be found
+        (cd "$PROJECT_ROOT" && env HOME="${HOME}" nix develop -c bash -c "cd solver && cargo run --bin sign_intent -- --profile \"$profile\" --chain-address \"$chain_address\" --source-metadata \"$source_metadata\" --source-amount 0 --desired-metadata \"$desired_metadata\" --desired-amount \"$desired_amount\" --expiry-time \"$expiry_time\" --issuer \"$issuer\" --solver \"$solver\" --chain-num \"$chain_num\" 2>&1" > "$temp_output_file")
+        exit_code=$?
+    fi
+    
+    # Read output from temp file
+    local temp_output
+    temp_output=$(cat "$temp_output_file")
+    rm -f "$temp_output_file"
+    
+    # Check if command succeeded
+    if [ $exit_code -ne 0 ]; then
+        log_and_echo "❌ ERROR: Failed to generate solver signature (exit code: $exit_code)"
+        # Print error output to stderr so it's visible in CI
+        echo "Error output:" >&2
+        echo "$temp_output" >&2
+        if [ -n "$log_file" ]; then
+            log "   Error output: $temp_output"
+        fi
+        exit 1
+    fi
+    
+    # Extract signature from output (line that matches hex pattern: 0x + 128 hex chars = 130 total)
+    local signature
+    signature=$(echo "$temp_output" | grep -E '^0x[0-9a-fA-F]{128}$' | tail -1)
+    
+    if [ -z "$signature" ] || [[ ! "$signature" =~ ^0x[0-9a-fA-F]{128}$ ]]; then
+        log_and_echo "❌ ERROR: Failed to extract valid signature from output"
+        # Print output to stderr so it's visible in CI
+        echo "Command output:" >&2
+        echo "$temp_output" >&2
+        if [ -n "$log_file" ]; then
+            log "   Output was: $temp_output"
+        fi
+        exit 1
+    fi
+
+    echo "$signature"
 }
 
