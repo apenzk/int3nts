@@ -70,11 +70,11 @@ SOURCE_FA_METADATA_CHAIN2="$APT_METADATA_CHAIN2"
 # 3. Pass solver address and signature to create_cross_chain_request_intent_entry
 #
 # In production, the solver would sign off-chain using their private key.
-# For e2e tests, we can use the e2e_utils::get_intent_to_sign_hash function to get the hash:
-# 1. Call e2e_utils::get_intent_to_sign_hash() to get the BCS-encoded hash via event
+# For e2e tests, we can use the utils::get_intent_to_sign_hash function to get the hash:
+# 1. Call utils::get_intent_to_sign_hash() to get the BCS-encoded hash via event
 # 2. Sign the hash with Ed25519 using Bob's private key (requires helper script)
 # 3. Convert signature to hex format
-# 4. Use the signature in create_cross_chain_request_intent_entry
+# 4. Use the signature in create_cross_chain_request_intent_entry (solver must be registered in registry)
 #
 log "   - Creating cross-chain request intent on Chain 1..."
 log "     Source FA metadata: $SOURCE_FA_METADATA_CHAIN1"
@@ -110,13 +110,19 @@ if [ -z "$SOLVER_PUBLIC_KEY" ]; then
 fi
 log "     ✅ Solver public key extracted: ${SOLVER_PUBLIC_KEY:0:20}..."
 
+# Register solver in the solver registry before creating intent
+# Use a simple test EVM address (20 bytes: 0x0000...0001)
+EVM_ADDRESS="0x0000000000000000000000000000000000000001"
+log "     Registering solver (Bob) in solver registry..."
+register_solver "bob-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY" "$EVM_ADDRESS" "$LOG_FILE"
 
-# Remove 0x prefix from signature and public key for hex format
+# Remove 0x prefix from signature for hex format
 SOLVER_SIGNATURE_HEX="${SOLVER_SIGNATURE#0x}"
-SOLVER_PUBLIC_KEY_HEX="${SOLVER_PUBLIC_KEY#0x}"
+# Chain 2 (connected Aptos chain) uses chain_id 2
+CONNECTED_CHAIN_ID=2
 aptos move run --profile alice-chain1 --assume-yes \
     --function-id "0x${CHAIN1_ADDRESS}::fa_intent_cross_chain::create_cross_chain_request_intent_entry" \
-    --args "address:${SOURCE_FA_METADATA_CHAIN1}" "address:${DESIRED_FA_METADATA_CHAIN1}" "u64:100000000" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${BOB_CHAIN1_ADDRESS}" "hex:${SOLVER_SIGNATURE_HEX}" "hex:${SOLVER_PUBLIC_KEY_HEX}" >> "$LOG_FILE" 2>&1
+    --args "address:${SOURCE_FA_METADATA_CHAIN1}" "address:${DESIRED_FA_METADATA_CHAIN1}" "u64:100000000" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "u64:${CONNECTED_CHAIN_ID}" "address:${BOB_CHAIN1_ADDRESS}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
     log "     ✅ Intent created on Chain 1!"

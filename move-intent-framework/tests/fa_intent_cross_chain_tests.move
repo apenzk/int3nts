@@ -10,7 +10,8 @@ module mvmt_intent::fa_intent_cross_chain_tests {
     use mvmt_intent::fa_intent_cross_chain;
     use mvmt_intent::fa_intent;
     use mvmt_intent::intent_reservation;
-    use mvmt_intent::utils;
+    use mvmt_intent::solver_registry;
+    use mvmt_intent::test_utils;
 
     // ============================================================================
     // TESTS
@@ -18,6 +19,7 @@ module mvmt_intent::fa_intent_cross_chain_tests {
 
     #[test(
         aptos_framework = @0x1,
+        mvmt_intent = @0x123,
         requestor = @0xcafe,
         solver = @0xdead
     )]
@@ -27,6 +29,7 @@ module mvmt_intent::fa_intent_cross_chain_tests {
     /// This is Step 3 of the cross-chain escrow flow.
     fun test_fulfill_cross_chain_request_intent(
         aptos_framework: &signer,
+        mvmt_intent: &signer,
         requestor: &signer,
         solver: &signer,
     ) {
@@ -34,8 +37,8 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         
         // Create test fungible assets for cross-chain swap
         // Source FA (locked on connected chain) and desired FA (requested on hub chain)
-        let (source_metadata, _) = mvmt_intent::fa_test_utils::register_and_mint_tokens(aptos_framework, requestor, 0);
-        let (desired_metadata, _desired_mint_ref) = mvmt_intent::fa_test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
+        let (source_metadata, _) = mvmt_intent::test_utils::register_and_mint_tokens(aptos_framework, requestor, 0);
+        let (desired_metadata, _desired_mint_ref) = mvmt_intent::test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
         
         // Requestor creates a cross-chain request intent (has 0 tokens locked)
         // Use a dummy intent_id for testing (in real scenarios this links cross-chain intents)
@@ -43,8 +46,16 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         let solver_address = signer::address_of(solver);
         let expiry_time = timestamp::now_seconds() + 3600;
         
+        // Initialize solver registry
+        solver_registry::init_for_test(mvmt_intent);
+        
         // Generate key pair for solver (simulating off-chain key generation)
-        let (solver_secret_key, solver_public_key) = utils::generate_key_pair();
+        let (solver_secret_key, validated_public_key) = ed25519::generate_keys();
+        let solver_public_key_bytes = ed25519::validated_public_key_to_bytes(&validated_public_key);
+        let evm_address = test_utils::create_test_evm_address(0);
+        
+        // Register solver in registry
+        solver_registry::register_solver(solver, solver_public_key_bytes, evm_address);
         
         // Step 1: Create draft intent (off-chain)
         let draft_intent = fa_intent_cross_chain::create_cross_chain_draft_intent(
@@ -63,12 +74,10 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         let solver_signature = ed25519::sign_arbitrary_bytes(&solver_secret_key, intent_hash);
         let solver_signature_bytes = ed25519::signature_to_bytes(&solver_signature);
         
-        // Step 4: Requestor creates intent on-chain with solver's signature
-        // Use verify_and_create_reservation_with_public_key since we have the public key
-        let reservation_result = intent_reservation::verify_and_create_reservation_with_public_key(
+        // Step 4: Requestor creates intent on-chain with solver's signature using registry
+        let reservation_result = intent_reservation::verify_and_create_reservation_from_registry(
             intent_to_sign,
             solver_signature_bytes,
-            &solver_public_key,
         );
         assert!(option::is_some(&reservation_result), 0);
         
@@ -83,6 +92,7 @@ module mvmt_intent::fa_intent_cross_chain_tests {
             reservation_result, // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
+            option::none(), // No connected_chain_id for this test
         );
         let intent_address = object::object_address(&intent_obj);
         
@@ -129,8 +139,8 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         timestamp::set_time_has_started_for_testing(aptos_framework);
         
         // Create test fungible assets for cross-chain swap
-        let (source_metadata, _) = mvmt_intent::fa_test_utils::register_and_mint_tokens(aptos_framework, requestor, 0);
-        let (desired_metadata, _desired_mint_ref) = mvmt_intent::fa_test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
+        let (source_metadata, _) = mvmt_intent::test_utils::register_and_mint_tokens(aptos_framework, requestor, 0);
+        let (desired_metadata, _desired_mint_ref) = mvmt_intent::test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
         
         // Requestor creates a cross-chain request intent wanting 1000 tokens
         let dummy_intent_id = @0x123;
@@ -154,6 +164,7 @@ module mvmt_intent::fa_intent_cross_chain_tests {
             option::some(reservation), // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
+            option::none(), // No connected_chain_id for this test
         );
         let intent_address = object::object_address(&intent_obj);
         

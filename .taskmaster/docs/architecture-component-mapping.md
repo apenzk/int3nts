@@ -173,15 +173,23 @@ graph TB
 - **`move-intent-framework/sources/fa_intent_cross_chain.move`**
   - **Purpose**: Cross-chain request intent creation (tokens locked on different chain)
   - **Key Functions**: `create_cross_chain_request_intent()`, `create_cross_chain_request_intent_entry()`
-  - **Responsibilities**: Creates unreserved intents with `intent_id` for cross-chain linking, zero-amount source (tokens on other chain)
+  - **Responsibilities**: Creates reserved intents with `intent_id` for cross-chain linking, zero-amount source (tokens on other chain). Uses solver registry to verify solver signatures.
 
 #### Intent Reservation System
 
 - **`move-intent-framework/sources/intent_reservation.move`**
   - **Purpose**: Reserved intent system for specific solver addresses
   - **Key Structures**: `IntentReserved`, `IntentToSign`, `IntentDraft`
-  - **Key Functions**: `create_reserved_intent()`, `verify_solver_signature()`
-  - **Responsibilities**: Solver reservation, signature verification for reserved intents
+  - **Key Functions**: `verify_and_create_reservation()`, `verify_and_create_reservation_from_registry()`
+  - **Responsibilities**: Solver reservation, signature verification for reserved intents. Supports both authentication key extraction (old format) and registry-based lookup (new format, cross-chain).
+
+#### Solver Registry
+
+- **`move-intent-framework/sources/solver_registry.move`**
+  - **Purpose**: On-chain registry for solver public keys and EVM addresses
+  - **Key Structures**: `SolverRegistry`, `SolverInfo`
+  - **Key Functions**: `register_solver()`, `update_solver()`, `deregister_solver()`, `get_public_key()`, `get_evm_address()`
+  - **Responsibilities**: Stores solver Ed25519 public keys for signature verification and EVM addresses for cross-chain escrow creation. Required for cross-chain intents and accounts with new authentication key format.
 
 #### Test Utilities
 
@@ -258,10 +266,10 @@ graph TB
 #### Event Monitoring
 
 - **`trusted-verifier/src/monitor/mod.rs`**
-  - **Purpose**: Monitors blockchain events from hub and connected chains
+  - **Purpose**: Monitors blockchain events from hub and connected chains (both Aptos and EVM)
   - **Key Structures**: `IntentEvent`, `EscrowEvent`, `FulfillmentEvent`, `EventMonitor`
-  - **Key Functions**: `poll_events()`, `get_cached_events()`, `match_events_by_intent_id()`
-  - **Responsibilities**: Event polling, caching, cross-chain event correlation
+  - **Key Functions**: `poll_hub_events()`, `poll_connected_events()`, `poll_evm_events()`, `monitor_hub_chain()`, `monitor_connected_chain()`, `monitor_evm_chain()`, `get_cached_events()`
+  - **Responsibilities**: Event polling from multiple chains, caching (both Aptos and EVM escrows), cross-chain event correlation, symmetrical handling of Aptos and EVM escrows
 
 #### Cross-Chain Validation
 
@@ -299,8 +307,15 @@ graph TB
 
 - **`trusted-verifier/src/aptos_client.rs`**
   - **Purpose**: Aptos blockchain client for event querying
-  - **Key Functions**: `get_events()`, `get_limit_order_events()`, `get_escrow_events()`
-  - **Responsibilities**: Blockchain RPC communication, event parsing
+  - **Key Functions**: `get_events()`, `get_limit_order_events()`, `get_escrow_events()`, `get_intent_solver()`, `get_solver_evm_address()`, `call_view_function()`
+  - **Responsibilities**: Blockchain RPC communication, event parsing, solver registry queries
+
+#### EVM Client
+
+- **`trusted-verifier/src/evm_client.rs`**
+  - **Purpose**: EVM blockchain client for event querying via JSON-RPC
+  - **Key Functions**: `get_escrow_initialized_events()`, `get_block_number()`
+  - **Responsibilities**: EVM JSON-RPC communication, event log parsing, EscrowInitialized event extraction
 
 #### Core Library
 
@@ -347,11 +362,13 @@ This section documents comprehensive communication patterns between domains, inc
 **Escrow → Verification** (Event Emission):
 
 - `OracleLimitOrderEvent` (Move): Emitted when escrow is created (`intent_as_escrow.move`)
-  - Contains: Escrow details with `intent_id` for cross-chain correlation
-  - Purpose: Verifier monitors escrow creation and validates safety
+  - Contains: Escrow details with `intent_id` for cross-chain correlation, `reserved_solver`
+  - Purpose: Verifier monitors Aptos escrow creation and validates safety
+  - Monitoring: Verifier actively polls Aptos connected chain and caches escrows when created
 - `EscrowInitialized` (EVM): Emitted when escrow is created (`IntentEscrow.sol`)
-  - Contains: `intentId`, `maker`, `token`, `amount`, `reservedSolver`, `expiry`
-  - Purpose: Verifier monitors EVM escrow creation
+  - Contains: `intentId`, `maker`, `token`, `reservedSolver`
+  - Purpose: Verifier monitors EVM escrow creation and validates safety
+  - Monitoring: Verifier actively polls EVM connected chain and caches escrows when created (symmetrical with Aptos)
 - `EscrowClaimed`, `EscrowCancelled` (EVM): Emitted on escrow completion/cancellation
   - Purpose: Verifier tracks escrow lifecycle
 
@@ -389,9 +406,12 @@ This section documents comprehensive communication patterns between domains, inc
 
 **Verification → Escrow** (Layer 2 → Layer 1):
 
-- **Event Monitoring**: Verifier polls `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM)
-- **Safety Validation**: Verifier calls `validate_escrow_safety()` to ensure `revocable = false` (CRITICAL)
-- **Approval Generation**: Verifier calls `sign_approval()` to generate cryptographic signatures for escrow release
+- **Event Monitoring**: Verifier polls `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM) actively
+- **Symmetrical Monitoring**: Both Aptos and EVM escrows are monitored, cached, and validated when created (not retroactively)
+- **Safety Validation**: Verifier calls `validate_intent_fulfillment()` to ensure `revocable = false` (CRITICAL) and validates solver addresses match
+- **Solver Validation**: For Aptos escrows, compares Aptos addresses directly; for EVM escrows, queries solver registry for EVM address and compares
+- **Chain ID Validation**: Verifier validates that escrow `chain_id` matches intent `connected_chain_id`
+- **Approval Generation**: Verifier calls `create_approval_signature()` (Ed25519) or `create_evm_approval_signature()` (ECDSA) to generate cryptographic signatures for escrow release
 
 ### Data Flow Patterns
 
@@ -476,4 +496,4 @@ This table provides a concise overview of domain boundaries, listing the primary
 | **Intent Management** | `intent.move`, `fa_intent.move`, `fa_intent_with_oracle.move`, `fa_intent_cross_chain.move`, `intent_reservation.move` | Intent lifecycle, creation, validation, event emission |
 | **Escrow** | `intent_as_escrow.move`, `intent_as_escrow_entry.move`, `IntentEscrow.sol` | Asset custody, fund locking, verifier integration |
 | **Settlement** | Functions in `fa_intent.move`, `intent_as_escrow.move`, `IntentEscrow.sol` | Intent fulfillment, escrow completion, asset transfers |
-| **Verification** | `monitor/mod.rs`, `validator/mod.rs`, `crypto/mod.rs`, `api/mod.rs`, `config/mod.rs`, `aptos_client.rs` | Event monitoring, cross-chain validation, approval signatures |
+| **Verification** | `monitor/mod.rs`, `validator/mod.rs`, `crypto/mod.rs`, `api/mod.rs`, `config/mod.rs`, `aptos_client.rs`, `evm_client.rs` | Event monitoring (hub, Aptos, EVM), cross-chain validation, approval signatures (Ed25519 & ECDSA) |

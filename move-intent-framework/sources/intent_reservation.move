@@ -7,6 +7,8 @@ module mvmt_intent::intent_reservation {
     use aptos_framework::fungible_asset::Metadata;
     use aptos_framework::account;
     use aptos_framework::event;
+    
+    use mvmt_intent::solver_registry;
 
     /// The public key used for verification is invalid.
     const EINVALID_PUBLIC_KEY: u64 = 1;
@@ -18,6 +20,8 @@ module mvmt_intent::intent_reservation {
     const EINVALID_AUTH_KEY_FORMAT: u64 = 4;
     /// The public key validation failed.
     const EPUBLIC_KEY_VALIDATION_FAILED: u64 = 5;
+    /// The solver is not registered in the solver registry.
+    const ESOLVER_NOT_REGISTERED: u64 = 6;
 
     #[event]
     struct IntentHashVerificationEvent has store, drop {
@@ -26,7 +30,7 @@ module mvmt_intent::intent_reservation {
 
     /// Struct to hold reservation details for an intent.
     /// This is stored inside the `TradeIntent` if the intent is reserved for a specific solver.
-    struct IntentReserved has store, drop {
+    public struct IntentReserved has store, drop {
         solver: address,
     }
 
@@ -112,8 +116,9 @@ module mvmt_intent::intent_reservation {
         }
     }
 
-    /// Verifies a solver's signature against the intent data and creates a reservation.
-    /// This version accepts the public key directly for testing purposes.
+    #[test_only]
+    // Test-only helper function for unit testing signature verification logic.
+    // For production code, use verify_and_create_reservation_from_registry instead.
     public fun verify_and_create_reservation_with_public_key(
         intent_to_sign: IntentToSign,
         solver_signature: vector<u8>,
@@ -126,6 +131,41 @@ module mvmt_intent::intent_reservation {
             option::some(IntentReserved { solver: intent_to_sign.solver })
         } else {
             option::none()
+        }
+    }
+
+    /// Verifies a solver's signature using the solver registry.
+    /// This version looks up the solver's public key from the registry.
+    /// 
+    /// # Aborts
+    /// - `ESOLVER_NOT_REGISTERED`: Solver is not registered in the solver registry
+    /// - `EINVALID_SIGNATURE`: Signature verification failed
+    public fun verify_and_create_reservation_from_registry(
+        intent_to_sign: IntentToSign,
+        solver_signature: vector<u8>,
+    ): Option<IntentReserved> {
+        let solver = intent_to_sign.solver;
+        
+        // Check if solver is registered
+        assert!(solver_registry::is_registered(solver), std::error::invalid_argument(ESOLVER_NOT_REGISTERED));
+        
+        // Get public key from registry
+        let public_key_opt = solver_registry::get_public_key_unvalidated(solver);
+        assert!(option::is_some(&public_key_opt), std::error::invalid_argument(ESOLVER_NOT_REGISTERED));
+        
+        let solver_public_key = option::extract(&mut public_key_opt);
+        let signature = ed25519::new_signature_from_bytes(solver_signature);
+        let message = hash_intent(intent_to_sign);
+        
+        // Emit event with hash being verified (useful for debugging signature mismatches)
+        event::emit(IntentHashVerificationEvent {
+            hash: message,
+        });
+        
+        if (ed25519::signature_verify_strict(&signature, &solver_public_key, message)) {
+            option::some(IntentReserved { solver })
+        } else {
+            abort std::error::invalid_argument(EINVALID_SIGNATURE)
         }
     }
 
@@ -196,5 +236,10 @@ module mvmt_intent::intent_reservation {
     /// This is a simple constructor that doesn't require signature verification.
     public fun new_reservation(solver: address): IntentReserved {
         IntentReserved { solver }
+    }
+    
+    /// Get the solver address from an IntentReserved struct.
+    public fun solver(reservation: &IntentReserved): address {
+        reservation.solver
     }
 }

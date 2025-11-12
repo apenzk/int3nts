@@ -13,7 +13,7 @@ module mvmt_intent::fa_entryflow_tests {
 
     use mvmt_intent::fa_intent::{Self, FungibleAssetLimitOrder, FungibleStoreManager};
     use mvmt_intent::intent;
-    use mvmt_intent::fa_test_utils::register_and_mint_tokens;
+    use mvmt_intent::test_utils;
 
     #[test_only]
     struct PendingIntent has key {
@@ -48,6 +48,7 @@ module mvmt_intent::fa_entryflow_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
+            option::none(), // No connected_chain_id for regular intents
         );
 
         move_to(offerer, PendingIntent { intent });
@@ -92,8 +93,8 @@ module mvmt_intent::fa_entryflow_tests {
         timestamp::set_time_has_started_for_testing(aptos_framework);
 
         // Each actor starts with 100 tokens of their respective asset.
-        let (offered_fa, _) = register_and_mint_tokens(aptos_framework, offerer, 100);
-        let (desired_fa, _) = register_and_mint_tokens(aptos_framework, solver, 100);
+        let (offered_fa, _) = test_utils::register_and_mint_tokens(aptos_framework, offerer, 100);
+        let (desired_fa, _) = test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
 
         let expiry_time = timestamp::now_seconds() + 3600;
 
@@ -126,8 +127,8 @@ module mvmt_intent::fa_entryflow_tests {
     ) acquires PendingIntent {
         timestamp::set_time_has_started_for_testing(aptos_framework);
 
-        let (offered_fa, _) = register_and_mint_tokens(aptos_framework, offerer, 100);
-        let (desired_fa, _) = register_and_mint_tokens(aptos_framework, solver, 100);
+        let (offered_fa, _) = test_utils::register_and_mint_tokens(aptos_framework, offerer, 100);
+        let (desired_fa, _) = test_utils::register_and_mint_tokens(aptos_framework, solver, 100);
 
         let expiry_time = timestamp::now_seconds() + 3600;
 
