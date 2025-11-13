@@ -60,8 +60,11 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         // Step 1: Create draft intent (off-chain)
         let draft_intent = fa_intent_cross_chain::create_cross_chain_draft_intent(
             source_metadata,
+            100, // offered_amount
+            2, // offered_chain_id (chain where escrow is - connected chain)
             desired_metadata,
-            100,
+            100, // desired_amount
+            1, // desired_chain_id (hub chain)
             expiry_time,
             signer::address_of(requestor),
         );
@@ -85,14 +88,15 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         let fa: FungibleAsset = primary_fungible_store::withdraw(requestor, source_metadata, 0);
         let intent_obj = fa_intent::create_fa_to_fa_intent(
             fa,
+            1, // offered_chain_id
             desired_metadata,
             100,
+            1, // desired_chain_id
             expiry_time,
             signer::address_of(requestor),
             reservation_result, // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
-            option::none(), // No connected_chain_id for this test
         );
         let intent_address = object::object_address(&intent_obj);
         
@@ -157,14 +161,15 @@ module mvmt_intent::fa_intent_cross_chain_tests {
         let fa: FungibleAsset = primary_fungible_store::withdraw(requestor, source_metadata, 0);
         let intent_obj = fa_intent::create_fa_to_fa_intent(
             fa,
+            1, // offered_chain_id
             desired_metadata,
             1000,
+            1, // desired_chain_id
             expiry_time,
             signer::address_of(requestor),
             option::some(reservation), // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
-            option::none(), // No connected_chain_id for this test
         );
         let intent_address = object::object_address(&intent_obj);
         

@@ -32,14 +32,15 @@ module mvmt_intent::fa_tests {
         // Creator creates intent to trade 50 offered tokens for 25 desired tokens
         let intent = fa_intent::create_fa_to_fa_intent(
             primary_fungible_store::withdraw(offerer, offered_fa_type, 50),
+            1, // offered_chain_id
             desired_fa_type,
             25,
+            1, // desired_chain_id
             timestamp::now_seconds() + 3600,
             signer::address_of(offerer),
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none(), // No connected_chain_id for regular intents
         );
         // Verify intent was created
         assert!(object::object_address(&intent) != @0x0);
@@ -81,27 +82,29 @@ module mvmt_intent::fa_tests {
         // Offerer1 deposits 30 of FA1 requesting 15 of FA2.
         let intent1 = fa_intent::create_fa_to_fa_intent(
             primary_fungible_store::withdraw(offerer1, fa1_metadata, 30),
+            1, // offered_chain_id
             fa2_metadata,
             15,
+            1, // desired_chain_id
             timestamp::now_seconds() + 3600,
             signer::address_of(offerer1),
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none(), // No connected_chain_id for regular intents
         );
 
         // Offerer2 deposits 15 of FA2 requesting 30 of FA1.
         let intent2 = fa_intent::create_fa_to_fa_intent(
             primary_fungible_store::withdraw(offerer2, fa2_metadata, 15),
+            1, // offered_chain_id
             fa1_metadata,
             30,
+            1, // desired_chain_id
             timestamp::now_seconds() + 3600,
             signer::address_of(offerer2),
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none(), // No connected_chain_id for regular intents
         );
 
         // Solver unlocks both intents to gather the offered assets.
@@ -146,14 +149,15 @@ module mvmt_intent::fa_tests {
         // Creator creates intent to trade 50 offered tokens for 25 desired tokens
         let intent = fa_intent::create_fa_to_fa_intent(
             primary_fungible_store::withdraw(offerer, offered_fa_type, 50),
+            1, // offered_chain_id
             desired_fa_type,
             25,
+            1, // desired_chain_id
             timestamp::now_seconds() + 3600,
             signer::address_of(offerer),
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none(), // No connected_chain_id for regular intents
         );
         // Check balance before revocation
         assert!(primary_fungible_store::balance(signer::address_of(offerer), offered_fa_type) == 50);
@@ -184,14 +188,15 @@ module mvmt_intent::fa_tests {
         // Creator creates intent to trade 50 offered tokens for 25 desired tokens
         let intent = fa_intent::create_fa_to_fa_intent(
             primary_fungible_store::withdraw(offerer, offered_fa_type, 50),
+            1, // offered_chain_id
             desired_fa_type,
             25, // Wants 25 but solver only has 5
+            1, // desired_chain_id
             timestamp::now_seconds() + 3600,
             signer::address_of(offerer),
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none(), // No connected_chain_id for regular intents
         );
         
         // Solver starts the session and unlocks the 50 offered tokens

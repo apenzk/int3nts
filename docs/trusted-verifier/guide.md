@@ -36,7 +36,7 @@ This script sets up chains, deploys contracts, submits intents, runs integration
 ## Event linkage
 
 - **Hub chain**
-  - `LimitOrderEvent` — intent creation (issuer, amounts, metadata, expiry, revocable, solver, connected_chain_id)
+  - `LimitOrderEvent` — intent creation (issuer, amounts, metadata, expiry, revocable, solver, offered_chain_id, desired_chain_id)
   - `LimitOrderFulfillmentEvent` — fulfillment (intent_id, solver, provided amount/metadata)
 - **Connected Aptos chain**
   - `OracleLimitOrderEvent` (escrow) — escrow deposit with verifier public key and desired amounts
@@ -44,7 +44,8 @@ This script sets up chains, deploys contracts, submits intents, runs integration
   - `EscrowInitialized` — escrow creation (intentId, maker, token, reservedSolver)
 - **Linking**
   - Shared `intent_id` across chains links hub intents to escrows on connected chains
-  - Verifier validates `chain_id` matches between intent `connected_chain_id` and escrow `chain_id`
+  - Verifier validates `chain_id` matches between intent `offered_chain_id` and escrow `chain_id`
+  - Each `EscrowEvent` includes a `chain_type` field (Move, Evm, Solana) set by the verifier based on which monitor discovered the event. This is trusted because it comes from the verifier's configuration, not from untrusted event data.
 
 ## Cross‑Chain Flow
 

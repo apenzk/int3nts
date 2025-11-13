@@ -97,14 +97,15 @@ async fn test_evm_vs_aptos_escrow_differentiation() {
             escrow_id: "0xaptos_escrow".to_string(),
             intent_id: "0xmvmt_intent".to_string(),
             issuer: "0xissuer".to_string(),
-            source_metadata: "{}".to_string(),
-            source_amount: 1000,
+            offered_metadata: "{}".to_string(),
+            offered_amount: 1000,
             desired_metadata: "{}".to_string(),
             desired_amount: 1,
             expiry_time: 9999999999,
             revocable: false,
             reserved_solver: None,
             chain_id: 2,
+            chain_type: trusted_verifier::ChainType::Move,
             timestamp: 1,
         });
     }

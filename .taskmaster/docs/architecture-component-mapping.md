@@ -267,7 +267,7 @@ graph TB
 
 - **`trusted-verifier/src/monitor/mod.rs`**
   - **Purpose**: Monitors blockchain events from hub and connected chains (both Aptos and EVM)
-  - **Key Structures**: `IntentEvent`, `EscrowEvent`, `FulfillmentEvent`, `EventMonitor`
+  - **Key Structures**: `RequestIntentEvent`, `EscrowEvent`, `FulfillmentEvent`, `EventMonitor`
   - **Key Functions**: `poll_hub_events()`, `poll_connected_events()`, `poll_evm_events()`, `monitor_hub_chain()`, `monitor_connected_chain()`, `monitor_evm_chain()`, `get_cached_events()`
   - **Responsibilities**: Event polling from multiple chains, caching (both Aptos and EVM escrows), cross-chain event correlation, symmetrical handling of Aptos and EVM escrows
 
@@ -350,7 +350,7 @@ This section documents comprehensive communication patterns between domains, inc
 **Intent Management → Verification** (Event Emission):
 
 - `LimitOrderEvent`: Emitted when intent is created (`fa_intent.move`)
-  - Contains: `intent_id`, `source_metadata`, `source_amount`, `desired_metadata`, `desired_amount`, `expiry_time`, `revocable`
+  - Contains: `intent_id`, `offered_metadata`, `offered_amount`, `desired_metadata`, `desired_amount`, `expiry_time`, `revocable`
   - Purpose: Verifier monitors for new intents requiring validation
 - `LimitOrderFulfillmentEvent`: Emitted when intent is fulfilled (`fa_intent.move`)
   - Contains: `intent_id`, `solver`, `provided_metadata`, `provided_amount`, `timestamp`
@@ -409,8 +409,9 @@ This section documents comprehensive communication patterns between domains, inc
 - **Event Monitoring**: Verifier polls `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM) actively
 - **Symmetrical Monitoring**: Both Aptos and EVM escrows are monitored, cached, and validated when created (not retroactively)
 - **Safety Validation**: Verifier calls `validate_intent_fulfillment()` to ensure `revocable = false` (CRITICAL) and validates solver addresses match
-- **Solver Validation**: For Aptos escrows, compares Aptos addresses directly; for EVM escrows, queries solver registry for EVM address and compares
-- **Chain ID Validation**: Verifier validates that escrow `chain_id` matches intent `connected_chain_id`
+- **Chain Type Detection**: Each `EscrowEvent` includes a `chain_type` field (Move, Evm, Solana) set by the verifier based on which monitor discovered the event. This is trusted because it comes from the verifier's configuration, not from untrusted event data.
+- **Solver Validation**: For Move escrows, compares Aptos addresses directly; for EVM escrows, queries solver registry for EVM address and compares. Chain type is determined from `EscrowEvent.chain_type` enum field.
+- **Chain ID Validation**: Verifier validates that escrow `chain_id` matches intent `offered_chain_id`
 - **Approval Generation**: Verifier calls `create_aptos_approval_signature(intent_id)` (Ed25519) or `create_evm_approval_signature(intent_id)` (ECDSA) to generate cryptographic signatures for escrow release. The signature itself is the approval - verifier signs the `intent_id`.
 
 ### Data Flow Patterns
