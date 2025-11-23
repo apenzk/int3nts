@@ -3,7 +3,7 @@
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
-source "$SCRIPT_DIR/../util_apt.sh"
+source "$SCRIPT_DIR/../util_mvm.sh"
 
 # Setup project root and logging
 setup_project_root
@@ -40,7 +40,9 @@ if [ $? -eq 0 ]; then
 else
     log_and_echo "   ❌ Chain 1 deployment failed!"
     log_and_echo "   Log file contents:"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     exit 1
 fi
 

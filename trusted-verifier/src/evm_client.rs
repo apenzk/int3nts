@@ -4,10 +4,10 @@
 //! via their JSON-RPC API. It handles event polling and transaction verification.
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use reqwest::Client;
-use sha3::{Keccak256, Digest};
+use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
+use std::time::Duration;
 
 // ============================================================================
 // API RESPONSE STRUCTURES
@@ -78,6 +78,38 @@ pub struct EscrowInitializedEvent {
     pub transaction_hash: String,
 }
 
+/// EVM transaction details from JSON-RPC
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EvmTransaction {
+    /// Transaction hash
+    #[serde(rename = "hash")]
+    pub hash: String,
+    /// Block number (hex string)
+    #[serde(rename = "blockNumber")]
+    pub block_number: Option<String>,
+    /// Transaction index in block (hex string)
+    #[serde(rename = "transactionIndex")]
+    pub transaction_index: Option<String>,
+    /// From address (sender)
+    #[serde(rename = "from")]
+    pub from: String,
+    /// To address (recipient/contract)
+    #[serde(rename = "to")]
+    pub to: Option<String>,
+    /// Transaction data (calldata)
+    pub input: String,
+    /// Transaction value (in wei, hex string)
+    pub value: String,
+    /// Gas used (hex string)
+    #[serde(rename = "gas")]
+    pub gas: String,
+    /// Gas price (hex string)
+    #[serde(rename = "gasPrice")]
+    pub gas_price: String,
+    /// Transaction status (1 = success, 0 = failure, null = pending)
+    pub status: Option<String>,
+}
+
 // ============================================================================
 // EVM CLIENT IMPLEMENTATION
 // ============================================================================
@@ -146,7 +178,7 @@ impl EvmClient {
         hasher.update(signature_string.as_bytes());
         let hash = hasher.finalize();
         let event_signature = format!("0x{}", hex::encode(hash));
-        
+
         // Build filter: topics[0] = event signature, address = escrow contract
         let from_block_str = from_block
             .map(|n| format!("0x{:x}", n))
@@ -178,7 +210,12 @@ impl EvmClient {
             .with_context(|| format!("Failed to send eth_getLogs request to {}", self.base_url))?
             .json()
             .await
-            .with_context(|| format!("Failed to parse eth_getLogs response from {}", self.base_url))?;
+            .with_context(|| {
+                format!(
+                    "Failed to parse eth_getLogs response from {}",
+                    self.base_url
+                )
+            })?;
 
         if let Some(error) = response.error {
             return Err(anyhow::anyhow!(
@@ -231,6 +268,134 @@ impl EvmClient {
         Ok(events)
     }
 
+    /// Queries transaction details by hash using eth_getTransactionByHash
+    ///
+    /// # Arguments
+    ///
+    /// * `hash` - Transaction hash (with or without 0x prefix)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(EvmTransaction)` - Transaction information
+    /// * `Err(anyhow::Error)` - Failed to query transaction
+    pub async fn get_transaction(&self, hash: &str) -> Result<EvmTransaction> {
+        // Normalize hash (ensure 0x prefix)
+        let hash = if hash.starts_with("0x") {
+            hash.to_string()
+        } else {
+            format!("0x{}", hash)
+        };
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "eth_getTransactionByHash".to_string(),
+            params: vec![serde_json::json!(hash)],
+            id: 1,
+        };
+
+        let response: JsonRpcResponse<EvmTransaction> = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to send eth_getTransactionByHash request to {}",
+                    self.base_url
+                )
+            })?
+            .json()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to parse eth_getTransactionByHash response from {}",
+                    self.base_url
+                )
+            })?;
+
+        if let Some(error) = response.error {
+            return Err(anyhow::anyhow!(
+                "JSON-RPC error from {}: {} (code: {})",
+                self.base_url,
+                error.message,
+                error.code
+            ));
+        }
+
+        match response.result {
+            Some(tx) => Ok(tx),
+            None => Err(anyhow::anyhow!("Transaction not found: {}", hash)),
+        }
+    }
+
+    /// Queries transaction receipt by hash using eth_getTransactionReceipt
+    ///
+    /// The receipt contains the transaction status, which is not available
+    /// in eth_getTransactionByHash.
+    ///
+    /// # Arguments
+    ///
+    /// * `hash` - Transaction hash (with or without 0x prefix)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Option<String>)` - Transaction status ("0x1" = success, "0x0" = failure, None = pending/not found)
+    /// * `Err(anyhow::Error)` - Failed to query transaction receipt
+    pub async fn get_transaction_receipt_status(&self, hash: &str) -> Result<Option<String>> {
+        // Normalize hash (ensure 0x prefix)
+        let hash = if hash.starts_with("0x") {
+            hash.to_string()
+        } else {
+            format!("0x{}", hash)
+        };
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "eth_getTransactionReceipt".to_string(),
+            params: vec![serde_json::json!(hash)],
+            id: 1,
+        };
+
+        #[derive(Debug, Deserialize)]
+        struct TransactionReceipt {
+            /// Transaction status (1 = success, 0 = failure)
+            status: Option<String>,
+        }
+
+        let response: JsonRpcResponse<TransactionReceipt> = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to send eth_getTransactionReceipt request to {}",
+                    self.base_url
+                )
+            })?
+            .json()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to parse eth_getTransactionReceipt response from {}",
+                    self.base_url
+                )
+            })?;
+
+        if let Some(error) = response.error {
+            return Err(anyhow::anyhow!(
+                "JSON-RPC error from {}: {} (code: {})",
+                self.base_url,
+                error.message,
+                error.code
+            ));
+        }
+
+        Ok(response.result.and_then(|receipt| receipt.status))
+    }
+
     /// Gets the current block number
     ///
     /// # Returns
@@ -251,10 +416,20 @@ impl EvmClient {
             .json(&request)
             .send()
             .await
-            .with_context(|| format!("Failed to send eth_blockNumber request to {}", self.base_url))?
+            .with_context(|| {
+                format!(
+                    "Failed to send eth_blockNumber request to {}",
+                    self.base_url
+                )
+            })?
             .json()
             .await
-            .with_context(|| format!("Failed to parse eth_blockNumber response from {}", self.base_url))?;
+            .with_context(|| {
+                format!(
+                    "Failed to parse eth_blockNumber response from {}",
+                    self.base_url
+                )
+            })?;
 
         if let Some(error) = response.error {
             return Err(anyhow::anyhow!(
@@ -265,12 +440,14 @@ impl EvmClient {
             ));
         }
 
-        let block_number_hex = response.result.ok_or_else(|| {
-            anyhow::anyhow!("No result in eth_blockNumber response")
-        })?;
+        let block_number_hex = response
+            .result
+            .ok_or_else(|| anyhow::anyhow!("No result in eth_blockNumber response"))?;
 
         let block_number = u64::from_str_radix(
-            block_number_hex.strip_prefix("0x").unwrap_or(&block_number_hex),
+            block_number_hex
+                .strip_prefix("0x")
+                .unwrap_or(&block_number_hex),
             16,
         )
         .context("Failed to parse block number")?;
@@ -289,4 +466,3 @@ impl EvmClient {
 mod tests {
     // Tests will be added in integration tests or separate test file
 }
-
