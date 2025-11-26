@@ -23,10 +23,10 @@ echo "================================================================"
 echo "🚀 Step 2: Setting up chains, deploying contracts, funding accounts"
 echo "===================================================================="
 ./testing-infra/chain-hub/setup-chain.sh
-./testing-infra/chain-hub/setup-alice-bob.sh
+./testing-infra/chain-hub/setup-requester-solver.sh
 ./testing-infra/chain-hub/deploy-contracts.sh
 ./testing-infra/chain-connected-mvm/setup-chain.sh
-./testing-infra/chain-connected-mvm/setup-alice-bob.sh
+./testing-infra/chain-connected-mvm/setup-requester-solver.sh
 ./testing-infra/chain-connected-mvm/deploy-contracts.sh
 
 echo "🚀 Step 3: Testing INFLOW intents (connected chain → hub chain)..."
@@ -58,6 +58,10 @@ echo "🚀 Step 6: Running Rust integration tests..."
 echo "============================================"
 ./testing-infra/e2e-tests-mvm/verifier-rust-integration-tests.sh
 
+echo ""
+echo "💰 Final Balance View"
+echo "=========================================="
+./testing-infra/e2e-tests-mvm/balance-check.sh || true
 echo ""
 echo "✅ E2E inflow test flow completed!"
 echo ""

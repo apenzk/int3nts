@@ -22,19 +22,21 @@ INTENT_ID="0x$(openssl rand -hex 32)"
 CONNECTED_CHAIN_ID=2
 CHAIN1_ADDRESS=$(get_profile_address "intent-account-chain1")
 CHAIN2_ADDRESS=$(get_profile_address "intent-account-chain2")
-ALICE_CHAIN1_ADDRESS=$(get_profile_address "alice-chain1")
-BOB_CHAIN1_ADDRESS=$(get_profile_address "bob-chain1")
-ALICE_CHAIN2_ADDRESS=$(get_profile_address "alice-chain2")
-BOB_CHAIN2_ADDRESS=$(get_profile_address "bob-chain2")
+TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
+TEST_TOKENS_CHAIN2=$(get_profile_address "test-tokens-chain2")
+REQUESTER_CHAIN1_ADDRESS=$(get_profile_address "requester-chain1")
+SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
+REQUESTER_CHAIN2_ADDRESS=$(get_profile_address "requester-chain2")
+SOLVER_CHAIN2_ADDRESS=$(get_profile_address "solver-chain2")
 
 log ""
 log "📋 Chain Information:"
 log "   Hub Chain Module Address (Chain 1):     $CHAIN1_ADDRESS"
 log "   Connected Chain Module Address (Chain 2): $CHAIN2_ADDRESS"
-log "   Alice Chain 1 (hub):     $ALICE_CHAIN1_ADDRESS"
-log "   Bob Chain 1 (hub):       $BOB_CHAIN1_ADDRESS"
-log "   Alice Chain 2 (connected): $ALICE_CHAIN2_ADDRESS"
-log "   Bob Chain 2 (connected): $BOB_CHAIN2_ADDRESS"
+log "   Requester Chain 1 (hub):     $REQUESTER_CHAIN1_ADDRESS"
+log "   Solver Chain 1 (hub):       $SOLVER_CHAIN1_ADDRESS"
+log "   Requester Chain 2 (connected): $REQUESTER_CHAIN2_ADDRESS"
+log "   Solver Chain 2 (connected): $SOLVER_CHAIN2_ADDRESS"
 
 VERIFIER_TESTING_CONFIG="${PROJECT_ROOT}/trusted-verifier/config/verifier_testing.toml"
 
@@ -67,9 +69,9 @@ fi
 
 VERIFIER_PUBLIC_KEY="0x${VERIFIER_PUBLIC_KEY_HEX}"
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
-# Bob gets funded with 200000000 Octas (2 APT), so half is 100000000 Octas (1 APT)
-OFFERED_AMOUNT="100000000"  # 1 APT (half of Bob's 200000000 Octas)
-DESIRED_AMOUNT="100000000"  # 1 APT (half of Bob's 200000000 Octas)
+# USDxyz amounts: 1 USDxyz (8 decimals = 100_000_000)
+OFFERED_AMOUNT="100000000"  # 1 USDxyz = 100_000_000
+DESIRED_AMOUNT="100000000"  # 1 USDxyz = 100_000_000
 OFFERED_CHAIN_ID=1
 DESIRED_CHAIN_ID=$CONNECTED_CHAIN_ID
 HUB_CHAIN_ID=1
@@ -79,57 +81,62 @@ log "🔑 Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Verifier public key: $VERIFIER_PUBLIC_KEY"
-log "   Offered amount: $OFFERED_AMOUNT Octas (1 APT)"
-log "   Desired amount: $DESIRED_AMOUNT Octas (1 APT)"
+log "   Offered amount: $OFFERED_AMOUNT (1 USDxyz)"
+log "   Desired amount: $DESIRED_AMOUNT (1 USDxyz)"
+
+# Get test tokens addresses from profiles
+TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
+TEST_TOKENS_CHAIN2=$(get_profile_address "test-tokens-chain2")
 
 log ""
-log "   - Getting APT metadata addresses..."
-log "     Getting APT metadata on Chain 1..."
-APT_METADATA_CHAIN1=$(extract_apt_metadata "alice-chain1" "$CHAIN1_ADDRESS" "$ALICE_CHAIN1_ADDRESS" "1" "$LOG_FILE")
-log "     ✅ Got APT metadata on Chain 1: $APT_METADATA_CHAIN1"
-OFFERED_FA_METADATA_CHAIN1="$APT_METADATA_CHAIN1"
+log "   - Getting USDxyz metadata addresses..."
+log "     Getting USDxyz metadata on Chain 1..."
+USDXYZ_METADATA_CHAIN1=$(get_usdxyz_metadata "0x$TEST_TOKENS_CHAIN1" "1")
+log "     ✅ Got USDxyz metadata on Chain 1: $USDXYZ_METADATA_CHAIN1"
+OFFERED_METADATA_CHAIN1="$USDXYZ_METADATA_CHAIN1"
 
-log "     Getting APT metadata on Chain 2..."
-APT_METADATA_CHAIN2=$(extract_apt_metadata "alice-chain2" "$CHAIN2_ADDRESS" "$ALICE_CHAIN2_ADDRESS" "2" "$LOG_FILE")
-log "     ✅ Got APT metadata on Chain 2: $APT_METADATA_CHAIN2"
-DESIRED_FA_METADATA_CHAIN2="$APT_METADATA_CHAIN2"
+# For outflow, use Chain 1 metadata for desired as well (signature is generated on Chain 1)
+# The actual transfer on Chain 2 uses Chain 2's USDxyz, but the intent stores Chain 1 metadata
+DESIRED_METADATA_CHAIN2="$USDXYZ_METADATA_CHAIN1"
+log "     Using Chain 1 USDxyz metadata for desired (outflow pattern)"
 
 # ============================================================================
 # SECTION 3: DISPLAY INITIAL STATE
 # ============================================================================
 log ""
-display_balances_hub
-display_balances_connected_mvm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_mvm "0x$TEST_TOKENS_CHAIN2"
 log_and_echo ""
 
 # ============================================================================
 # SECTION 4: EXECUTE MAIN OPERATION
 # ============================================================================
 log ""
-log "   Creating outflow request intent on hub chain..."
-log "   - Requester (Alice) creates outflow request intent on Chain 1 (hub chain)"
-log "   - Requester (Alice) locks 1 APT on hub chain"
-log "   - Requester (Alice) wants 1 APT on connected chain (Chain 2)"
+log "   Creating outflow request-intent on hub chain..."
+log "   - Requester (Requester) creates outflow request-intent on Chain 1 (hub chain)"
+log "   - Requester (Requester) locks 1 USDxyz on hub chain"
+log "   - Requester (Requester) wants 1 USDxyz on connected chain (Chain 2)"
 log "   - Using intent_id: $INTENT_ID"
 
 log "   - Generating solver signature..."
 SOLVER_SIGNATURE=$(generate_solver_signature \
-    "bob-chain1" \
+    "solver-chain1" \
     "$CHAIN1_ADDRESS" \
-    "$OFFERED_FA_METADATA_CHAIN1" \
+    "$OFFERED_METADATA_CHAIN1" \
     "$OFFERED_AMOUNT" \
     "$OFFERED_CHAIN_ID" \
-    "$DESIRED_FA_METADATA_CHAIN2" \
+    "$DESIRED_METADATA_CHAIN2" \
     "$DESIRED_AMOUNT" \
     "$DESIRED_CHAIN_ID" \
     "$EXPIRY_TIME" \
-    "$ALICE_CHAIN1_ADDRESS" \
-    "$BOB_CHAIN1_ADDRESS" \
+    "$REQUESTER_CHAIN1_ADDRESS" \
+    "$SOLVER_CHAIN1_ADDRESS" \
     "1" \
     "$LOG_FILE")
 
-if [ -z "$SOLVER_SIGNATURE" ]; then
+if [ -z "$SOLVER_SIGNATURE" ] || [[ ! "$SOLVER_SIGNATURE" =~ ^0x[0-9a-fA-F]+$ ]]; then
     log_and_echo "❌ Failed to generate solver signature"
+    log_and_echo "   Output was: $SOLVER_SIGNATURE"
     exit 1
 fi
 
@@ -145,49 +152,49 @@ log "     ✅ Solver public key extracted: ${SOLVER_PUBLIC_KEY:0:20}..."
 # EVM address placeholder (not used for MVM-only tests, but required for solver registration)
 EVM_ADDRESS="0x0000000000000000000000000000000000000001"
 
-log "   - Registering solver (Bob) in solver registry..."
-# Register with EVM address and connected chain MVM address (Bob's Chain 2 address)
-register_solver "bob-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY" "$EVM_ADDRESS" "$BOB_CHAIN2_ADDRESS" "$LOG_FILE"
+log "   - Registering solver (Solver) in solver registry..."
+# Register with EVM address and connected chain MVM address (Solver's Chain 2 address)
+register_solver "solver-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY" "$EVM_ADDRESS" "$SOLVER_CHAIN2_ADDRESS" "$LOG_FILE"
 
 log "   - Waiting for solver registration to be confirmed on-chain (5 seconds)..."
 sleep 5
 
 log "   - Verifying solver registration..."
-verify_solver_registered "bob-chain1" "$CHAIN1_ADDRESS" "$BOB_CHAIN1_ADDRESS" "$LOG_FILE"
+verify_solver_registered "solver-chain1" "$CHAIN1_ADDRESS" "$SOLVER_CHAIN1_ADDRESS" "$LOG_FILE"
 
-log "   - Creating outflow request intent on Chain 1..."
-log "     Offered FA metadata (hub): $OFFERED_FA_METADATA_CHAIN1"
-log "     Desired FA metadata (connected): $DESIRED_FA_METADATA_CHAIN2"
-log "     Solver (Bob) address: $BOB_CHAIN1_ADDRESS"
-log "     Requester address on connected chain: $ALICE_CHAIN2_ADDRESS"
+log "   - Creating outflow request-intent on Chain 1..."
+log "     Offered metadata (hub): $OFFERED_METADATA_CHAIN1"
+log "     Desired metadata (connected): $DESIRED_METADATA_CHAIN2"
+log "     Solver (Solver) address: $SOLVER_CHAIN1_ADDRESS"
+log "     Requester address on connected chain: $REQUESTER_CHAIN2_ADDRESS"
 
 SOLVER_SIGNATURE_HEX="${SOLVER_SIGNATURE#0x}"
 VERIFIER_PUBLIC_KEY_HEX="${VERIFIER_PUBLIC_KEY#0x}"
 
-aptos move run --profile alice-chain1 --assume-yes \
+aptos move run --profile requester-chain1 --assume-yes \
     --function-id "0x${CHAIN1_ADDRESS}::fa_intent_outflow::create_outflow_request_intent_entry" \
-    --args "address:${OFFERED_FA_METADATA_CHAIN1}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_FA_METADATA_CHAIN2}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${ALICE_CHAIN2_ADDRESS}" "hex:${VERIFIER_PUBLIC_KEY_HEX}" "address:${BOB_CHAIN1_ADDRESS}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
+    --args "address:${OFFERED_METADATA_CHAIN1}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_CHAIN2}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_CHAIN2_ADDRESS}" "hex:${VERIFIER_PUBLIC_KEY_HEX}" "address:${SOLVER_CHAIN1_ADDRESS}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
 
 # ============================================================================
 # SECTION 5: VERIFY RESULTS
 # ============================================================================
 if [ $? -eq 0 ]; then
-    log "     ✅ Outflow request intent created on Chain 1!"
+    log "     ✅ Outflow request-intent created on Chain 1!"
 
     sleep 2
-    log "     - Verifying request intent stored on-chain..."
-    HUB_INTENT_ADDRESS=$(curl -s "http://127.0.0.1:8080/v1/accounts/${ALICE_CHAIN1_ADDRESS}/transactions?limit=1" | \
+    log "     - Verifying request-intent stored on-chain..."
+    HUB_INTENT_ADDRESS=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_CHAIN1_ADDRESS}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("OracleLimitOrderEvent")) | .data.intent_address' | head -n 1)
 
     if [ -n "$HUB_INTENT_ADDRESS" ] && [ "$HUB_INTENT_ADDRESS" != "null" ]; then
-        log "     ✅ Hub outflow request intent stored at: $HUB_INTENT_ADDRESS"
-        log_and_echo "✅ Outflow request intent created"
+        log "     ✅ Hub outflow request-intent stored at: $HUB_INTENT_ADDRESS"
+        log_and_echo "✅ Outflow request-intent created"
     else
-        log_and_echo "❌ ERROR: Could not verify hub outflow request intent address"
+        log_and_echo "❌ ERROR: Could not verify hub outflow request-intent address"
         exit 1
     fi
 else
-    log_and_echo "❌ Outflow request intent creation failed on Chain 1!"
+    log_and_echo "❌ Outflow request-intent creation failed on Chain 1!"
     log_and_echo "   Log file contents:"
     log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
@@ -199,8 +206,8 @@ fi
 # SECTION 6: FINAL SUMMARY
 # ============================================================================
 log ""
-display_balances_hub
-display_balances_connected_mvm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_mvm "0x$TEST_TOKENS_CHAIN2"
 log_and_echo ""
 
 log ""
@@ -208,14 +215,14 @@ log "🎉 OUTFLOW - HUB CHAIN INTENT CREATION COMPLETE!"
 log "================================================"
 log ""
 log "✅ Step completed successfully:"
-log "   1. Outflow request intent created on Chain 1 (hub chain)"
+log "   1. Outflow request-intent created on Chain 1 (hub chain)"
 log "   2. Tokens locked on hub chain"
 log ""
-log "📋 Request Intent Details:"
+log "📋 Request-intent Details:"
 log "   Intent ID: $INTENT_ID"
 if [ -n "$HUB_INTENT_ADDRESS" ] && [ "$HUB_INTENT_ADDRESS" != "null" ]; then
-    log "   Chain 1 Hub Outflow Request Intent: $HUB_INTENT_ADDRESS"
+    log "   Chain 1 Hub Outflow Request-intent: $HUB_INTENT_ADDRESS"
 fi
-log "   Requester address on connected chain: $ALICE_CHAIN2_ADDRESS"
+log "   Requester address on connected chain: $REQUESTER_CHAIN2_ADDRESS"
 
 save_intent_info "$INTENT_ID" "$HUB_INTENT_ADDRESS"

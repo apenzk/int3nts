@@ -3,6 +3,7 @@
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../util_evm.sh"
 source "$SCRIPT_DIR/utils.sh"
 
 # Setup project root and logging
@@ -72,14 +73,64 @@ log "🔍 Verify deployment:"
 log "   npx hardhat verify --network localhost $CONTRACT_ADDRESS <verifier_address>"
 
 log ""
-log "✅ EVM contracts deployed"
+log "✅ IntentEscrow deployed"
+
+# Deploy USDxyz token
+log ""
+log "💵 Deploying USDxyz token to EVM chain..."
+
+USDXYZ_OUTPUT=$(run_hardhat_command "npx hardhat run test-scripts/deploy-usdxyz.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
+USDXYZ_ADDRESS=$(echo "$USDXYZ_OUTPUT" | grep "USDxyz deployed to:" | awk '{print $NF}' | tr -d '\n')
+
+if [ -z "$USDXYZ_ADDRESS" ]; then
+    log_and_echo "❌ USDxyz deployment failed!"
+    exit 1
+fi
+
+log "   ✅ USDxyz deployed to: $USDXYZ_ADDRESS"
+
+# Save USDxyz address for other scripts
+echo "USDXYZ_EVM_ADDRESS=$USDXYZ_ADDRESS" >> "$PROJECT_ROOT/tmp/chain-info.env"
+
+# Mint USDxyz to Requester and Solver (accounts 1 and 2)
+log ""
+log "💵 Minting USDxyz to Requester and Solver on EVM chain..."
+
+REQUESTER_EVM_ADDRESS=$(get_hardhat_account_address "1")
+SOLVER_EVM_ADDRESS=$(get_hardhat_account_address "2")
+USDXYZ_MINT_AMOUNT="100000000"  # 1 USDxyz (8 decimals = 100_000_000)
+
+log "   - Minting USDxyz to Requester ($REQUESTER_EVM_ADDRESS)..."
+MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDRESS='$USDXYZ_ADDRESS' RECIPIENT='$REQUESTER_EVM_ADDRESS' AMOUNT='$USDXYZ_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
+if echo "$MINT_OUTPUT" | grep -q "SUCCESS"; then
+    log "   ✅ Minted USDxyz to Requester"
+else
+    log_and_echo "   ❌ Failed to mint USDxyz to Requester"
+    exit 1
+fi
+
+log "   - Minting USDxyz to Solver ($SOLVER_EVM_ADDRESS)..."
+MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDRESS='$USDXYZ_ADDRESS' RECIPIENT='$SOLVER_EVM_ADDRESS' AMOUNT='$USDXYZ_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
+if echo "$MINT_OUTPUT" | grep -q "SUCCESS"; then
+    log "   ✅ Minted USDxyz to Solver"
+else
+    log_and_echo "   ❌ Failed to mint USDxyz to Solver"
+    exit 1
+fi
+
+log_and_echo "✅ USDxyz minted to Requester and Solver on EVM chain"
+
+# Display balances (ETH + USDxyz)
+display_balances_connected_evm "$USDXYZ_ADDRESS"
+
 log ""
 log "🎉 EVM DEPLOYMENT COMPLETE!"
 log "==========================="
 log "EVM Chain:"
 log "   RPC URL:  http://127.0.0.1:8545"
 log "   Chain ID: 31337"
-log "   Contract: $CONTRACT_ADDRESS"
+log "   IntentEscrow: $CONTRACT_ADDRESS"
+log "   USDxyz Token: $USDXYZ_ADDRESS"
 log "   Verifier: $VERIFIER_ETH_ADDRESS"
 log ""
 log "📡 API Examples:"

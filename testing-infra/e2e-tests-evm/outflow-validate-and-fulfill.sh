@@ -37,14 +37,19 @@ fi
 # SECTION 2: GET ADDRESSES AND CONFIGURATION
 # ============================================================================
 CHAIN1_ADDRESS=$(get_profile_address "intent-account-chain1")
-BOB_CHAIN1_ADDRESS=$(get_profile_address "bob-chain1")
+TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
+SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
+
+# Get USDxyz EVM address
+source "$PROJECT_ROOT/tmp/chain-info.env" 2>/dev/null || true
+USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
 
 log ""
 log "📋 Chain Information:"
 log "   Hub Chain Module Address (Chain 1):     $CHAIN1_ADDRESS"
-log "   Bob Chain 1 (hub):       $BOB_CHAIN1_ADDRESS"
+log "   Solver Chain 1 (hub):       $SOLVER_CHAIN1_ADDRESS"
 log "   Intent ID:               $INTENT_ID"
-log "   Hub Request Intent Address: $HUB_INTENT_ADDRESS"
+log "   Hub Request-intent Address: $HUB_INTENT_ADDRESS"
 log "   Transaction Hash:        $CONNECTED_CHAIN_TX_HASH"
 log "   Chain Type:              evm (Ethereum Virtual Machine)"
 
@@ -58,10 +63,10 @@ if ! curl -s "http://127.0.0.1:3333/health" > /dev/null 2>&1; then
 fi
 log "   ✅ Verifier is running"
 
-# Wait for verifier to poll and cache the request intent
-# The verifier polls every 2 seconds, so wait for it to discover the request intent
+# Wait for verifier to poll and cache the request-intent
+# The verifier polls every 2 seconds, so wait for it to discover the request-intent
 log ""
-log "   - Waiting for verifier to poll and cache request intent..."
+log "   - Waiting for verifier to poll and cache request-intent..."
 MAX_WAIT=30  # Maximum wait time in seconds (should be enough for several poll cycles)
 WAIT_INTERVAL=2  # Check every 2 seconds (matches polling interval)
 ELAPSED=0
@@ -69,7 +74,9 @@ INTENT_FOUND=false
 
 while [ $ELAPSED -lt $MAX_WAIT ]; do
     EVENTS_RESPONSE=$(curl -s "http://127.0.0.1:3333/events" 2>/dev/null)
-    if [ $? -eq 0 ] && echo "$EVENTS_RESPONSE" | jq -e '.data.intent_events[] | select(.intent_id | ascii_downcase | gsub("0x"; "") == "'"$(echo "$INTENT_ID" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//')"'")' > /dev/null 2>&1; then
+    # Normalize intent_id by removing 0x prefix and leading zeros for comparison
+    NORMALIZED_INTENT_ID=$(echo "$INTENT_ID" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//' | sed 's/^0*//')
+    if [ $? -eq 0 ] && echo "$EVENTS_RESPONSE" | jq -e '.data.intent_events[] | select(.intent_id | ascii_downcase | gsub("^0x"; "") | gsub("^0+"; "") == "'"$NORMALIZED_INTENT_ID"'")' > /dev/null 2>&1; then
         INTENT_FOUND=true
         break
     fi
@@ -78,9 +85,9 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 done
 
 if [ "$INTENT_FOUND" = true ]; then
-    log "     ✅ Verifier has cached the request intent"
+    log "     ✅ Verifier has cached the request-intent"
 else
-    log_and_echo "❌ ERROR: Verifier did not cache the request intent within ${MAX_WAIT} seconds"
+    log_and_echo "❌ ERROR: Verifier did not cache the request-intent within ${MAX_WAIT} seconds"
     log_and_echo "   Intent ID: $INTENT_ID"
     log_and_echo "   Verifier events:"
     curl -s "http://127.0.0.1:3333/events" | jq '.data.intent_events' 2>/dev/null || log "   (Unable to query events)"
@@ -91,12 +98,14 @@ fi
 # SECTION 3: DISPLAY INITIAL STATE
 # ============================================================================
 log ""
-display_balances_hub
-display_balances_connected_evm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_evm "$USDXYZ_ADDRESS"
 log_and_echo ""
 
-BOB_INITIAL_BALANCE=$(aptos account balance --profile bob-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-log "   Bob Chain 1 initial balance: $BOB_INITIAL_BALANCE Octas"
+# Get USDxyz metadata for balance checks
+TEST_TOKENS_CHAIN1_ADDRESS=$(get_profile_address "test-tokens-chain1")
+SOLVER_CHAIN1_USDXYZ_INIT=$(get_usdxyz_balance "solver-chain1" "1" "0x$TEST_TOKENS_CHAIN1_ADDRESS")
+log "   Solver Chain 1 initial USDxyz balance: $SOLVER_CHAIN1_USDXYZ_INIT USDxyz.10e8"
 
 # ============================================================================
 # SECTION 4: EXECUTE MAIN OPERATION
@@ -196,7 +205,7 @@ if [ "$VALID" != "true" ]; then
     if echo "$MESSAGE" | grep -qi "is not registered in hub chain solver registry"; then
         log_and_echo ""
         log_and_echo "   Available registered solvers:"
-        list_all_solvers "bob-chain1" "$CHAIN1_ADDRESS" "$LOG_FILE"
+        list_all_solvers "solver-chain1" "$CHAIN1_ADDRESS" "$LOG_FILE"
     fi
     
     log_and_echo "   Full response:"
@@ -225,7 +234,7 @@ log "   Signature type: $SIGNATURE_TYPE"
 log "   Signature (first 20 chars): ${APPROVAL_SIGNATURE:0:20}..."
 
 log ""
-log "🔓 Fulfilling hub request intent with verifier signature..."
+log "🔓 Fulfilling hub request-intent with verifier signature..."
 log "========================================================="
 
 INTENT_OBJECT_ADDRESS="$HUB_INTENT_ADDRESS"
@@ -254,7 +263,7 @@ fi
 log "   - Fulfilling intent at: $INTENT_OBJECT_ADDRESS"
 log "   - Calling fulfill_outflow_request_intent with verifier signature"
 
-aptos move run --profile bob-chain1 --assume-yes \
+aptos move run --profile solver-chain1 --assume-yes \
     --function-id "0x${CHAIN1_ADDRESS}::fa_intent_outflow::fulfill_outflow_request_intent" \
     --args "address:$INTENT_OBJECT_ADDRESS" "hex:$SIGNATURE_HEX" >> "$LOG_FILE" 2>&1
 
@@ -262,30 +271,29 @@ aptos move run --profile bob-chain1 --assume-yes \
 # SECTION 5: VERIFY RESULTS
 # ============================================================================
 if [ $? -eq 0 ]; then
-    log "     ✅ Solver (Bob) successfully fulfilled the outflow request intent!"
+    log "     ✅ Solver (Solver) successfully fulfilled the outflow request-intent!"
 
     sleep 2
 
-    log "     - Verifying solver (Bob) received locked tokens..."
-    BOB_FINAL_BALANCE=$(aptos account balance --profile bob-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-    log "     Bob Chain 1 final balance: $BOB_FINAL_BALANCE Octas"
+    log "     - Verifying solver (Solver) received locked USDxyz tokens..."
+    SOLVER_CHAIN1_USDXYZ_FINAL=$(get_usdxyz_balance "solver-chain1" "1" "0x$TEST_TOKENS_CHAIN1_ADDRESS")
+    log "     Solver Chain 1 final USDxyz balance: $SOLVER_CHAIN1_USDXYZ_FINAL USDxyz.10e8"
 
-    BALANCE_INCREASE=$((BOB_FINAL_BALANCE - BOB_INITIAL_BALANCE))
-    OFFERED_AMOUNT=100000000
-    EXPECTED_MIN_AMOUNT=$((OFFERED_AMOUNT - 1000000))
+    CHAIN1_USDXYZ_INCREASE=$((SOLVER_CHAIN1_USDXYZ_FINAL - SOLVER_CHAIN1_USDXYZ_INIT))
+    OFFERED_AMOUNT=100000000  # 1 USDxyz = 100_000_000
 
-    if [ "$BALANCE_INCREASE" -ge "$EXPECTED_MIN_AMOUNT" ]; then
-        log "     ✅ Solver (Bob) received locked tokens: +$BALANCE_INCREASE Octas (expected ~$OFFERED_AMOUNT minus gas)"
+    if [ "$CHAIN1_USDXYZ_INCREASE" -ge "$OFFERED_AMOUNT" ]; then
+        log "     ✅ Solver (Solver) received locked USDxyz: +$CHAIN1_USDXYZ_INCREASE USDxyz.10e8 (expected $OFFERED_AMOUNT)"
     else
-        log_and_echo "❌ ERROR: Solver (Bob)'s balance increase is less than expected"
-        log_and_echo "   Balance increase: $BALANCE_INCREASE Octas"
-        log_and_echo "   Expected minimum: $EXPECTED_MIN_AMOUNT Octas"
+        log_and_echo "❌ ERROR: Solver (Solver) Chain 1 USDxyz balance increase is less than expected"
+        log_and_echo "   Chain 1 USDxyz increase: $CHAIN1_USDXYZ_INCREASE USDxyz.10e8"
+        log_and_echo "   Expected: $OFFERED_AMOUNT USDxyz.10e8"
         exit 1
     fi
 
-    log_and_echo "✅ Outflow request intent fulfilled"
+    log_and_echo "✅ Outflow request-intent fulfilled"
 else
-    log_and_echo "❌ Outflow request intent fulfillment failed!"
+    log_and_echo "❌ Outflow request-intent fulfillment failed!"
     log_and_echo "   Log file contents:"
     log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
@@ -297,8 +305,8 @@ fi
 # SECTION 6: FINAL SUMMARY
 # ============================================================================
 log ""
-display_balances_hub
-display_balances_connected_evm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_evm "$USDXYZ_ADDRESS"
 log_and_echo ""
 
 log ""
@@ -309,21 +317,21 @@ log "✅ Steps completed successfully:"
 log "   1. Verifier queried connected EVM chain transaction"
 log "   2. Transaction validated against intent requirements"
 log "   3. Approval signature generated for hub fulfillment"
-log "   4. Solver (Bob) fulfilled hub request intent with verifier signature"
-log "   5. Locked tokens released to solver (Bob) on hub chain"
+log "   4. Solver (Solver) fulfilled hub request-intent with verifier signature"
+log "   5. Locked tokens released to solver (Solver) on hub chain"
 log ""
 log "📋 Details:"
 log "   Intent ID: $INTENT_ID"
-log "   Hub Request Intent Address: $HUB_INTENT_ADDRESS"
+log "   Hub Request-intent Address: $HUB_INTENT_ADDRESS"
 log "   Transaction Hash: $CONNECTED_CHAIN_TX_HASH"
 log "   Validation Result: VALID"
 log "   Signature Type: $SIGNATURE_TYPE"
-log "   Solver (Bob)'s balance increase: $BALANCE_INCREASE Octas"
+log "   Solver (Solver) Chain 1 USDxyz increase: $CHAIN1_USDXYZ_INCREASE USDxyz.10e8"
 log ""
-log "📖 Outflow Request Intent Summary:"
-log "   1. Requester (Alice) created outflow request intent on hub chain (locked 1 APT)"
-log "   2. Solver (Bob) transferred tokens to requester (Alice) on connected EVM chain (amount matches request intent desired_amount)"
+log "📖 Outflow Request-intent Summary:"
+log "   1. Requester (Requester) created outflow request-intent on hub chain (locked 1 USDxyz)"
+log "   2. Solver (Solver) transferred tokens to requester (Requester) on connected EVM chain (amount matches request-intent desired_amount)"
 log "   3. Verifier validated the connected EVM chain transfer"
-log "   4. Solver (Bob) fulfilled hub request intent with verifier signature"
-log "   5. Solver (Bob) received locked tokens as reward on hub chain"
+log "   4. Solver (Solver) fulfilled hub request-intent with verifier signature"
+log "   5. Solver (Solver) received locked tokens as reward on hub chain"
 

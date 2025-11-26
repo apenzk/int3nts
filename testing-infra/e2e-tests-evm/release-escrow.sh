@@ -40,28 +40,42 @@ fi
 
 log "   Escrow contract address: $ESCROW_ADDRESS"
 
+# Get USDxyz token address from chain-info.env
+if [ -f "$PROJECT_ROOT/tmp/chain-info.env" ]; then
+    source "$PROJECT_ROOT/tmp/chain-info.env"
+    USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
+fi
+if [ -z "$USDXYZ_ADDRESS" ]; then
+    log_and_echo "❌ ERROR: Could not find USDxyz token address"
+    exit 1
+fi
+log "   USDxyz token address: $USDXYZ_ADDRESS"
+
+# Get Solver's EVM address
+SOLVER_EVM_ADDRESS=$(get_hardhat_account_address "2")
+
 # ============================================================================
 # SECTION 1.5: CAPTURE INITIAL BALANCES (for final validation)
 # ============================================================================
 log ""
 log "📊 Capturing initial balances for validation..."
 
-# Note: Alice's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh
+# Note: Requester's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh
 
-# Get Bob's initial balance on EVM Chain 3
+# Get Solver's initial USDxyz balance on EVM Chain 3
 cd evm-intent-framework
-BOB_BALANCE_INIT_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
-BOB_BALANCE_INIT=$(echo "$BOB_BALANCE_INIT_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
+SOLVER_CHAIN3_USDXYZ_INIT_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && TOKEN_ADDRESS='$USDXYZ_ADDRESS' ACCOUNT='$SOLVER_EVM_ADDRESS' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+SOLVER_CHAIN3_USDXYZ_INIT=$(echo "$SOLVER_CHAIN3_USDXYZ_INIT_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
 cd ..
 
-if [ -z "$BOB_BALANCE_INIT" ]; then
-    log_and_echo "   ⚠️  WARNING: Failed to get Bob's initial balance on EVM"
-    log_and_echo "   Balance output: $BOB_BALANCE_INIT_OUTPUT"
-    BOB_BALANCE_INIT="0"
+if [ -z "$SOLVER_CHAIN3_USDXYZ_INIT" ]; then
+    log_and_echo "   ⚠️  WARNING: Failed to get Solver's initial USDxyz balance on Chain 3 (EVM)"
+    log_and_echo "   Balance output: $SOLVER_CHAIN3_USDXYZ_INIT_OUTPUT"
+    SOLVER_CHAIN3_USDXYZ_INIT="0"
 fi
 
 log "   Initial balances:"
-log "      Bob EVM Chain 3: $BOB_BALANCE_INIT wei"
+log "      Solver Chain 3 USDxyz: $SOLVER_CHAIN3_USDXYZ_INIT USDxyz.10e8"
 
 # Track released escrows to avoid duplicate attempts
 RELEASED_ESCROWS=""
@@ -123,20 +137,20 @@ check_and_release_escrows() {
             continue
         fi
         
-        # Get Bob's balance before claiming (to verify funds were received)
-        log "   - Getting Bob's balance before claim..."
+        # Get Solver's USDxyz balance before claiming (to verify funds were received)
+        log "   - Getting Solver's Chain 3 USDxyz balance before claim..."
         cd evm-intent-framework
-        BOB_BALANCE_BEFORE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
-        BOB_BALANCE_BEFORE=$(echo "$BOB_BALANCE_BEFORE_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
+        SOLVER_CHAIN3_USDXYZ_BEFORE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && TOKEN_ADDRESS='$USDXYZ_ADDRESS' ACCOUNT='$SOLVER_EVM_ADDRESS' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+        SOLVER_CHAIN3_USDXYZ_BEFORE=$(echo "$SOLVER_CHAIN3_USDXYZ_BEFORE_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
         cd ..
         
-        if [ -z "$BOB_BALANCE_BEFORE" ]; then
-            log_and_echo "   ❌ ERROR: Failed to get Bob's balance before claim"
-            log_and_echo "   Balance output: $BOB_BALANCE_BEFORE_OUTPUT"
+        if [ -z "$SOLVER_CHAIN3_USDXYZ_BEFORE" ]; then
+            log_and_echo "   ❌ ERROR: Failed to get Solver's Chain 3 USDxyz balance before claim"
+            log_and_echo "   Balance output: $SOLVER_CHAIN3_USDXYZ_BEFORE_OUTPUT"
             exit 1
         fi
         
-        log "   - Bob's balance before claim: $BOB_BALANCE_BEFORE wei"
+        log "   - Solver's Chain 3 USDxyz balance before claim: $SOLVER_CHAIN3_USDXYZ_BEFORE USDxyz.10e8"
         
         # Submit escrow release transaction on EVM
         cd evm-intent-framework
@@ -168,48 +182,43 @@ check_and_release_escrows() {
         # Wait a bit for transaction to be processed
         sleep 2
         
-        # Get Bob's balance after claiming (to verify funds were received)
-        log "   - Getting Bob's balance after claim..."
+        # Get Solver's USDxyz balance after claiming (to verify funds were received)
+        log "   - Getting Solver's Chain 3 USDxyz balance after claim..."
         cd evm-intent-framework
-        BOB_BALANCE_AFTER_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
-        BOB_BALANCE_AFTER=$(echo "$BOB_BALANCE_AFTER_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
+        SOLVER_CHAIN3_USDXYZ_AFTER_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && TOKEN_ADDRESS='$USDXYZ_ADDRESS' ACCOUNT='$SOLVER_EVM_ADDRESS' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+        SOLVER_CHAIN3_USDXYZ_AFTER=$(echo "$SOLVER_CHAIN3_USDXYZ_AFTER_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
         cd ..
         
-        if [ -z "$BOB_BALANCE_AFTER" ]; then
-            log_and_echo "   ❌ ERROR: Failed to get Bob's balance after claim"
-            log_and_echo "   Balance output: $BOB_BALANCE_AFTER_OUTPUT"
+        if [ -z "$SOLVER_CHAIN3_USDXYZ_AFTER" ]; then
+            log_and_echo "   ❌ ERROR: Failed to get Solver's Chain 3 USDxyz balance after claim"
+            log_and_echo "   Balance output: $SOLVER_CHAIN3_USDXYZ_AFTER_OUTPUT"
             exit 1
         fi
         
-        log "   - Bob's balance after claim: $BOB_BALANCE_AFTER wei"
+        log "   - Solver's Chain 3 USDxyz balance after claim: $SOLVER_CHAIN3_USDXYZ_AFTER USDxyz.10e8"
         
         # Calculate balance increase
-        # Expected: Bob should receive 1 ETH (matches request intent offered_amount, minus gas fees)
-        EXPECTED_AMOUNT_WEI="1000000000000000000"  # 1 ETH (matches request intent offered_amount)
-        BALANCE_INCREASE=$(echo "$BOB_BALANCE_AFTER $BOB_BALANCE_BEFORE" | awk '{print $1 - $2}')
+        # Expected: Solver should receive 1 USDxyz (matches request-intent offered_amount)
+        # Note: EVM USDxyz uses 18 decimals, MVM uses 8 decimals
+        EXPECTED_USDXYZ="100000000"  # 1 USDxyz = 100_000_000
+        CHAIN3_USDXYZ_INCREASE=$(echo "$SOLVER_CHAIN3_USDXYZ_AFTER $SOLVER_CHAIN3_USDXYZ_BEFORE" | awk '{print $1 - $2}')
         
-        log "   - Balance increase: $BALANCE_INCREASE wei"
-        log "   - Expected: ~$EXPECTED_AMOUNT_WEI wei (matches request intent offered_amount, minus gas)"
+        log "   - USDxyz balance increase: $CHAIN3_USDXYZ_INCREASE USDxyz.10e8"
+        log "   - Expected: $EXPECTED_USDXYZ USDxyz.10e8"
         
-        # Check if balance increased by at least 99% of expected (allowing for gas fees)
-        MIN_EXPECTED=$(echo "$EXPECTED_AMOUNT_WEI" | awk '{print int($1 * 0.99)}')
-        
-        # Use awk for numeric comparison
-        SUFFICIENT_INCREASE=$(echo "$BALANCE_INCREASE $MIN_EXPECTED" | awk '{if ($1 >= $2) print "1"; else print "0"}')
-        
-        if [ "$SUFFICIENT_INCREASE" = "0" ] || [ -z "$BALANCE_INCREASE" ] || [ "$BALANCE_INCREASE" = "0" ]; then
-            log_and_echo "   ❌ ERROR: Bob did not receive the escrow funds!"
-            log_and_echo "   Bob's balance before: $BOB_BALANCE_BEFORE wei"
-            log_and_echo "   Bob's balance after:  $BOB_BALANCE_AFTER wei"
-            log_and_echo "   Balance increase:    $BALANCE_INCREASE wei"
-            log_and_echo "   Expected increase:   ~$EXPECTED_AMOUNT_WEI wei (matches request intent offered_amount)"
-            log_and_echo "   Minimum expected:     $MIN_EXPECTED wei (99% of escrow amount)"
-            log_and_echo "   Escrow release FAILED - Bob did not receive funds!"
+        # Check if balance increased (USDxyz transfer, no gas deduction from token balance)
+        if [ -z "$CHAIN3_USDXYZ_INCREASE" ] || [ "$CHAIN3_USDXYZ_INCREASE" = "0" ]; then
+            log_and_echo "   ❌ ERROR: Solver did not receive the escrow USDxyz!"
+            log_and_echo "   Solver's Chain 3 USDxyz before: $SOLVER_CHAIN3_USDXYZ_BEFORE USDxyz.10e8"
+            log_and_echo "   Solver's Chain 3 USDxyz after:  $SOLVER_CHAIN3_USDXYZ_AFTER USDxyz.10e8"
+            log_and_echo "   Balance increase:    $CHAIN3_USDXYZ_INCREASE USDxyz.10e8"
+            log_and_echo "   Expected increase:   $EXPECTED_USDXYZ USDxyz.10e8"
+            log_and_echo "   Escrow release FAILED - Solver did not receive USDxyz!"
             exit 1
         fi
         
         log "   ✅ Escrow released successfully on EVM chain!"
-        log "   ✅ Bob received $BALANCE_INCREASE wei (expected ~$EXPECTED_AMOUNT_WEI wei)"
+        log "   ✅ Solver received $CHAIN3_USDXYZ_INCREASE USDxyz.10e8 (expected $EXPECTED_USDXYZ USDxyz.10e8)"
         RELEASED_ESCROWS="${RELEASED_ESCROWS}${RELEASED_ESCROWS:+ }${ESCROW_ID}"
     done
 }
@@ -301,45 +310,41 @@ log "   - Waiting for transactions to be fully processed..."
 sleep 5
 
 # Get final balances
-# Note: Alice's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh
+# Note: Requester's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh
 
 cd evm-intent-framework
-BOB_BALANCE_FINAL_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
-BOB_BALANCE_FINAL=$(echo "$BOB_BALANCE_FINAL_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
+SOLVER_CHAIN3_USDXYZ_FINAL_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && TOKEN_ADDRESS='$USDXYZ_ADDRESS' ACCOUNT='$SOLVER_EVM_ADDRESS' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+SOLVER_CHAIN3_USDXYZ_FINAL=$(echo "$SOLVER_CHAIN3_USDXYZ_FINAL_OUTPUT" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
 cd ..
 
-if [ -z "$BOB_BALANCE_FINAL" ]; then
-    log_and_echo "   ❌ ERROR: Failed to get Bob's final balance on EVM"
-    log_and_echo "   Balance output: $BOB_BALANCE_FINAL_OUTPUT"
+if [ -z "$SOLVER_CHAIN3_USDXYZ_FINAL" ]; then
+    log_and_echo "   ❌ ERROR: Failed to get Solver's final USDxyz balance on Chain 3 (EVM)"
+    log_and_echo "   Balance output: $SOLVER_CHAIN3_USDXYZ_FINAL_OUTPUT"
     exit 1
 fi
 
 # For inflow flow:
-# - Bob on EVM Chain 3 should have received ~1 ETH (matches request intent offered_amount) from escrow release
-# Note: Alice's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh (hub intent fulfillment)
-# We check that Bob's balance increased by approximately the expected amount (at least 99% to account for gas)
+# - Solver on EVM Chain 3 should have received 1 USDxyz (matches request-intent offered_amount) from escrow release
+# Note: Requester's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh (hub intent fulfillment)
 
-EXPECTED_BOB_AMOUNT_WEI="1000000000000000000"  # 1 ETH (matches request intent offered_amount)
-MIN_EXPECTED_BOB_WEI=$(echo "$EXPECTED_BOB_AMOUNT_WEI" | awk '{print int($1 * 0.99)}')
+SOLVER_CHAIN3_USDXYZ_EXPECTED="100000000"  # 1 USDxyz = 100_000_000 (8 decimals)
 
-# Calculate balance increase for Bob on EVM Chain 3
-BOB_BALANCE_INCREASE=$(echo "$BOB_BALANCE_FINAL $BOB_BALANCE_INIT" | awk '{print $1 - $2}')
+# Calculate balance increase for Solver on EVM Chain 3
+SOLVER_CHAIN3_USDXYZ_GAIN=$((SOLVER_CHAIN3_USDXYZ_FINAL - SOLVER_CHAIN3_USDXYZ_INIT))
 
-# Check if escrow was released (Bob on EVM Chain 3 should have received funds)
-SUFFICIENT_BOB_INCREASE=$(echo "$BOB_BALANCE_INCREASE $MIN_EXPECTED_BOB_WEI" | awk '{if ($1 >= $2) print "1"; else print "0"}')
-
-if [ "$SUFFICIENT_BOB_INCREASE" = "0" ] || [ -z "$BOB_BALANCE_INCREASE" ] || [ "$BOB_BALANCE_INCREASE" = "0" ]; then
-    log_and_echo "❌ ERROR: Bob on EVM Chain 3 balance did not increase by expected amount!"
-    log_and_echo "   Initial balance: $BOB_BALANCE_INIT wei"
-    log_and_echo "   Final balance: $BOB_BALANCE_FINAL wei"
-    log_and_echo "   Balance increase: $BOB_BALANCE_INCREASE wei"
-    log_and_echo "   Expected increase: at least $MIN_EXPECTED_BOB_WEI wei (99% of escrow amount, after escrow release)"
+# Check if escrow was released (Solver on EVM Chain 3 should have received funds)
+if [ "$SOLVER_CHAIN3_USDXYZ_GAIN" -lt "$SOLVER_CHAIN3_USDXYZ_EXPECTED" ]; then
+    log_and_echo "❌ ERROR: Solver on EVM Chain 3 USDxyz balance did not increase by expected amount!"
+    log_and_echo "   Initial balance: $SOLVER_CHAIN3_USDXYZ_INIT USDxyz.10e8"
+    log_and_echo "   Final balance: $SOLVER_CHAIN3_USDXYZ_FINAL USDxyz.10e8"
+    log_and_echo "   Balance increase: $SOLVER_CHAIN3_USDXYZ_GAIN USDxyz.10e8"
+    log_and_echo "   Expected increase: $SOLVER_CHAIN3_USDXYZ_EXPECTED USDxyz.10e8"
     log_and_echo "   This indicates the escrow was not released or funds were not received"
     exit 1
 fi
 
 log "   ✅ Final balances validated:"
-log "      Bob EVM Chain 3: $BOB_BALANCE_INIT → $BOB_BALANCE_FINAL wei (+$BOB_BALANCE_INCREASE, escrow released)"
+log "      Solver Chain 3 USDxyz: $SOLVER_CHAIN3_USDXYZ_INIT → $SOLVER_CHAIN3_USDXYZ_FINAL (+$SOLVER_CHAIN3_USDXYZ_GAIN) USDxyz.10e8"
 
 log ""
 log "📝 Useful commands:"

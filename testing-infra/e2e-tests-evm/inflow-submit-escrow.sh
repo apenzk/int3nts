@@ -40,24 +40,38 @@ log "   Intent ID:              $INTENT_ID"
 
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 
+# Get USDxyz token address from chain-info.env
+if [ -f "$PROJECT_ROOT/tmp/chain-info.env" ]; then
+    source "$PROJECT_ROOT/tmp/chain-info.env"
+    USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
+fi
+if [ -z "$USDXYZ_ADDRESS" ]; then
+    log_and_echo "❌ ERROR: Could not find USDxyz token address. Please ensure USDxyz is deployed."
+    exit 1
+fi
+
+# Get test tokens address for balance display
+TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
+
 log ""
 log "🔑 Configuration:"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Intent ID (for escrow): $INTENT_ID"
-log "   Escrow amount: 1 ETH (matches request intent offered_amount)"
+log "   USDxyz token address: $USDXYZ_ADDRESS"
+log "   Escrow amount: 1 USDxyz (matches request-intent offered_amount)"
 
 # Check and display initial balances using common function
 log ""
-display_balances_hub
-display_balances_connected_evm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_evm "$USDXYZ_ADDRESS"
 log_and_echo ""
 
 log ""
 log "   Creating escrow on EVM chain..."
-log "   - Alice locks 1 ETH in escrow on Chain 3 (EVM)"
+log "   - Requester locks 1 USDxyz in escrow on Chain 3 (EVM)"
 log "   - Requester provides hub chain intent_id when creating escrow"
 log "   - Using intent_id from hub chain: $INTENT_ID"
-log "   - Amount matches request intent offered_amount"
+log "   - Amount matches request-intent offered_amount"
 
 cd evm-intent-framework
 
@@ -65,14 +79,13 @@ cd evm-intent-framework
 INTENT_ID_EVM=$(convert_intent_id_to_evm "$INTENT_ID")
 log "     Intent ID (EVM): $INTENT_ID_EVM"
 
-# Create escrow for this intent with ETH (address(0)) and deposit funds atomically
-log "   - Creating escrow for intent (ETH escrow) with funds..."
-# Reserved solver: Bob - funds will go to Bob when escrow is claimed
-BOB_ADDRESS=$(get_hardhat_account_address "2")
-# Escrow amount must match the request intent's offered_amount (1 ETH)
-# This is the amount the requester specified they will lock in escrow on the connected chain
-ETH_AMOUNT_WEI="1000000000000000000"  # 1 ETH (matches request intent offered_amount)
-CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDRESS='$ESCROW_ADDRESS' INTENT_ID_EVM='$INTENT_ID_EVM' ETH_AMOUNT_WEI='$ETH_AMOUNT_WEI' RESERVED_SOLVER='$BOB_ADDRESS' npx hardhat run scripts/create-escrow-eth.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
+# Create escrow for this intent with USDxyz ERC20 token
+log "   - Creating escrow for intent (USDxyz ERC20 escrow) with funds..."
+# Reserved solver: Solver - funds will go to Solver when escrow is claimed
+SOLVER_ADDRESS=$(get_hardhat_account_address "2")
+# Escrow amount must match the request-intent's offered_amount (1 USDxyz)
+USDXYZ_AMOUNT="100000000"  # 1 USDxyz = 100_000_000 (8 decimals)
+CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDRESS='$ESCROW_ADDRESS' TOKEN_ADDRESS='$USDXYZ_ADDRESS' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDXYZ_AMOUNT' RESERVED_SOLVER='$SOLVER_ADDRESS' npx hardhat run scripts/create-escrow-erc20.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
 CREATE_EXIT_CODE=$?
 
 # Check if creation was successful
@@ -90,7 +103,7 @@ fi
 if ! echo "$CREATE_OUTPUT" | grep -qi "Escrow created for intent"; then
     log_and_echo "     ❌ ERROR: Escrow creation did not complete successfully"
     log_and_echo "   Creation output: $CREATE_OUTPUT"
-    log_and_echo "   Expected to see 'Escrow created for intent (ETH)' in output"
+    log_and_echo "   Expected to see 'Escrow created for intent (ERC20)' in output"
     exit 1
 fi
 
@@ -104,16 +117,16 @@ log "🎉 ESCROW CREATION COMPLETE!"
 log "============================"
 log ""
 log "✅ Step completed successfully:"
-log "   1. Escrow created on Chain 3 (EVM) with locked ETH"
+log "   1. Escrow created on Chain 3 (EVM) with locked USDxyz"
 log ""
 log "📋 Escrow Details:"
 log "   Intent ID: $INTENT_ID"
 log "   Escrow Address: $ESCROW_ADDRESS"
-log "   Locked Amount: 1 ETH (matches request intent offered_amount)"
+log "   Locked Amount: 1 USDxyz (matches request-intent offered_amount)"
 
 # Check final balances using common function
-display_balances_hub
-display_balances_connected_evm
+display_balances_hub "0x$TEST_TOKENS_CHAIN1"
+display_balances_connected_evm "$USDXYZ_ADDRESS"
 log_and_echo ""
 
 

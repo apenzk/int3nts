@@ -16,15 +16,15 @@ get_profile_address() {
     local profile="$1"
     
     if [ -z "$profile" ]; then
-        log_and_echo "❌ ERROR: get_profile_address() requires a profile name"
-        exit 1
+        echo "❌ ERROR: get_profile_address() requires a profile name" >&2
+        return 1
     fi
     
     local address=$(aptos config show-profiles | jq -r ".[\"Result\"][\"$profile\"].account" 2>/dev/null)
     
     if [ -z "$address" ] || [ "$address" = "null" ]; then
-        log_and_echo "❌ ERROR: Could not extract address for profile: $profile"
-        exit 1
+        echo "❌ ERROR: Could not extract address for profile: $profile" >&2
+        return 1
     fi
     
     echo "$address"
@@ -32,7 +32,7 @@ get_profile_address() {
 
 # Fund account and verify balance
 # Usage: fund_and_verify_account <profile_name> <chain_number> <account_label> <expected_amount> [output_var_name]
-# Example: fund_and_verify_account "alice-chain1" "1" "Alice Chain 1" "200000000" "ALICE_BALANCE"
+# Example: fund_and_verify_account "requester-chain1" "1" "Requester Chain 1" "200000000" "REQUESTER_BALANCE"
 # If output_var_name is provided, sets that variable with the verified balance
 # Otherwise, outputs the balance (can be captured with: BALANCE=$(fund_and_verify_account ...))
 fund_and_verify_account() {
@@ -105,8 +105,8 @@ fund_and_verify_account() {
 
 # Initialize Aptos profile
 # Usage: init_aptos_profile <profile_name> <chain_number> [log_file]
-# Example: init_aptos_profile "alice-chain1" "1"
-#          init_aptos_profile "alice-chain2" "2"
+# Example: init_aptos_profile "requester-chain1" "1"
+#          init_aptos_profile "requester-chain2" "2"
 # Creates an Aptos profile for the specified chain:
 #   - Chain 1 (hub): uses --network local (ports 8080/8081)
 #   - Chain 2 (connected): uses --network custom with --rest-url and --faucet-url (ports 8082/8083)
@@ -161,7 +161,7 @@ init_aptos_profile() {
 
 # Cleanup Aptos profile
 # Usage: cleanup_aptos_profile <profile_name> [log_file]
-# Example: cleanup_aptos_profile "alice-chain1"
+# Example: cleanup_aptos_profile "requester-chain1"
 #          cleanup_aptos_profile "intent-account-chain2"
 # Deletes an Aptos profile using aptos config delete-profile
 # If log_file is provided, redirects output there; otherwise uses LOG_FILE if set
@@ -363,7 +363,7 @@ extract_apt_metadata() {
 
 # Generate solver signature for IntentToSign
 # Usage: generate_solver_signature <profile> <chain_address> <offered_metadata> <offered_amount> <offered_chain_id> <desired_metadata> <desired_amount> <desired_chain_id> <expiry_time> <issuer> <solver> <chain_num> [log_file]
-# Example: generate_solver_signature "bob-chain1" "$CHAIN1_ADDRESS" "$OFFERED_FA_METADATA" "100000000" "1" "$DESIRED_FA_METADATA" "100000000" "2" "$EXPIRY_TIME" "$ALICE_CHAIN1_ADDRESS" "$BOB_CHAIN1_ADDRESS" "1"
+# Example: generate_solver_signature "solver-chain1" "$CHAIN1_ADDRESS" "$OFFERED_METADATA" "100000000" "1" "$DESIRED_METADATA" "100000000" "2" "$EXPIRY_TIME" "$REQUESTER_CHAIN1_ADDRESS" "$SOLVER_CHAIN1_ADDRESS" "1"
 # Returns the signature as hex string (with 0x prefix)
 generate_solver_signature() {
     local profile="$1"
@@ -480,42 +480,157 @@ initialize_solver_registry() {
     fi
 }
 
+# Get USDxyz metadata address
+# Usage: get_usdxyz_metadata <test_tokens_address> <chain_num>
+# Returns the USDxyz metadata object address
+get_usdxyz_metadata() {
+    local test_tokens_addr="$1"
+    local chain_num="$2"
+    
+    local rest_port
+    if [ "$chain_num" = "1" ]; then
+        rest_port="8080"
+    else
+        rest_port="8082"
+    fi
+    
+    # Call the view function to get metadata
+    local metadata=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
+        -H 'Content-Type: application/json' \
+        -d "{
+            \"function\": \"${test_tokens_addr}::usdxyz::get_metadata\",
+            \"type_arguments\": [],
+            \"arguments\": []
+        }" 2>/dev/null | jq -r '.[0].inner // empty')
+    
+    echo "$metadata"
+}
+
+# Get USDxyz balance for an account
+# Usage: get_usdxyz_balance <profile> <chain_num> <test_tokens_address>
+# Returns the USDxyz balance for the given profile
+get_usdxyz_balance() {
+    local profile="$1"
+    local chain_num="$2"
+    local test_tokens_addr="$3"
+    
+    # Validate inputs
+    if [ -z "$profile" ] || [ -z "$chain_num" ] || [ -z "$test_tokens_addr" ]; then
+        echo "❌ PANIC: get_usdxyz_balance requires profile, chain_num, test_tokens_addr" >&2
+        echo "   profile: '$profile', chain_num: '$chain_num', test_tokens_addr: '$test_tokens_addr'" >&2
+        exit 1
+    fi
+    
+    local rest_port
+    if [ "$chain_num" = "1" ]; then
+        rest_port="8080"
+    else
+        rest_port="8082"
+    fi
+    
+    # Use || true to allow PANIC check to run if get_profile_address fails
+    local account_addr=$(get_profile_address "$profile" 2>/dev/null) || true
+    if [ -z "$account_addr" ]; then
+        echo "❌ PANIC: get_usdxyz_balance failed to get address for profile '$profile'" >&2
+        exit 1
+    fi
+    
+    # Call the view function to get balance
+    local balance=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
+        -H 'Content-Type: application/json' \
+        -d "{
+            \"function\": \"${test_tokens_addr}::usdxyz::balance\",
+            \"type_arguments\": [],
+            \"arguments\": [\"${account_addr}\"]
+        }" 2>/dev/null | jq -r '.[0] // ""')
+    
+    if [ -z "$balance" ]; then
+        echo "❌ PANIC: get_usdxyz_balance failed to get balance for '$profile' on chain $chain_num" >&2
+        echo "   account_addr: $account_addr, test_tokens_addr: $test_tokens_addr" >&2
+        exit 1
+    fi
+    
+    echo "$balance"
+}
+
 # Display balances for Chain 1 (Hub)
-# Usage: display_balances_hub
-# Fetches and displays Alice and Bob balances on the Hub chain
+# Usage: display_balances_hub [test_tokens_address]
+# Fetches and displays Requester and Solver balances on the Hub chain
+# If test_tokens_address is provided, also displays USDxyz balances (PANICS if USDxyz lookup fails)
 # Note: Hub chain is always a Move VM chain, so this uses aptos commands
 display_balances_hub() {
-    local alice1=$(aptos account balance --profile alice-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-    local bob1=$(aptos account balance --profile bob-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+    local test_tokens_addr="$1"
+    
+    local requester1=$(aptos account balance --profile requester-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+    local solver1=$(aptos account balance --profile solver-chain1 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
     
     log_and_echo ""
     log_and_echo "   Chain 1 (Hub):"
-    log_and_echo "      Alice: $alice1 Octas"
-    log_and_echo "      Bob:   $bob1 Octas"
+    
+    if [ -n "$test_tokens_addr" ]; then
+        local requester_usdxyz=$(get_usdxyz_balance "requester-chain1" "1" "$test_tokens_addr")
+        local solver_usdxyz=$(get_usdxyz_balance "solver-chain1" "1" "$test_tokens_addr")
+        
+        # PANIC if we passed a token address but couldn't get balances
+        if [ -z "$requester_usdxyz" ] || [ -z "$solver_usdxyz" ]; then
+            log_and_echo "❌ PANIC: display_balances_hub failed to get USDxyz balances"
+            log_and_echo "   test_tokens_addr: $test_tokens_addr"
+            log_and_echo "   requester_usdxyz: '$requester_usdxyz'"
+            log_and_echo "   solver_usdxyz: '$solver_usdxyz'"
+            exit 1
+        fi
+        
+        log_and_echo "      Requester: $requester1 Octas APT, $requester_usdxyz USDxyz"
+        log_and_echo "      Solver:   $solver1 Octas APT, $solver_usdxyz USDxyz"
+    else
+        log_and_echo "      Requester: $requester1 Octas"
+        log_and_echo "      Solver:   $solver1 Octas"
+    fi
 }
 
 # Display balances for Chain 2 (Connected Move VM)
-# Usage: display_balances_connected_mvm
-# Fetches and displays Alice and Bob balances on the Connected Move VM chain
+# Usage: display_balances_connected_mvm [test_tokens_address]
+# Fetches and displays Requester and Solver balances on the Connected Move VM chain
+# If test_tokens_address is provided, also displays USDxyz balances (PANICS if USDxyz lookup fails)
 # Only displays if Chain 2 profiles exist (skips silently if they don't)
 display_balances_connected_mvm() {
+    local test_tokens_addr="$1"
+    
     # Check if Chain 2 profiles exist
-    if ! aptos config show-profiles 2>/dev/null | jq -r ".[\"Result\"][\"alice-chain2\"]" 2>/dev/null | grep -q "."; then
+    if ! aptos config show-profiles 2>/dev/null | jq -r ".[\"Result\"][\"requester-chain2\"]" 2>/dev/null | grep -q "."; then
         return 0  # Silently skip if profiles don't exist
     fi
     
-    local alice2=$(aptos account balance --profile alice-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-    local bob2=$(aptos account balance --profile bob-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+    local requester2=$(aptos account balance --profile requester-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+    local solver2=$(aptos account balance --profile solver-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
     
     log_and_echo "   Chain 2 (Connected MVM):"
-    log_and_echo "      Alice: $alice2 Octas"
-    log_and_echo "      Bob:   $bob2 Octas"
+    
+    if [ -n "$test_tokens_addr" ]; then
+        local requester_usdxyz=$(get_usdxyz_balance "requester-chain2" "2" "$test_tokens_addr")
+        local solver_usdxyz=$(get_usdxyz_balance "solver-chain2" "2" "$test_tokens_addr")
+        
+        # PANIC if we passed a token address but couldn't get balances
+        if [ -z "$requester_usdxyz" ] || [ -z "$solver_usdxyz" ]; then
+            log_and_echo "❌ PANIC: display_balances_connected_mvm failed to get USDxyz balances"
+            log_and_echo "   test_tokens_addr: $test_tokens_addr"
+            log_and_echo "   requester_usdxyz: '$requester_usdxyz'"
+            log_and_echo "   solver_usdxyz: '$solver_usdxyz'"
+            exit 1
+        fi
+        
+        log_and_echo "      Requester: $requester2 Octas APT, $requester_usdxyz USDxyz"
+        log_and_echo "      Solver:   $solver2 Octas APT, $solver_usdxyz USDxyz"
+    else
+        log_and_echo "      Requester: $requester2 Octas"
+        log_and_echo "      Solver:   $solver2 Octas"
+    fi
 }
 
 # Register solver in the solver registry
 # Usage: register_solver <profile> <chain_address> <public_key_hex> <evm_address_hex> [connected_chain_mvm_address] [log_file]
-# Example: register_solver "bob-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY_HEX" "0x0000000000000000000000000000000000000001"
-# Example with MVM address: register_solver "bob-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY_HEX" "0x0000000000000000000000000000000000000001" "$BOB_CHAIN2_ADDRESS"
+# Example: register_solver "solver-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY_HEX" "0x0000000000000000000000000000000000000001"
+# Example with MVM address: register_solver "solver-chain1" "$CHAIN1_ADDRESS" "$SOLVER_PUBLIC_KEY_HEX" "0x0000000000000000000000000000000000000001" "$SOLVER_CHAIN2_ADDRESS"
 # Exits on error
 register_solver() {
     local profile="$1"
@@ -803,4 +918,3 @@ list_all_solvers() {
         fi
     done
 }
-
