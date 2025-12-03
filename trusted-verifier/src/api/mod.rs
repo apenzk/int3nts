@@ -23,7 +23,14 @@ mod inflow_mvm;
 mod outflow_evm;
 mod outflow_mvm;
 
+// Negotiation routing module
+mod negotiation;
+
 // Re-export ApiServer for convenience
 pub use generic::ApiServer;
-// Note: ApiResponse is used internally but not re-exported
-// Use crate::api::generic::ApiResponse if needed
+// Re-export ApiResponse for testing
+#[allow(unused_imports)]
+pub use generic::ApiResponse;
+// Re-export negotiation validation functions for testing
+#[allow(unused_imports)]
+pub use negotiation::validate_signature_format;
