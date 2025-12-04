@@ -5,7 +5,7 @@
 
 use serde_json::json;
 use trusted_verifier::evm_client::EvmTransaction;
-use trusted_verifier::monitor::RequestIntentEvent;
+use trusted_verifier::monitor::IntentEvent;
 use trusted_verifier::validator::CrossChainValidator;
 use trusted_verifier::validator::{
     extract_evm_fulfillment_params, validate_outflow_fulfillment, FulfillmentTransactionParams,
@@ -16,7 +16,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 mod test_helpers;
 use test_helpers::{
     build_test_config_with_evm, create_base_evm_transaction,
-    create_base_fulfillment_transaction_params_evm, create_base_request_intent_evm,
+    create_base_fulfillment_transaction_params_evm, create_base_intent_evm,
 };
 
 // ============================================================================
@@ -237,6 +237,41 @@ fn test_extract_evm_fulfillment_params_large_valid_amount() {
     );
 }
 
+/// Test that extract_evm_fulfillment_params normalizes intent_id with leading zeros
+///
+/// What is tested: Extracting intent_id from EVM transaction calldata where the intent_id
+/// has leading zeros (padded format) should normalize it by removing leading zeros.
+///
+/// Why: EVM transactions pad intent_id to 32 bytes (64 hex chars), but intents
+/// may have the same intent_id without padding. Normalization ensures they match.
+#[test]
+fn test_extract_evm_fulfillment_params_normalizes_intent_id_with_leading_zeros() {
+    // ERC20 transfer selector: 0xa9059cbb
+    // Calldata: selector (4 bytes) + to (32 bytes) + amount (32 bytes) + intent_id (32 bytes)
+    // intent_id: 0x00aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa (with leading zero, padded to 64 hex chars)
+    // Should normalize to: 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    let calldata = "a9059cbb000000000000000000000000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa00000000000000000000000000000000000000000000000000000000017d784000aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    let tx = EvmTransaction {
+        input: format!("0x{}", calldata),
+        ..create_base_evm_transaction()
+    };
+
+    let result = extract_evm_fulfillment_params(&tx);
+
+    assert!(
+        result.is_ok(),
+        "Extraction should succeed for transaction with padded intent_id"
+    );
+    let params = result.unwrap();
+    // Should be normalized (leading zero removed)
+    assert_eq!(
+        params.intent_id,
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "Extracted intent_id should be normalized (leading zeros removed)"
+    );
+}
+
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -340,10 +375,10 @@ async fn test_validate_outflow_fulfillment_success() {
     let (_mock_server, validator) =
         setup_mock_server_with_registry(registry_address, solver_address, Some(evm_address)).await;
 
-    let request_intent = RequestIntentEvent {
-        desired_amount: 25000000, // For outflow request-intents, validation uses desired_amount (amount desired on connected chain)
+    let intent = IntentEvent {
+        desired_amount: 25000000, // For outflow intents, validation uses desired_amount (amount desired on connected chain)
         reserved_solver: Some(solver_address.to_string()),
-        ..create_base_request_intent_evm()
+        ..create_base_intent_evm()
     };
 
     let tx_params = FulfillmentTransactionParams {
@@ -352,13 +387,56 @@ async fn test_validate_outflow_fulfillment_success() {
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, true).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();
     assert!(
         validation_result.valid,
         "Validation should pass when all parameters match and solver is registered. Message: {}",
+        validation_result.message
+    );
+}
+
+/// Test that validate_outflow_fulfillment succeeds when intent_ids match after normalization
+///
+/// What is tested: Validating an outflow fulfillment transaction where the transaction's intent_id
+/// has leading zeros (padded format) but matches the intent's intent_id after normalization.
+///
+/// Why: EVM transactions pad intent_id to 32 bytes, but intents may have the same intent_id
+/// without padding. Normalization ensures they match correctly.
+#[tokio::test]
+async fn test_validate_outflow_fulfillment_succeeds_with_normalized_intent_id() {
+    let solver_address = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let evm_address = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    let registry_address = "0x1";
+
+    let (_mock_server, validator) =
+        setup_mock_server_with_registry(registry_address, solver_address, Some(evm_address)).await;
+
+    // Request-intent has intent_id without leading zeros
+    let intent = IntentEvent {
+        intent_id: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        desired_amount: 25000000,
+        reserved_solver: Some(solver_address.to_string()),
+        ..create_base_intent_evm()
+    };
+
+    // Transaction has intent_id with leading zeros (padded format)
+    let tx_params = FulfillmentTransactionParams {
+        intent_id: "0x00aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+        amount: 25000000,
+        solver: evm_address.to_string(),
+        ..create_base_fulfillment_transaction_params_evm()
+    };
+
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
+
+    assert!(result.is_ok(), "Validation should complete without error");
+    let validation_result = result.unwrap();
+    assert!(
+        validation_result.valid,
+        "Validation should pass when intent_ids match after normalization. Message: {}",
         validation_result.message
     );
 }
@@ -376,14 +454,14 @@ async fn test_validate_outflow_fulfillment_fails_on_unsuccessful_tx() {
         .await
         .expect("Failed to create validator");
 
-    let request_intent = create_base_request_intent_evm();
+    let intent = create_base_intent_evm();
     let tx_params = FulfillmentTransactionParams {
-        intent_id: request_intent.intent_id.clone(),
-        amount: request_intent.desired_amount,
+        intent_id: intent.intent_id.clone(),
+        amount: intent.desired_amount,
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, false).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, false).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();
@@ -400,7 +478,7 @@ async fn test_validate_outflow_fulfillment_fails_on_unsuccessful_tx() {
 /// Test that validate_outflow_fulfillment fails when intent_id doesn't match
 ///
 /// What is tested: Validating an outflow fulfillment transaction where the transaction's intent_id
-/// doesn't match the request-intent's intent_id should result in validation failure.
+/// doesn't match the intent's intent_id should result in validation failure.
 ///
 /// Why: Verify that transactions can only fulfill the specific intent they reference.
 #[tokio::test]
@@ -410,14 +488,14 @@ async fn test_validate_outflow_fulfillment_fails_on_intent_id_mismatch() {
         .await
         .expect("Failed to create validator");
 
-    let request_intent = create_base_request_intent_evm();
+    let intent = create_base_intent_evm();
     let tx_params = FulfillmentTransactionParams {
         intent_id: "0xwrong_intent_id".to_string(), // Different intent_id
-        amount: request_intent.desired_amount,
+        amount: intent.desired_amount,
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, true).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();
@@ -434,7 +512,7 @@ async fn test_validate_outflow_fulfillment_fails_on_intent_id_mismatch() {
 /// Test that validate_outflow_fulfillment fails when recipient doesn't match requester_address_connected_chain
 ///
 /// What is tested: Validating an outflow fulfillment transaction where the transaction's recipient
-/// doesn't match the request-intent's requester_address_connected_chain should result in validation failure.
+/// doesn't match the intent's requester_address_connected_chain should result in validation failure.
 ///
 /// Why: Verify that tokens are sent to the correct recipient address on the connected chain.
 #[tokio::test]
@@ -444,17 +522,17 @@ async fn test_validate_outflow_fulfillment_fails_on_recipient_mismatch() {
         .await
         .expect("Failed to create validator");
 
-    let request_intent = RequestIntentEvent {
-        ..create_base_request_intent_evm()
+    let intent = IntentEvent {
+        ..create_base_intent_evm()
     };
 
     let tx_params = FulfillmentTransactionParams {
         recipient: "0xdddddddddddddddddddddddddddddddddddddddd".to_string(), // Different recipient (EVM address format)
-        amount: request_intent.desired_amount,
+        amount: intent.desired_amount,
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, true).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();
@@ -471,7 +549,7 @@ async fn test_validate_outflow_fulfillment_fails_on_recipient_mismatch() {
 /// Test that validate_outflow_fulfillment fails when amount doesn't match desired_amount
 ///
 /// What is tested: Validating an outflow fulfillment transaction where the transaction's amount
-/// doesn't match the request-intent's desired_amount should result in validation failure.
+/// doesn't match the intent's desired_amount should result in validation failure.
 ///
 /// Why: Verify that the correct amount of tokens is transferred.
 #[tokio::test]
@@ -481,9 +559,9 @@ async fn test_validate_outflow_fulfillment_fails_on_amount_mismatch() {
         .await
         .expect("Failed to create validator");
 
-    let request_intent = RequestIntentEvent {
+    let intent = IntentEvent {
         desired_amount: 1000,
-        ..create_base_request_intent_evm()
+        ..create_base_intent_evm()
     };
 
     let tx_params = FulfillmentTransactionParams {
@@ -491,7 +569,7 @@ async fn test_validate_outflow_fulfillment_fails_on_amount_mismatch() {
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, true).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();
@@ -511,7 +589,7 @@ async fn test_validate_outflow_fulfillment_fails_on_amount_mismatch() {
 /// Test that validate_outflow_fulfillment fails when solver doesn't match reserved solver
 ///
 /// What is tested: Validating an outflow fulfillment transaction where the transaction's solver
-/// doesn't match the request-intent's reserved solver should result in validation failure.
+/// doesn't match the intent's reserved solver should result in validation failure.
 ///
 /// Why: Verify that only the authorized solver can fulfill the intent.
 #[tokio::test]
@@ -528,19 +606,19 @@ async fn test_validate_outflow_fulfillment_fails_on_solver_mismatch() {
     )
     .await;
 
-    let request_intent = RequestIntentEvent {
+    let intent = IntentEvent {
         desired_amount: 1000, // Set desired_amount to avoid validation failure on amount check
         reserved_solver: Some(solver_address.to_string()),
-        ..create_base_request_intent_evm()
+        ..create_base_intent_evm()
     };
 
     let tx_params = FulfillmentTransactionParams {
-        amount: request_intent.desired_amount,
+        amount: intent.desired_amount,
         solver: different_solver.to_string(), // Different solver (EVM address format)
         ..create_base_fulfillment_transaction_params_evm()
     };
 
-    let result = validate_outflow_fulfillment(&validator, &request_intent, &tx_params, true).await;
+    let result = validate_outflow_fulfillment(&validator, &intent, &tx_params, true).await;
 
     assert!(result.is_ok(), "Validation should complete without error");
     let validation_result = result.unwrap();

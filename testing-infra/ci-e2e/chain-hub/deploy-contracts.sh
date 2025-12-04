@@ -74,7 +74,7 @@ fi
 cd "$PROJECT_ROOT"
 
 # Export USDxyz address for other scripts
-echo "TEST_TOKENS_CHAIN1_ADDRESS=$TEST_TOKENS_CHAIN1_ADDRESS" >> "$PROJECT_ROOT/tmp/chain-info.env"
+echo "TEST_TOKENS_CHAIN1_ADDRESS=$TEST_TOKENS_CHAIN1_ADDRESS" >> "$PROJECT_ROOT/.tmp/chain-info.env"
 log "   ✅ USDxyz address saved: $TEST_TOKENS_CHAIN1_ADDRESS"
 
 # Mint USDxyz to Requester and Solver
@@ -83,7 +83,7 @@ log "💵 Minting USDxyz to Requester and Solver on Chain 1..."
 
 REQUESTER_CHAIN1_ADDRESS=$(get_profile_address "requester-chain1")
 SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
-USDXYZ_MINT_AMOUNT="100000000"  # 1 USDxyz (8 decimals = 100_000_000)
+USDXYZ_MINT_AMOUNT="1000000"  # 1 USDxyz (6 decimals = 1_000_000)
 
 log "   - Minting $USDXYZ_MINT_AMOUNT USDxyz to Requester ($REQUESTER_CHAIN1_ADDRESS)..."
 aptos move run --profile test-tokens-chain1 --assume-yes \

@@ -36,7 +36,7 @@ log "   Solver Chain 1 (hub):       $SOLVER_CHAIN1_ADDRESS"
 log "   Requester Chain 2 (connected): $REQUESTER_CHAIN2_ADDRESS"
 log "   Solver Chain 2 (connected): $SOLVER_CHAIN2_ADDRESS"
 
-TRANSFER_AMOUNT="100000000"  # 1 USDxyz (8 decimals = 100_000_000)
+TRANSFER_AMOUNT="1000000"  # 1 USDxyz (6 decimals = 1_000_000)
 
 # Get test tokens address
 TEST_TOKENS_CHAIN2=$(get_profile_address "test-tokens-chain2")
@@ -126,8 +126,8 @@ if [ $? -eq 0 ]; then
         exit 1
     fi
 
-    TRANSFER_INFO_FILE="${PROJECT_ROOT}/.test-data/outflow-transfer-info.txt"
-    mkdir -p "${PROJECT_ROOT}/.test-data"
+    TRANSFER_INFO_FILE="${PROJECT_ROOT}/.tmp/outflow-transfer-info.txt"
+    mkdir -p "${PROJECT_ROOT}/.tmp"
     echo "CONNECTED_CHAIN_TX_HASH=$TX_HASH" > "$TRANSFER_INFO_FILE"
     echo "INTENT_ID=$INTENT_ID" >> "$TRANSFER_INFO_FILE"
     log "     ✅ Transaction info saved to $TRANSFER_INFO_FILE"

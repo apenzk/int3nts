@@ -41,9 +41,10 @@ log_and_echo "======================================================"
 log_and_echo ""
 log_and_echo "🚀 Step 3: Configuring and starting verifier (for negotiation routing)..."
 log_and_echo "=========================================================================="
-./testing-infra/ci-e2e/chain-hub/configure-verifier.sh
-./testing-infra/ci-e2e/chain-connected-evm/configure-verifier.sh
 ./testing-infra/ci-e2e/e2e-tests-evm/start-verifier.sh
+
+# Start solver service for automatic signing and fulfillment
+./testing-infra/ci-e2e/e2e-tests-evm/start-solver.sh
 
 log_and_echo ""
 log_and_echo "🚀 Step 4: Testing OUTFLOW intents (hub chain → connected EVM chain)..."

@@ -30,7 +30,7 @@ log ""
 
 # Get EVM escrow contract address
 cd evm-intent-framework
-ESCROW_ADDRESS=$(grep -i "IntentEscrow deployed to" "$PROJECT_ROOT/tmp/intent-framework-logs/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
+ESCROW_ADDRESS=$(grep -i "IntentEscrow deployed to" "$PROJECT_ROOT/.tmp/intent-framework-logs/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
 cd ..
 
 if [ -z "$ESCROW_ADDRESS" ]; then
@@ -41,8 +41,8 @@ fi
 log "   Escrow contract address: $ESCROW_ADDRESS"
 
 # Get USDxyz token address from chain-info.env
-if [ -f "$PROJECT_ROOT/tmp/chain-info.env" ]; then
-    source "$PROJECT_ROOT/tmp/chain-info.env"
+if [ -f "$PROJECT_ROOT/.tmp/chain-info.env" ]; then
+    source "$PROJECT_ROOT/.tmp/chain-info.env"
     USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
 fi
 if [ -z "$USDXYZ_ADDRESS" ]; then
@@ -198,9 +198,9 @@ check_and_release_escrows() {
         log "   - Solver's Chain 3 USDxyz balance after claim: $SOLVER_CHAIN3_USDXYZ_AFTER USDxyz.10e8"
         
         # Calculate balance increase
-        # Expected: Solver should receive 1 USDxyz (matches request-intent offered_amount)
-        # Note: EVM USDxyz uses 18 decimals, MVM uses 8 decimals
-        EXPECTED_USDXYZ="100000000"  # 1 USDxyz = 100_000_000
+        # Expected: Solver should receive 1 USDxyz (matches intent offered_amount)
+        # Note: Both EVM and MVM USDxyz use 6 decimals
+        EXPECTED_USDXYZ="1000000"  # 1 USDxyz = 1_000_000 (6 decimals)
         CHAIN3_USDXYZ_INCREASE=$(echo "$SOLVER_CHAIN3_USDXYZ_AFTER $SOLVER_CHAIN3_USDXYZ_BEFORE" | awk '{print $1 - $2}')
         
         log "   - USDxyz balance increase: $CHAIN3_USDXYZ_INCREASE USDxyz.10e8"
@@ -324,10 +324,10 @@ if [ -z "$SOLVER_CHAIN3_USDXYZ_FINAL" ]; then
 fi
 
 # For inflow flow:
-# - Solver on EVM Chain 3 should have received 1 USDxyz (matches request-intent offered_amount) from escrow release
+# - Solver on EVM Chain 3 should have received 1 USDxyz (matches intent offered_amount) from escrow release
 # Note: Requester's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh (hub intent fulfillment)
 
-SOLVER_CHAIN3_USDXYZ_EXPECTED="100000000"  # 1 USDxyz = 100_000_000 (8 decimals)
+SOLVER_CHAIN3_USDXYZ_EXPECTED="1000000"  # 1 USDxyz = 1_000_000 (6 decimals)
 
 # Calculate balance increase for Solver on EVM Chain 3
 SOLVER_CHAIN3_USDXYZ_GAIN=$((SOLVER_CHAIN3_USDXYZ_FINAL - SOLVER_CHAIN3_USDXYZ_INIT))

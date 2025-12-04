@@ -40,12 +40,14 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-VERIFIER_ETH_ADDRESS=$(cd "$VERIFIER_DIR" && VERIFIER_CONFIG_PATH="$CONFIG_PATH" cargo run --bin get_verifier_eth_address 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1 | tr -d '\n')
+VERIFIER_ETH_OUTPUT=$(cd "$PROJECT_ROOT" && env HOME="${HOME}" VERIFIER_CONFIG_PATH="$CONFIG_PATH" nix develop -c bash -c "cd trusted-verifier && cargo run --bin get_verifier_eth_address 2>&1" | tee -a "$LOG_FILE")
+VERIFIER_ETH_ADDRESS=$(echo "$VERIFIER_ETH_OUTPUT" | grep -E '^0x[a-fA-F0-9]{40}$' | head -1 | tr -d '\n')
 
 if [ -z "$VERIFIER_ETH_ADDRESS" ]; then
     log_and_echo "❌ ERROR: Could not compute verifier Ethereum address from config"
+    log_and_echo "   Command output:"
+    echo "$VERIFIER_ETH_OUTPUT"
     log_and_echo "   Check that trusted-verifier/config/verifier_testing.toml has valid keys"
-    log_and_echo "   Run: cargo run --bin get_verifier_eth_address in trusted-verifier directory"
     exit 1
 fi
 
@@ -90,7 +92,7 @@ fi
 log "   ✅ USDxyz deployed to: $USDXYZ_ADDRESS"
 
 # Save USDxyz address for other scripts
-echo "USDXYZ_EVM_ADDRESS=$USDXYZ_ADDRESS" >> "$PROJECT_ROOT/tmp/chain-info.env"
+echo "USDXYZ_EVM_ADDRESS=$USDXYZ_ADDRESS" >> "$PROJECT_ROOT/.tmp/chain-info.env"
 
 # Mint USDxyz to Requester and Solver (accounts 1 and 2)
 log ""
@@ -98,7 +100,7 @@ log "💵 Minting USDxyz to Requester and Solver on EVM chain..."
 
 REQUESTER_EVM_ADDRESS=$(get_hardhat_account_address "1")
 SOLVER_EVM_ADDRESS=$(get_hardhat_account_address "2")
-USDXYZ_MINT_AMOUNT="100000000"  # 1 USDxyz (8 decimals = 100_000_000)
+USDXYZ_MINT_AMOUNT="1000000"  # 1 USDxyz (6 decimals = 1_000_000)
 
 log "   - Minting USDxyz to Requester ($REQUESTER_EVM_ADDRESS)..."
 MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDRESS='$USDXYZ_ADDRESS' RECIPIENT='$REQUESTER_EVM_ADDRESS' AMOUNT='$USDXYZ_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")

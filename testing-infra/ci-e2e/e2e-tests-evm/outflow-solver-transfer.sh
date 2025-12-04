@@ -30,17 +30,17 @@ log "📋 Chain Information:"
 log "   Requester EVM (connected): $REQUESTER_EVM_ADDRESS"
 log "   Solver EVM (connected): $SOLVER_EVM_ADDRESS"
 
-# Transfer amount must match the request-intent's desired_amount (1 USDxyz)
+# Transfer amount must match the intent's desired_amount (1 USDxyz)
 # This is the amount the requester specified they want on the connected chain
-TRANSFER_AMOUNT="100000000"  # 1 USDxyz = 100_000_000 (8 decimals)
+TRANSFER_AMOUNT="1000000"  # 1 USDxyz = 1_000_000 (6 decimals)
 
 log ""
 log "🔑 Configuration:"
 log "   Intent ID: $INTENT_ID"
-log "   Transfer Amount: $TRANSFER_AMOUNT USDxyz.10e8 (matches request-intent desired_amount)"
+log "   Transfer Amount: $TRANSFER_AMOUNT USDxyz.10e8 (matches intent desired_amount)"
 
 # Get USDxyz token address from chain-info.env
-source "$PROJECT_ROOT/tmp/chain-info.env" 2>/dev/null || true
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
 
 if [ -z "$USDXYZ_ADDRESS" ]; then
@@ -75,7 +75,7 @@ log "   Executing solver transfer on connected EVM chain..."
 log "   - Solver (Solver) transfers tokens directly to requester (Requester) on EVM chain"
 log "   - This is a DIRECT TRANSFER, not an escrow"
 log "   - Requester (Requester) receives tokens immediately on EVM chain"
-log "   - Amount: $TRANSFER_AMOUNT USDxyz.10e8 (matches request-intent desired_amount)"
+log "   - Amount: $TRANSFER_AMOUNT USDxyz.10e8 (matches intent desired_amount)"
 log "   - Intent ID included in transaction calldata for verifier tracking"
 
 cd evm-intent-framework
@@ -142,8 +142,8 @@ if [ $TRANSFER_EXIT_CODE -eq 0 ] && echo "$TRANSFER_OUTPUT" | grep -qi "SUCCESS"
         exit 1
     fi
 
-    TRANSFER_INFO_FILE="${PROJECT_ROOT}/.test-data/outflow-transfer-info.txt"
-    mkdir -p "${PROJECT_ROOT}/.test-data"
+    TRANSFER_INFO_FILE="${PROJECT_ROOT}/.tmp/outflow-transfer-info.txt"
+    mkdir -p "${PROJECT_ROOT}/tmp"
     echo "CONNECTED_CHAIN_TX_HASH=$TX_HASH" > "$TRANSFER_INFO_FILE"
     echo "INTENT_ID=$INTENT_ID" >> "$TRANSFER_INFO_FILE"
     log "     ✅ Transaction info saved to $TRANSFER_INFO_FILE"
@@ -177,7 +177,7 @@ log ""
 log "📋 Transfer Details:"
 log "   Intent ID: $INTENT_ID"
 log "   Transaction Hash: $TX_HASH"
-log "   Amount Transferred: $TRANSFER_AMOUNT USDxyz.10e8 (matches request-intent desired_amount)"
+log "   Amount Transferred: $TRANSFER_AMOUNT USDxyz.10e8 (matches intent desired_amount)"
 log "   Recipient: $REQUESTER_EVM_ADDRESS"
 log "   Token Address: $USDXYZ_ADDRESS"
 

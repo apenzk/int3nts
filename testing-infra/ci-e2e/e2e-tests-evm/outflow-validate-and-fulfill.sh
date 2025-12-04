@@ -18,7 +18,7 @@ if ! load_intent_info "INTENT_ID,HUB_INTENT_ADDRESS"; then
     exit 1
 fi
 
-TRANSFER_INFO_FILE="${PROJECT_ROOT}/.test-data/outflow-transfer-info.txt"
+TRANSFER_INFO_FILE="${PROJECT_ROOT}/.tmp/outflow-transfer-info.txt"
 
 if [ ! -f "$TRANSFER_INFO_FILE" ]; then
     log_and_echo "❌ ERROR: Transfer info file not found at $TRANSFER_INFO_FILE"
@@ -41,7 +41,7 @@ TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
 SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
 
 # Get USDxyz EVM address
-source "$PROJECT_ROOT/tmp/chain-info.env" 2>/dev/null || true
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 USDXYZ_ADDRESS="$USDXYZ_EVM_ADDRESS"
 
 log ""
@@ -63,10 +63,10 @@ if ! curl -s "http://127.0.0.1:3333/health" > /dev/null 2>&1; then
 fi
 log "   ✅ Verifier is running"
 
-# Wait for verifier to poll and cache the request-intent
-# The verifier polls every 2 seconds, so wait for it to discover the request-intent
+# Wait for verifier to poll and cache the intent
+# The verifier polls every 2 seconds, so wait for it to discover the intent
 log ""
-log "   - Waiting for verifier to poll and cache request-intent..."
+log "   - Waiting for verifier to poll and cache intent..."
 MAX_WAIT=30  # Maximum wait time in seconds (should be enough for several poll cycles)
 WAIT_INTERVAL=2  # Check every 2 seconds (matches polling interval)
 ELAPSED=0
@@ -85,9 +85,9 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
 done
 
 if [ "$INTENT_FOUND" = true ]; then
-    log "     ✅ Verifier has cached the request-intent"
+    log "     ✅ Verifier has cached the intent"
 else
-    log_and_echo "❌ ERROR: Verifier did not cache the request-intent within ${MAX_WAIT} seconds"
+    log_and_echo "❌ ERROR: Verifier did not cache the intent within ${MAX_WAIT} seconds"
     log_and_echo "   Intent ID: $INTENT_ID"
     log_and_echo "   Verifier events:"
     curl -s "http://127.0.0.1:3333/events" | jq '.data.intent_events' 2>/dev/null || log "   (Unable to query events)"
@@ -234,7 +234,7 @@ log "   Signature type: $SIGNATURE_TYPE"
 log "   Signature (first 20 chars): ${APPROVAL_SIGNATURE:0:20}..."
 
 log ""
-log "🔓 Fulfilling hub request-intent with verifier signature..."
+log "🔓 Fulfilling hub intent with verifier signature..."
 log "========================================================="
 
 INTENT_OBJECT_ADDRESS="$HUB_INTENT_ADDRESS"
@@ -261,17 +261,17 @@ if [ ${#SIGNATURE_HEX} -ne 128 ]; then
 fi
 
 log "   - Fulfilling intent at: $INTENT_OBJECT_ADDRESS"
-log "   - Calling fulfill_outflow_request_intent with verifier signature"
+log "   - Calling fulfill_outflow_intent with verifier signature"
 
 aptos move run --profile solver-chain1 --assume-yes \
-    --function-id "0x${CHAIN1_ADDRESS}::fa_intent_outflow::fulfill_outflow_request_intent" \
+    --function-id "0x${CHAIN1_ADDRESS}::fa_intent_outflow::fulfill_outflow_intent" \
     --args "address:$INTENT_OBJECT_ADDRESS" "hex:$SIGNATURE_HEX" >> "$LOG_FILE" 2>&1
 
 # ============================================================================
 # SECTION 5: VERIFY RESULTS
 # ============================================================================
 if [ $? -eq 0 ]; then
-    log "     ✅ Solver (Solver) successfully fulfilled the outflow request-intent!"
+    log "     ✅ Solver (Solver) successfully fulfilled the outflow intent!"
 
     sleep 2
 
@@ -280,7 +280,7 @@ if [ $? -eq 0 ]; then
     log "     Solver Chain 1 final USDxyz balance: $SOLVER_CHAIN1_USDXYZ_FINAL USDxyz.10e8"
 
     CHAIN1_USDXYZ_INCREASE=$((SOLVER_CHAIN1_USDXYZ_FINAL - SOLVER_CHAIN1_USDXYZ_INIT))
-    OFFERED_AMOUNT=100000000  # 1 USDxyz = 100_000_000
+    OFFERED_AMOUNT=1000000  # 1 USDxyz = 1_000_000 (6 decimals)
 
     if [ "$CHAIN1_USDXYZ_INCREASE" -ge "$OFFERED_AMOUNT" ]; then
         log "     ✅ Solver (Solver) received locked USDxyz: +$CHAIN1_USDXYZ_INCREASE USDxyz.10e8 (expected $OFFERED_AMOUNT)"
@@ -291,9 +291,9 @@ if [ $? -eq 0 ]; then
         exit 1
     fi
 
-    log_and_echo "✅ Outflow request-intent fulfilled"
+    log_and_echo "✅ Outflow intent fulfilled"
 else
-    log_and_echo "❌ Outflow request-intent fulfillment failed!"
+    log_and_echo "❌ Outflow intent fulfillment failed!"
     log_and_echo "   Log file contents:"
     log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
@@ -317,7 +317,7 @@ log "✅ Steps completed successfully:"
 log "   1. Verifier queried connected EVM chain transaction"
 log "   2. Transaction validated against intent requirements"
 log "   3. Approval signature generated for hub fulfillment"
-log "   4. Solver (Solver) fulfilled hub request-intent with verifier signature"
+log "   4. Solver (Solver) fulfilled hub intent with verifier signature"
 log "   5. Locked tokens released to solver (Solver) on hub chain"
 log ""
 log "📋 Details:"
@@ -329,9 +329,9 @@ log "   Signature Type: $SIGNATURE_TYPE"
 log "   Solver (Solver) Chain 1 USDxyz increase: $CHAIN1_USDXYZ_INCREASE USDxyz.10e8"
 log ""
 log "📖 Outflow Request-intent Summary:"
-log "   1. Requester (Requester) created outflow request-intent on hub chain (locked 1 USDxyz)"
-log "   2. Solver (Solver) transferred tokens to requester (Requester) on connected EVM chain (amount matches request-intent desired_amount)"
+log "   1. Requester (Requester) created outflow intent on hub chain (locked 1 USDxyz)"
+log "   2. Solver (Solver) transferred tokens to requester (Requester) on connected EVM chain (amount matches intent desired_amount)"
 log "   3. Verifier validated the connected EVM chain transfer"
-log "   4. Solver (Solver) fulfilled hub request-intent with verifier signature"
+log "   4. Solver (Solver) fulfilled hub intent with verifier signature"
 log "   5. Solver (Solver) received locked tokens as reward on hub chain"
 

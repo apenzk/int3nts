@@ -40,8 +40,8 @@ if [ -z "$VERIFIER_LOG" ]; then
     VERIFIER_LOG="$LOG_DIR/verifier.log"
     if [ ! -f "$VERIFIER_LOG" ]; then
         # Try to find verifier log in common locations
-        if [ -f "$PROJECT_ROOT/tmp/intent-framework-logs/verifier.log" ]; then
-            VERIFIER_LOG="$PROJECT_ROOT/tmp/intent-framework-logs/verifier.log"
+        if [ -f "$PROJECT_ROOT/.tmp/intent-framework-logs/verifier.log" ]; then
+            VERIFIER_LOG="$PROJECT_ROOT/.tmp/intent-framework-logs/verifier.log"
         fi
     fi
 fi
@@ -235,6 +235,11 @@ else
                 continue
             fi
             
+            # Skip if already released (check early to avoid redundant logs)
+            if [[ "$RELEASED_ESCROWS" == *"$ESCROW_ID"* ]]; then
+                continue
+            fi
+            
             # Verify escrow_id is a valid Move VM object address format
             # Move VM addresses: 0x followed by 1-64 hex characters (3-66 chars total)
             # Object addresses can be shorter than 64 hex chars (leading zeros may be omitted)
@@ -278,11 +283,6 @@ else
                 cat "$VERIFIER_LOG"
                 log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
                 exit 1
-            fi
-            
-            # Skip if already released
-            if [[ "$RELEASED_ESCROWS" == *"$ESCROW_ID"* ]]; then
-                continue
             fi
             
             log ""
@@ -345,7 +345,7 @@ else
             # Calculate balance increase
             CHAIN2_USDXYZ_INCREASE=$((SOLVER_CHAIN2_USDXYZ_AFTER - SOLVER_CHAIN2_USDXYZ_BEFORE))
             
-            SOLVER_CHAIN2_USDXYZ_MIN_EXPECTED=100000000  # 1 USDxyz (8 decimals = 100_000_000)
+            SOLVER_CHAIN2_USDXYZ_MIN_EXPECTED=1000000  # 1 USDxyz (6 decimals = 1_000_000)
             
             if [ $TX_EXIT_CODE -eq 0 ]; then
                 log "   ✅ Escrow release transaction succeeded!"
@@ -361,7 +361,7 @@ else
                     exit 1
                 fi
                 
-                log "   ✅ Solver (Solver) received $CHAIN2_USDXYZ_INCREASE USDxyz.10e8 (expected 100_000_000 USDxyz.10e8)"
+                log "   ✅ Solver (Solver) received $CHAIN2_USDXYZ_INCREASE USDxyz.10e6 (expected 1_000_000 USDxyz.10e6)"
                 RELEASED_ESCROWS="${RELEASED_ESCROWS}${RELEASED_ESCROWS:+ }${ESCROW_ID}"
             else
                 # Check the log file for error messages
@@ -464,8 +464,8 @@ SOLVER_CHAIN2_USDXYZ_FINAL=$(get_usdxyz_balance "solver-chain2" "2" "0x$TEST_TOK
 # - Solver on Chain 2 should have received 1 USDxyz from escrow release
 # Note: Requester's balance on Chain 1 is validated in inflow-fulfill-hub-intent.sh (hub intent fulfillment)
 
-ESCROW_USDXYZ_AMOUNT=100000000  # 1 USDxyz (8 decimals = 100_000_000)
-SOLVER_CHAIN2_USDXYZ_MIN_EXPECTED=100000000  # 1 USDxyz = 100_000_000 (no deduction)
+ESCROW_USDXYZ_AMOUNT=1000000  # 1 USDxyz (6 decimals = 1_000_000)
+SOLVER_CHAIN2_USDXYZ_MIN_EXPECTED=1000000  # 1 USDxyz = 1_000_000 (no deduction)
 
 # Calculate balance increase
 SOLVER_CHAIN2_USDXYZ_GAIN=$((SOLVER_CHAIN2_USDXYZ_FINAL - SOLVER_CHAIN2_USDXYZ_INIT))
