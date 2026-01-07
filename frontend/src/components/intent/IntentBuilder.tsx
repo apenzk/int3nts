@@ -1,20 +1,22 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { verifierClient } from '@/lib/verifier';
-import type { DraftIntentRequest } from '@/lib/types';
+import type { DraftIntentRequest, DraftIntentSignature } from '@/lib/types';
 import { generateIntentId } from '@/lib/types';
 import { SUPPORTED_TOKENS, type TokenConfig, toSmallestUnits } from '@/config/tokens';
 import { CHAIN_CONFIGS } from '@/config/chains';
 import { fetchTokenBalance, type TokenBalance } from '@/lib/balances';
+import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
+import { INTENT_MODULE_ADDRESS, hexToBytes, padEvmAddressToMove } from '@/lib/move-transactions';
 
 type FlowType = 'inflow' | 'outflow';
 
 export function IntentBuilder() {
   const { address: evmAddress } = useAccount();
-  const { account: mvmAccount } = useWallet();
+  const { account: mvmAccount, signAndSubmitTransaction } = useWallet();
   const [directNightlyAddress, setDirectNightlyAddress] = useState<string | null>(null);
   const [offeredBalance, setOfferedBalance] = useState<TokenBalance | null>(null);
   const [desiredBalance, setDesiredBalance] = useState<TokenBalance | null>(null);
@@ -47,6 +49,27 @@ export function IntentBuilder() {
   const [draftCreatedAt, setDraftCreatedAt] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  
+  // Signature polling state
+  const [signature, setSignature] = useState<DraftIntentSignature | null>(null);
+  const [pollingSignature, setPollingSignature] = useState(false);
+  
+  // Transaction submission state
+  const [submittingTransaction, setSubmittingTransaction] = useState(false);
+  const [transactionHash, setTransactionHash] = useState<string | null>(null);
+  
+  
+  // Store draft data for transaction building
+  const [savedDraftData, setSavedDraftData] = useState<{
+    intentId: string;
+    offeredMetadata: string;
+    offeredAmount: string;
+    offeredChainId: string;
+    desiredMetadata: string;
+    desiredAmount: string;
+    desiredChainId: string;
+    expiryTime: number;
+  } | null>(null);
 
   // Restore draft ID from localStorage after mount (to avoid hydration mismatch)
   useEffect(() => {
@@ -61,23 +84,38 @@ export function IntentBuilder() {
     }
   }, []);
 
-  // Update countdown timer
+  // Store the fixed expiry time (Unix timestamp in seconds) - never recalculate it
+  const [fixedExpiryTime, setFixedExpiryTime] = useState<number | null>(null);
+
+  // Set fixed expiry time when draft is created or restored
+  // Always use expiry_time from the verifier (saved in savedDraftData), never recalculate
   useEffect(() => {
-    if (!draftCreatedAt) {
+    if (savedDraftData?.expiryTime) {
+      // Use the expiry_time from the verifier (Unix timestamp in seconds)
+      setFixedExpiryTime(savedDraftData.expiryTime);
+    } else {
+      setFixedExpiryTime(null);
+    }
+  }, [savedDraftData?.expiryTime]);
+
+  // Update countdown timer - uses fixed expiry time, never recalculates
+  useEffect(() => {
+    if (!fixedExpiryTime) {
       setTimeRemaining(null);
       return;
     }
 
     const updateTimer = () => {
-      const now = Date.now();
-      const expiryTime = draftCreatedAt + 30000; // 30 seconds = 30000ms
-      const remaining = Math.max(0, expiryTime - now);
-      setTimeRemaining(remaining);
+      const now = Math.floor(Date.now() / 1000); // Current time in seconds
+      const remaining = Math.max(0, fixedExpiryTime - now);
+      setTimeRemaining(remaining * 1000); // Convert to milliseconds for display
 
       if (remaining === 0) {
         // Draft expired
         setDraftId(null);
         setDraftCreatedAt(null);
+        setSavedDraftData(null);
+        setFixedExpiryTime(null);
         if (typeof window !== 'undefined') {
           localStorage.removeItem('last_draft_id');
           localStorage.removeItem('last_draft_created_at');
@@ -92,17 +130,91 @@ export function IntentBuilder() {
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [draftCreatedAt]);
+  }, [fixedExpiryTime]); // Only depend on fixedExpiryTime, not draftCreatedAt or savedDraftData
 
   // Clear draft when manually cleared
   const clearDraft = () => {
     setDraftId(null);
     setDraftCreatedAt(null);
+    setSignature(null);
+    setSavedDraftData(null);
+    setTransactionHash(null);
+    setFixedExpiryTime(null);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('last_draft_id');
       localStorage.removeItem('last_draft_created_at');
     }
   };
+
+
+  // Track if polling is active to prevent multiple polling loops
+  const pollingActiveRef = useRef(false);
+
+  // Poll for solver signature when draft exists
+  useEffect(() => {
+    if (!draftId || pollingActiveRef.current || signature) return; // Don't poll if already polling or have signature
+
+    const pollSignature = async () => {
+      pollingActiveRef.current = true;
+      setPollingSignature(true);
+      const maxAttempts = 60; // 60 attempts * 2 seconds = 120 seconds max (longer than 30s expiry)
+      let attempts = 0;
+
+      const poll = async () => {
+        try {
+          const response = await verifierClient.pollDraftSignature(draftId!);
+          console.log('Poll response:', { success: response.success, hasData: !!response.data, error: response.error });
+          
+          // Check if we got a signature (success: true with data)
+          if (response.success && response.data) {
+            console.log('Signature received:', response.data);
+            setSignature(response.data);
+            setPollingSignature(false);
+            pollingActiveRef.current = false;
+            return;
+          }
+          
+          // If error is "Draft not yet signed", continue polling
+          // If error is something else, log it but continue
+          if (response.error && !response.error.includes('not yet signed')) {
+            console.warn('Polling error:', response.error);
+          }
+          
+          attempts++;
+          
+          // Continue polling if we haven't exceeded max attempts and draft hasn't expired
+          const shouldContinue = attempts < maxAttempts && 
+            (fixedExpiryTime === null || Math.floor(Date.now() / 1000) < fixedExpiryTime);
+          
+          if (shouldContinue) {
+            setTimeout(poll, 2000); // Poll every 2 seconds
+          } else {
+            console.log('Stopping signature polling:', { attempts, maxAttempts, fixedExpiryTime });
+            setPollingSignature(false);
+            pollingActiveRef.current = false;
+          }
+        } catch (error) {
+          console.error('Error polling signature:', error);
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 2000);
+          } else {
+            setPollingSignature(false);
+            pollingActiveRef.current = false;
+          }
+        }
+      };
+
+      poll();
+    };
+
+    pollSignature();
+    
+    // Cleanup: reset polling flag if draftId changes
+    return () => {
+      pollingActiveRef.current = false;
+    };
+  }, [draftId]); // Only depend on draftId - don't restart when fixedExpiryTime changes
 
   // Filter tokens based on flow type
   const offeredTokens = useMemo(() => {
@@ -141,13 +253,17 @@ export function IntentBuilder() {
 
   // Fetch balance when offered token is selected
   useEffect(() => {
+    console.log('Offered balance effect triggered:', { offeredToken: offeredToken?.symbol, mvmAddress, evmAddress });
     if (!offeredToken) {
+      console.log('No offered token, skipping balance fetch');
       setOfferedBalance(null);
       return;
     }
 
     const address = offeredToken.chain === 'movement' ? mvmAddress : evmAddress;
+    console.log('Offered token address lookup:', { chain: offeredToken.chain, address });
     if (!address) {
+      console.log('No address for offered token chain, skipping balance fetch');
       setOfferedBalance(null);
       return;
     }
@@ -200,7 +316,15 @@ export function IntentBuilder() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    
+    // Clear all previous draft state
     setDraftId(null);
+    setDraftCreatedAt(null);
+    setSavedDraftData(null);
+    setSignature(null);
+    setPollingSignature(false);
+    pollingActiveRef.current = false;
+    setTransactionHash(null);
 
     // Validation
     if (!requesterAddr) {
@@ -228,8 +352,8 @@ export function IntentBuilder() {
     const offeredAmountSmallest = toSmallestUnits(offeredAmountNum, offeredToken.decimals);
     const desiredAmountSmallest = toSmallestUnits(desiredAmountNum, desiredToken.decimals);
 
-    // Expiry is fixed to 30 seconds from now (hardcoded, not user-configurable)
-    const expiryTime = Math.floor(Date.now() / 1000) + 30;
+    // Expiry is fixed to 60 seconds from now (hardcoded, not user-configurable)
+    const expiryTime = Math.floor(Date.now() / 1000) + 60;
 
     // Get chain IDs from config
     const offeredChainId = CHAIN_CONFIGS[offeredToken.chain].chainId;
@@ -260,14 +384,75 @@ export function IntentBuilder() {
       const response = await verifierClient.createDraftIntent(request);
 
       if (response.success && response.data) {
-        const createdAt = Date.now();
-        setDraftId(response.data.draft_id);
-        setDraftCreatedAt(createdAt);
+        const draftId = response.data.draft_id;
+        setDraftId(draftId);
         setError(null);
-        // Save to localStorage
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('last_draft_id', response.data.draft_id);
-          localStorage.setItem('last_draft_created_at', createdAt.toString());
+        
+        // Fetch the draft status to get the actual expiry_time from the verifier
+        // This ensures we use the server's time, not local time
+        try {
+          const statusResponse = await verifierClient.getDraftIntentStatus(draftId);
+          if (statusResponse.success && statusResponse.data) {
+            // Use the expiry_time from the verifier (Unix timestamp in seconds)
+            const verifierExpiryTime = statusResponse.data.expiry_time;
+            const createdAt = Date.now();
+            setDraftCreatedAt(createdAt);
+            
+            // Save draft data for transaction building - use verifier's expiry_time
+            setSavedDraftData({
+              intentId,
+              offeredMetadata: offeredToken.metadata,
+              offeredAmount: offeredAmountSmallest.toString(),
+              offeredChainId: offeredChainId.toString(),
+              desiredMetadata: desiredToken.metadata,
+              desiredAmount: desiredAmountSmallest.toString(),
+              desiredChainId: desiredChainId.toString(),
+              expiryTime: verifierExpiryTime, // Use verifier's expiry_time, not local calculation
+            });
+            
+            // Save to localStorage
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('last_draft_id', draftId);
+              localStorage.setItem('last_draft_created_at', createdAt.toString());
+            }
+          } else {
+            // Fallback: use local expiry_time if status fetch fails
+            const createdAt = Date.now();
+            setDraftCreatedAt(createdAt);
+            setSavedDraftData({
+              intentId,
+              offeredMetadata: offeredToken.metadata,
+              offeredAmount: offeredAmountSmallest.toString(),
+              offeredChainId: offeredChainId.toString(),
+              desiredMetadata: desiredToken.metadata,
+              desiredAmount: desiredAmountSmallest.toString(),
+              desiredChainId: desiredChainId.toString(),
+              expiryTime, // Fallback to local calculation
+            });
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('last_draft_id', draftId);
+              localStorage.setItem('last_draft_created_at', createdAt.toString());
+            }
+          }
+        } catch (statusError) {
+          // Fallback: use local expiry_time if status fetch fails
+          console.error('Failed to fetch draft status, using local expiry_time:', statusError);
+          const createdAt = Date.now();
+          setDraftCreatedAt(createdAt);
+          setSavedDraftData({
+            intentId,
+            offeredMetadata: offeredToken.metadata,
+            offeredAmount: offeredAmountSmallest.toString(),
+            offeredChainId: offeredChainId.toString(),
+            desiredMetadata: desiredToken.metadata,
+            desiredAmount: desiredAmountSmallest.toString(),
+            desiredChainId: desiredChainId.toString(),
+            expiryTime, // Fallback to local calculation
+          });
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('last_draft_id', draftId);
+            localStorage.setItem('last_draft_created_at', createdAt.toString());
+          }
         }
       } else {
         setError(response.error || 'Failed to create draft intent');
@@ -279,13 +464,161 @@ export function IntentBuilder() {
     }
   };
 
+  const handleCreateIntent = async () => {
+    if (!savedDraftData || !signature || !requesterAddr) {
+      setError('Missing required data to create intent');
+      return;
+    }
+
+    // Verify we're using the intent ID from the draft
+    if (!savedDraftData.intentId) {
+      setError('Intent ID not found in saved draft data');
+      return;
+    }
+
+    console.log('Creating intent on-chain with intent ID from draft:', savedDraftData.intentId);
+
+    setSubmittingTransaction(true);
+    setError(null);
+
+    try {
+      // Build transaction arguments as plain values
+      let functionName: string;
+      let functionArguments: any[];
+
+      // Convert signature to array of numbers for vector<u8> serialization
+      const signatureBytes = hexToBytes(signature.signature);
+      const signatureArray = Array.from(signatureBytes);
+      console.log('Signature array length:', signatureArray.length);
+
+      if (flowType === 'inflow') {
+        // Inflow: offered on connected chain (EVM), desired on hub (Move)
+        const evmAddressForInflow = evmAddress || '0x' + '0'.repeat(40);
+        const paddedRequesterAddr = padEvmAddressToMove(evmAddressForInflow);
+        // Pad offered metadata (EVM token address) to 32 bytes
+        const paddedOfferedMetadata = padEvmAddressToMove(savedDraftData.offeredMetadata);
+        
+        functionName = `${INTENT_MODULE_ADDRESS}::fa_intent_inflow::create_inflow_intent_entry`;
+        functionArguments = [
+          paddedOfferedMetadata,
+          savedDraftData.offeredAmount,
+          savedDraftData.offeredChainId,
+          savedDraftData.desiredMetadata, // Move token - already 32 bytes
+          savedDraftData.desiredAmount,
+          savedDraftData.desiredChainId,
+          savedDraftData.expiryTime.toString(),
+          savedDraftData.intentId,
+          signature.solver_addr,
+          signatureArray,
+          paddedRequesterAddr,
+        ];
+      } else {
+        // Outflow: offered on hub (Move), desired on connected chain (EVM)
+        if (!evmAddress) {
+          throw new Error('EVM wallet (MetaMask) must be connected for outflow intents');
+        }
+        
+        const paddedRequesterAddr = padEvmAddressToMove(evmAddress);
+        // Pad desired metadata (EVM token address) to 32 bytes
+        const paddedDesiredMetadata = padEvmAddressToMove(savedDraftData.desiredMetadata);
+        console.log('Padded desired metadata:', paddedDesiredMetadata);
+        
+        functionName = `${INTENT_MODULE_ADDRESS}::fa_intent_outflow::create_outflow_intent_entry`;
+        functionArguments = [
+          savedDraftData.offeredMetadata, // Move token - already 32 bytes
+          savedDraftData.offeredAmount,
+          savedDraftData.offeredChainId,
+          paddedDesiredMetadata,
+          savedDraftData.desiredAmount,
+          savedDraftData.desiredChainId,
+          savedDraftData.expiryTime.toString(),
+          savedDraftData.intentId,
+          paddedRequesterAddr,
+          signature.solver_addr,
+          signatureArray,
+        ];
+      }
+
+      // Use build-sign-submit pattern to work around Nightly wallet bug
+      const senderAddress = mvmAccount?.address || directNightlyAddress;
+      if (!senderAddress) {
+        throw new Error('No MVM wallet connected');
+      }
+
+      // Configure Aptos client for Movement testnet
+      const config = new AptosConfig({
+        fullnode: 'https://testnet.movementnetwork.xyz/v1',
+      });
+      const aptos = new Aptos(config);
+
+      // Build raw transaction using SDK
+      console.log('Building transaction with SDK...');
+      console.log('Function:', functionName);
+      console.log('Arguments:', functionArguments);
+      
+      const rawTxn = await aptos.transaction.build.simple({
+        sender: senderAddress as `0x${string}`,
+        data: {
+          function: functionName as `${string}::${string}::${string}`,
+          functionArguments: functionArguments,
+        },
+      });
+      console.log('Raw transaction built:', rawTxn);
+
+      // Sign with wallet
+      let signResponse: any;
+      if (mvmAccount?.address) {
+        // Connected via wallet adapter
+        const nightlyWallet = (window as any).nightly?.aptos;
+        if (nightlyWallet) {
+          signResponse = await nightlyWallet.signTransaction(rawTxn);
+        } else {
+          throw new Error('Nightly wallet not available for signing');
+        }
+      } else if (directNightlyAddress) {
+        // Connected directly to Nightly
+        const nightlyWallet = (window as any).nightly?.aptos;
+        if (!nightlyWallet) {
+          throw new Error('Nightly wallet not available');
+        }
+        signResponse = await nightlyWallet.signTransaction(rawTxn);
+      }
+
+      console.log('Sign response:', signResponse);
+
+      if (signResponse?.status === 'Rejected') {
+        throw new Error('User rejected transaction');
+      }
+
+      // Extract the authenticator and submit
+      const senderAuthenticator = signResponse?.args || signResponse;
+      console.log('Submitting signed transaction...');
+      
+      const pendingTxn = await aptos.transaction.submit.simple({
+        transaction: rawTxn,
+        senderAuthenticator: senderAuthenticator,
+      });
+
+      console.log('Transaction submitted:', pendingTxn);
+      if (pendingTxn && pendingTxn.hash) {
+        setTransactionHash(pendingTxn.hash);
+      } else {
+        throw new Error('Transaction submitted but no hash returned');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create intent on-chain');
+    } finally {
+      setSubmittingTransaction(false);
+    }
+  };
+
   return (
     <div className="border border-gray-700 rounded p-6">
       <h2 className="text-2xl font-bold mb-6">Create Intent</h2>
       
       {/* Expiry Note */}
       <div className="mb-6 p-3 bg-gray-800/50 border border-gray-700 rounded text-xs text-gray-400">
-        <p>⚠️ Intent expires 30 seconds after creation</p>
+        <p>⚠️ Intent expires 60 seconds after creation</p>
       </div>
 
       {/* Flow Type Selector */}
@@ -314,6 +647,7 @@ export function IntentBuilder() {
           </label>
         </div>
       </div>
+
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Offered Token */}
@@ -462,10 +796,41 @@ export function IntentBuilder() {
                 {timeRemaining === 0 && ' (Expired)'}
               </p>
             )}
-            <p className="mt-2 text-xs">
-              Polling for solver signature... (check Debug tab for status)
-            </p>
+            
+            {/* Signature Status */}
+            {pollingSignature && !signature && (
+              <p className="mt-2 text-xs text-yellow-300">
+                ⏳ Waiting for solver signature...
+              </p>
+            )}
+            
+            {signature && (
+              <div className="mt-3 p-2 bg-gray-800/50 rounded">
+                <p className="text-xs font-bold text-green-400">✅ Solver signature received!</p>
+                <p className="mt-1 text-xs font-mono">Solver: {signature.solver_addr.slice(0, 10)}...{signature.solver_addr.slice(-8)}</p>
+                
+                {!transactionHash && (
+                  <button
+                    type="button"
+                    onClick={handleCreateIntent}
+                    disabled={submittingTransaction || !requesterAddr || (flowType === 'outflow' && !evmAddress)}
+                    className="mt-2 w-full px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingTransaction ? 'Creating Intent...' : 'Create Intent on Chain'}
+                  </button>
+                )}
+                
+                {transactionHash && (
+                  <div className="mt-2">
+                    <p className="text-xs font-bold text-green-400">✅ Intent created on-chain!</p>
+                    <p className="mt-1 text-xs font-mono break-all">Tx: {transactionHash}</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
             <button
+              type="button"
               onClick={clearDraft}
               className="mt-2 text-xs underline hover:no-underline"
             >
@@ -474,19 +839,23 @@ export function IntentBuilder() {
           </div>
         )}
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading || !requesterAddr}
-          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? 'Creating Draft Intent...' : 'Create Draft Intent'}
-        </button>
+        {/* Submit Button - Only show when no active draft */}
+        {!draftId && (
+          <>
+            <button
+              type="submit"
+              disabled={loading || !requesterAddr}
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating Draft Intent...' : 'Create Draft Intent'}
+            </button>
 
-        {!requesterAddr && (
-          <p className="text-xs text-gray-400 text-center">
-            Connect your MVM wallet (Nightly) to create an intent
-          </p>
+            {!requesterAddr && (
+              <p className="text-xs text-gray-400 text-center">
+                Connect your MVM wallet (Nightly) to create an intent
+              </p>
+            )}
+          </>
         )}
       </form>
     </div>

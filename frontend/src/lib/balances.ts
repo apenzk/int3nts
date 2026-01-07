@@ -46,6 +46,8 @@ export async function fetchMovementBalance(
     
     // For fungible assets, use primary_fungible_store::balance
     const rpcUrl = getRpcUrl('movement');
+    console.log('Fetching Movement FA balance:', { rpcUrl, address, metadata: token.metadata });
+    
     const response = await fetch(`${rpcUrl}/view`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -56,17 +58,23 @@ export async function fetchMovementBalance(
       }),
     });
     
+    console.log('Movement balance response status:', response.status);
+    
     if (!response.ok) {
+      const text = await response.text();
+      console.error('Movement balance request failed:', response.status, text);
       return null;
     }
     
     const result = await response.json();
+    console.log('Movement balance result:', result);
     const raw = result[0] || '0';
     const formatted = fromSmallestUnits(parseInt(raw), token.decimals).toFixed(token.decimals);
     
     return { raw, formatted, symbol: token.symbol };
   } catch (error) {
     console.error('Error fetching Movement balance:', error);
+    console.error('Token:', token.symbol, 'Address:', address);
     return null;
   }
 }

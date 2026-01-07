@@ -40,6 +40,16 @@ EVM_FAILED=$(echo "$EVM_TEST_OUTPUT" | grep -oE "[0-9]+ failing" | awk '{print $
 EVM_PASSED=${EVM_PASSED:-0}
 EVM_FAILED=${EVM_FAILED:-0}
 
+echo "Running Frontend tests..."
+FRONTEND_TEST_OUTPUT=$(nix develop -c bash -c "cd frontend && npm test" 2>&1) || {
+    echo "Frontend tests failed:"
+    echo "$FRONTEND_TEST_OUTPUT"
+}
+FRONTEND_PASSED=$(echo "$FRONTEND_TEST_OUTPUT" | grep -oE "Tests[[:space:]]+[0-9]+ passed" | grep -oE "[0-9]+")
+FRONTEND_FAILED=$(echo "$FRONTEND_TEST_OUTPUT" | grep -oE "Tests[[:space:]]+[0-9]+ failed" | grep -oE "[0-9]+" || echo "0")
+FRONTEND_PASSED=${FRONTEND_PASSED:-0}
+FRONTEND_FAILED=${FRONTEND_FAILED:-0}
+
 echo "=== Test Summary Table ==="
 echo ""
 echo "| Tests | Passed | Failed |"
@@ -48,5 +58,6 @@ echo "| Verifier (Rust) | $VERIFIER_PASSED | $VERIFIER_FAILED |"
 echo "| Solver (Rust) | $SOLVER_PASSED | $SOLVER_FAILED |"
 echo "| Move | $MOVE_PASSED | $MOVE_FAILED |"
 echo "| EVM | $EVM_PASSED | $EVM_FAILED |"
+echo "| Frontend | $FRONTEND_PASSED | $FRONTEND_FAILED |"
 echo ""
 

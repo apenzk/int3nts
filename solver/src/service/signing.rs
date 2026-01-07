@@ -10,8 +10,10 @@ use crate::service::tracker::IntentTracker;
 use crate::verifier_client::{PendingDraft, VerifierClient};
 use anyhow::{Context, Result};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 /// Signing service that polls verifier and signs accepted drafts.
@@ -22,6 +24,8 @@ pub struct SigningService {
     acceptance_config: AcceptanceConfig,
     /// Intent tracker for tracking signed intents
     tracker: Arc<IntentTracker>,
+    /// Track processed draft IDs to avoid repeated logging
+    processed_drafts: Arc<RwLock<HashSet<String>>>,
 }
 
 impl SigningService {
@@ -46,6 +50,7 @@ impl SigningService {
             config,
             acceptance_config,
             tracker,
+            processed_drafts: Arc::new(RwLock::new(HashSet::new())),
         })
     }
 
@@ -103,16 +108,36 @@ impl SigningService {
 
         let mut processed = 0;
         for draft in drafts {
+            // Check if we've already processed this draft
+            let already_processed = {
+                let processed = self.processed_drafts.read().await;
+                processed.contains(&draft.draft_id)
+            };
+
+            if already_processed {
+                // Skip already processed drafts (silently)
+                continue;
+            }
+
             match self.process_draft(&draft).await {
                 Ok(true) => {
                     processed += 1;
                     info!("Successfully signed and submitted draft {}", draft.draft_id);
+                    // Mark as processed
+                    let mut processed_set = self.processed_drafts.write().await;
+                    processed_set.insert(draft.draft_id.clone());
                 }
                 Ok(false) => {
+                    // Mark as processed (rejected or expired)
+                    let mut processed_set = self.processed_drafts.write().await;
+                    processed_set.insert(draft.draft_id.clone());
                     debug!("Draft {} was not accepted or already signed", draft.draft_id);
                 }
                 Err(e) => {
                     error!("Error processing draft {}: {}", draft.draft_id, e);
+                    // Mark as processed even on error to avoid repeated error logs
+                    let mut processed_set = self.processed_drafts.write().await;
+                    processed_set.insert(draft.draft_id.clone());
                 }
             }
         }

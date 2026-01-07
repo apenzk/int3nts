@@ -12,11 +12,36 @@ export function MvmWalletConnector() {
   useEffect(() => {
     setMounted(true);
     
-    // Restore Nightly connection from localStorage
+    // Restore Nightly connection from localStorage and try to reconnect silently
     if (typeof window !== 'undefined') {
       const savedAddress = localStorage.getItem('nightly_connected_address');
       if (savedAddress) {
-        setDirectNightlyAccount(savedAddress);
+        const nightlyWallet = (window as any).nightly?.aptos;
+        if (nightlyWallet) {
+          // Try to silently reconnect
+          nightlyWallet.connect().then((response: any) => {
+            const address = response?.address || (Array.isArray(response) ? response[0]?.address : null);
+            if (address) {
+              setDirectNightlyAccount(address);
+              localStorage.setItem('nightly_connected_address', address);
+            } else if (response?.status === 'Approved' || response?.status === 'AlreadyConnected') {
+              // Wallet approved but didn't return address, use saved
+              setDirectNightlyAccount(savedAddress);
+            } else {
+              // Connection failed or rejected
+              localStorage.removeItem('nightly_connected_address');
+              setDirectNightlyAccount(null);
+            }
+          }).catch(() => {
+            // Silent reconnect failed, clear state
+            localStorage.removeItem('nightly_connected_address');
+            setDirectNightlyAccount(null);
+          });
+        } else {
+          // Wallet extension not found, clear stale state
+          localStorage.removeItem('nightly_connected_address');
+          setDirectNightlyAccount(null);
+        }
       }
     }
     

@@ -85,6 +85,9 @@ pub struct IntentCreatedEvent {
     pub offered_chain_id: String,
     /// Desired token metadata (wrapped in {"inner": "0x..."})
     pub desired_metadata: MoveInner,
+    /// Desired metadata address for cross-chain tokens (optional)
+    #[serde(default)]
+    pub desired_metadata_addr: Option<MoveOption<String>>,
     /// Desired amount
     pub desired_amount: String,
     /// Desired chain ID
@@ -93,6 +96,15 @@ pub struct IntentCreatedEvent {
     pub requester_addr: String,
     /// Expiry timestamp
     pub expiry_time: String,
+    /// Minimum reported oracle value (optional)
+    #[serde(default)]
+    pub min_reported_value: Option<String>,
+    /// Whether the intent is revocable (optional)
+    #[serde(default)]
+    pub revocable: Option<bool>,
+    /// Reserved solver address (optional)
+    #[serde(default)]
+    pub reserved_solver: Option<MoveOption<String>>,
     /// Requester address on the connected chain (for outflow intents)
     /// Wrapped in Move Option: {"vec": ["0x..."]} or {"vec": []}
     #[serde(default)]
@@ -216,17 +228,26 @@ impl HubChainClient {
 
             // Extract intent creation events from transactions
             for tx in &transactions {
+                let tx_hash = tx.get("hash").and_then(|h| h.as_str()).unwrap_or("unknown");
                 if let Some(tx_events) = tx.get("events").and_then(|e| e.as_array()) {
+                    tracing::debug!("Transaction {} has {} events", tx_hash, tx_events.len());
                     for event_json in tx_events {
                         let event_type = event_json
                             .get("type")
                             .and_then(|t| t.as_str())
                             .unwrap_or("");
 
+                        // Log all event types for debugging
+                        if event_type.contains("intent") || event_type.contains("Intent") || 
+                           event_type.contains("Order") || event_type.contains("order") {
+                            tracing::debug!("Found potentially relevant event type: {}", event_type);
+                        }
+
                         // Check for LimitOrderEvent (inflow) or OracleLimitOrderEvent (outflow)
                         // IMPORTANT: Check OracleLimitOrderEvent BEFORE LimitOrderEvent because
                         // "OracleLimitOrderEvent".contains("LimitOrderEvent") is true!
                         if event_type.contains("OracleLimitOrderEvent") || event_type.contains("LimitOrderEvent") {
+                            tracing::info!("Found intent creation event: {}", event_type);
                             match serde_json::from_value::<IntentCreatedEvent>(
                                 event_json.get("data").cloned().unwrap_or(serde_json::Value::Null),
                             ) {
@@ -238,15 +259,17 @@ impl HubChainClient {
                                         .as_secs();
                                     if let Ok(expiry) = event_data.expiry_time.parse::<u64>() {
                                         if expiry >= current_time {
-                                            tracing::debug!("Found intent event: {} - type: {}", 
-                                                event_data.intent_id, event_type);
+                                            tracing::info!("Intent {} is valid (expiry {} >= now {})", 
+                                                event_data.intent_id, expiry, current_time);
                                             events.push(event_data);
+                                        } else {
+                                            tracing::debug!("Intent {} is expired (expiry {} < now {})", 
+                                                event_data.intent_id, expiry, current_time);
                                         }
-                                        // Skip expired events silently
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::debug!("Failed to parse event data: {} - data: {:?}", e, event_json.get("data"));
+                                    tracing::warn!("Failed to parse intent event data: {} - data: {:?}", e, event_json.get("data"));
                                 }
                             }
                         }

@@ -151,6 +151,9 @@ impl IntentTracker {
     /// * `Ok(usize)` - Number of intents that transitioned to Created state
     /// * `Err(anyhow::Error)` - Failed to poll
     pub async fn poll_for_created_intents(&self) -> Result<usize> {
+        // Clean up expired intents first
+        self.cleanup_expired_intents().await;
+
         // Get requester addresses from tracked intents
         let requester_addresses: Vec<String> = {
             let addresses = self.requester_addresses.read().await;
@@ -357,6 +360,52 @@ impl IntentTracker {
             Ok(())
         } else {
             anyhow::bail!("Intent not found: {}", draft_id)
+        }
+    }
+
+    /// Cleans up expired intents and removes requester addresses if no active intents remain
+    ///
+    /// Removes intents that have expired and haven't been created on-chain yet.
+    /// Also removes requester addresses if all their intents are expired or fulfilled.
+    async fn cleanup_expired_intents(&self) {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let mut intents = self.intents.write().await;
+        let mut addresses_to_check = std::collections::HashSet::new();
+
+        // Remove expired intents that haven't been created on-chain (still in Signed state)
+        intents.retain(|draft_id, intent| {
+            let is_expired = intent.expiry_time < current_time;
+            let is_signed_only = intent.state == IntentState::Signed;
+
+            if is_expired && is_signed_only {
+                tracing::debug!("Removing expired intent {} (draft_id: {})", intent.intent_id, draft_id);
+                addresses_to_check.insert(intent.requester_addr.clone());
+                false // Remove from map
+            } else {
+                true // Keep in map
+            }
+        });
+
+        // Check if requester addresses should be removed (no active intents remaining)
+        if !addresses_to_check.is_empty() {
+            let mut requester_addresses = self.requester_addresses.write().await;
+            for requester_addr in addresses_to_check {
+                // Check if this requester has any active (non-expired, non-fulfilled) intents
+                let has_active = intents.values().any(|i| {
+                    i.requester_addr == requester_addr
+                        && i.expiry_time >= current_time
+                        && i.state != IntentState::Fulfilled
+                });
+
+                if !has_active {
+                    requester_addresses.remove(&requester_addr);
+                    tracing::debug!("Removed requester {} from tracking (all intents expired or fulfilled)", requester_addr);
+                }
+            }
         }
     }
 }

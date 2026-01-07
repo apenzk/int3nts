@@ -35,26 +35,20 @@ class VerifierClient {
         },
       });
 
+      // Parse JSON response regardless of status code
+      // The verifier returns 200 OK for signed, 202 Accepted for pending
+      // Both are valid responses and should be parsed
+      const data = await response.json();
+      
+      // If status is not ok (outside 200-299), treat as error
       if (!response.ok) {
-        let errorMessage: string;
-        try {
-          const error = await response.json();
-          if (error.error) {
-            errorMessage = error.error;
-          } else {
-            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-          }
-        } catch {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
         return {
           success: false,
           data: null,
-          error: errorMessage,
+          error: data.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
-
-      const data = await response.json();
+      
       return data as ApiResponse<T>;
     } catch (error) {
       if (!(error instanceof Error)) {
@@ -79,8 +73,9 @@ class VerifierClient {
   }
 
   // Get public key
-  async getPublicKey(): Promise<ApiResponse<{ public_key: string }>> {
-    return this.fetch<{ public_key: string }>('/public-key');
+  // Note: API returns the public key directly as the data field (base64 string)
+  async getPublicKey(): Promise<ApiResponse<string>> {
+    return this.fetch<string>('/public-key');
   }
 
   // Draft intent endpoints
