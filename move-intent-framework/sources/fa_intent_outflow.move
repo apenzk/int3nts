@@ -15,6 +15,59 @@ module mvmt_intent::fa_intent_outflow {
     const EINVALID_SIGNATURE: u64 = 2;
     /// The requester address on the connected chain is invalid (zero address).
     const EINVALID_REQUESTER_ADDRESS: u64 = 3;
+    /// The verifier config has not been initialized.
+    const EVERIFIER_NOT_INITIALIZED: u64 = 4;
+    /// Only the module publisher can initialize/update the verifier config.
+    const ENOT_AUTHORIZED: u64 = 5;
+
+    // ============================================================================
+    // VERIFIER CONFIG (Global trusted verifier public key)
+    // ============================================================================
+
+    /// Global configuration storing the trusted verifier's public key.
+    struct VerifierConfig has key {
+        /// The Ed25519 public key of the trusted verifier (32 bytes)
+        public_key: vector<u8>,
+    }
+
+    /// Initialize the verifier configuration with the trusted verifier's public key.
+    /// Can only be called by the module publisher (@mvmt_intent).
+    ///
+    /// # Arguments
+    /// - `admin`: Must be the module publisher
+    /// - `verifier_public_key`: 32-byte Ed25519 public key of the trusted verifier
+    public entry fun initialize_verifier(
+        admin: &signer,
+        verifier_public_key: vector<u8>
+    ) acquires VerifierConfig {
+        let admin_addr = signer::address_of(admin);
+        assert!(admin_addr == @mvmt_intent, error::permission_denied(ENOT_AUTHORIZED));
+        
+        if (exists<VerifierConfig>(@mvmt_intent)) {
+            // Update existing config
+            let config = borrow_global_mut<VerifierConfig>(@mvmt_intent);
+            config.public_key = verifier_public_key;
+        } else {
+            // Create new config
+            move_to(admin, VerifierConfig {
+                public_key: verifier_public_key,
+            });
+        }
+    }
+
+    /// Get the configured verifier public key.
+    /// Aborts if verifier config has not been initialized.
+    fun get_verifier_public_key(): vector<u8> acquires VerifierConfig {
+        assert!(exists<VerifierConfig>(@mvmt_intent), error::not_found(EVERIFIER_NOT_INITIALIZED));
+        let config = borrow_global<VerifierConfig>(@mvmt_intent);
+        config.public_key
+    }
+
+    #[view]
+    /// View function to check if verifier is configured and get the public key.
+    public fun get_verifier_config(): vector<u8> acquires VerifierConfig {
+        get_verifier_public_key()
+    }
 
     // ============================================================================
     // SHARED UTILITIES
@@ -248,11 +301,27 @@ module mvmt_intent::fa_intent_outflow {
 
     /// Entry function to create an outflow intent.
     ///
-    /// Outflow intents have tokens locked on the hub chain and request tokens on the connected chain.
-    /// This function uses `OracleGuardedLimitOrder` (requires verifier signature) and withdraws actual
-    /// tokens from the requester (locked on hub).
+    /// Reads the verifier public key from the module's VerifierConfig.
+    /// The verifier must be initialized via `initialize_verifier` before calling this function.
     ///
-    /// For argument descriptions and abort conditions, see `create_outflow_intent`.
+    /// # Arguments
+    /// - `requester_signer`: The account creating the intent (tokens will be withdrawn from this account)
+    /// - `offered_metadata`: Metadata of the token being offered (locked on hub chain)
+    /// - `offered_amount`: Amount of tokens to lock
+    /// - `offered_chain_id`: Chain ID where offered tokens are located (hub chain)
+    /// - `desired_metadata_addr`: Address of the desired token metadata (on connected chain)
+    /// - `desired_amount`: Amount of tokens desired on connected chain
+    /// - `desired_chain_id`: Chain ID where desired tokens are located (connected chain)
+    /// - `expiry_time`: Unix timestamp when the intent expires
+    /// - `intent_id`: Unique identifier for cross-chain correlation
+    /// - `requester_addr_connected_chain`: Requester's address on the connected chain
+    /// - `solver`: Address of the solver who will fulfill the intent
+    /// - `solver_signature`: Solver's signature approving the intent
+    ///
+    /// # Aborts
+    /// - `EVERIFIER_NOT_INITIALIZED`: Verifier config has not been set
+    /// - `EINVALID_SIGNATURE`: Solver signature verification failed
+    /// - `EINVALID_REQUESTER_ADDRESS`: requester_addr_connected_chain is zero address
     public entry fun create_outflow_intent_entry(
         requester_signer: &signer,
         offered_metadata: Object<Metadata>,
@@ -264,10 +333,12 @@ module mvmt_intent::fa_intent_outflow {
         expiry_time: u64,
         intent_id: address,
         requester_addr_connected_chain: address,
-        verifier_public_key: vector<u8>, // 32 bytes
         solver: address,
         solver_signature: vector<u8>
-    ) {
+    ) acquires VerifierConfig {
+        // Read verifier public key from stored config
+        let verifier_public_key = get_verifier_public_key();
+        
         let _intent_obj =
             create_outflow_intent(
                 requester_signer,

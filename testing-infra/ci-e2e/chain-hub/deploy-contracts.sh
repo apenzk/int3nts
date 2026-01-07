@@ -71,6 +71,22 @@ log ""
 log "🔧 Initializing intent registry..."
 initialize_intent_registry "intent-account-chain1" "$CHAIN1_ADDRESS" "$LOG_FILE"
 
+# Initialize verifier config for outflow intents
+log ""
+log "🔧 Initializing verifier config for outflow intents..."
+load_verifier_keys
+VERIFIER_PUBLIC_KEY_HEX=$(echo "$E2E_VERIFIER_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
+aptos move run --profile intent-account-chain1 --assume-yes \
+    --function-id ${CHAIN1_ADDRESS}::fa_intent_outflow::initialize_verifier \
+    --args "hex:${VERIFIER_PUBLIC_KEY_HEX}" >> "$LOG_FILE" 2>&1
+
+if [ $? -eq 0 ]; then
+    log "   ✅ Verifier config initialized"
+else
+    log_and_echo "   ❌ Failed to initialize verifier config"
+    exit 1
+fi
+
 # Deploy USDhub test token
 log ""
 log "💵 Deploying USDhub test token to Chain 1..."

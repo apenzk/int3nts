@@ -290,6 +290,29 @@ movement move run \
 
 echo ""
 
+# Initialize verifier config for outflow intents
+echo "🔧 Step 8: Initializing verifier config..."
+
+if [ -z "$VERIFIER_PUBLIC_KEY" ]; then
+    echo "❌ ERROR: VERIFIER_PUBLIC_KEY not set in .testnet-keys.env"
+    exit 1
+fi
+
+VERIFIER_PUBLIC_KEY_HEX=$(echo "$VERIFIER_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
+movement move run \
+  --profile "$TEMP_PROFILE" \
+  --function-id "${DEPLOY_ADDRESS_FULL}::fa_intent_outflow::initialize_verifier" \
+  --args "hex:${VERIFIER_PUBLIC_KEY_HEX}" \
+  --assume-yes
+
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: Failed to initialize verifier config"
+    exit 1
+fi
+echo "   ✅ Verifier config initialized"
+
+echo ""
+
 # Cleanup temp profile (but keep the key info for reference)
 echo "🧹 Cleaning up..."
 rm -rf "$TEMP_DIR"
