@@ -30,4 +30,4 @@ Local testing using Docker containers:
 
 ## Testnet
 
-Scripts for deploying to and interacting with public testnets (Movement Bardock, Base Sepolia).
+Scripts for deploying to and interacting with public testnets (Movement Bardock, Base Sepolia). See the **[testnet README](./testnet/README.md)** for deployment and interaction scripts.

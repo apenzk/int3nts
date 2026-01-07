@@ -3,12 +3,12 @@
 //! This module contains shared structures, helper functions, and generic API handlers
 //! that are used across all flow types (inflow/outflow) and chain types (Move VM/EVM).
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info};
-use warp::{http::StatusCode, Filter, Rejection, Reply};
+use warp::{http::{Method, StatusCode}, Filter, Rejection, Reply};
 use warp::hyper::body::Bytes;
 
 use crate::config::Config;
@@ -290,6 +290,34 @@ pub struct JsonDeserializeError(pub String);
 impl warp::reject::Reject for JsonDeserializeError {}
 
 // ============================================================================
+// CORS CONFIGURATION
+// ============================================================================
+
+/// Creates a CORS filter based on the configured allowed origins.
+fn create_cors_filter(allowed_origins: &[String]) -> warp::cors::Builder {
+    let methods = vec![
+        Method::GET,
+        Method::POST,
+        Method::PUT,
+        Method::DELETE,
+        Method::OPTIONS,
+    ];
+    
+    if allowed_origins.contains(&"*".to_string()) {
+        warp::cors()
+            .allow_any_origin()
+            .allow_methods(methods.clone())
+            .allow_headers(vec!["content-type"])
+    } else {
+        let origins: Vec<&str> = allowed_origins.iter().map(|s| s.as_str()).collect();
+        warp::cors()
+            .allow_origins(origins)
+            .allow_methods(methods)
+            .allow_headers(vec!["content-type"])
+    }
+}
+
+// ============================================================================
 // REJECTION HANDLER
 // ============================================================================
 
@@ -400,9 +428,14 @@ impl ApiServer {
         // Create and configure all API routes
         let routes = self.create_routes();
 
+        // Parse host address from config
+        let addr: std::net::SocketAddr = format!("{}:{}", self.config.api.host, self.config.api.port)
+            .parse()
+            .context("Failed to parse API server address")?;
+
         // Start the HTTP server
         warp::serve(routes)
-            .run(([127, 0, 0, 1], self.config.api.port))
+            .run(addr)
             .await;
 
         Ok(())
@@ -586,6 +619,7 @@ impl ApiServer {
             .or(get_pending)
             .or(submit_signature)
             .or(get_signature)
+            .with(create_cors_filter(&self.config.api.cors_origins))
             .recover(handle_rejection)
     }
 

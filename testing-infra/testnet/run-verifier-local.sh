@@ -141,12 +141,12 @@ if [ "$1" = "--release" ]; then
     echo "🚀 Starting verifier (release mode)..."
     echo "   Press Ctrl+C to stop"
     echo ""
-    VERIFIER_CONFIG_PATH="$VERIFIER_CONFIG" RUST_LOG=info ./target/release/trusted-verifier
+    RUST_LOG=info ./target/release/trusted-verifier --testnet
 else
     echo "🚀 Starting verifier (debug mode)..."
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop --command bash -c "cd '$PROJECT_ROOT/trusted-verifier' && VERIFIER_CONFIG_PATH='$VERIFIER_CONFIG' RUST_LOG=info cargo run --bin trusted-verifier"
+    nix develop --command bash -c "cd '$PROJECT_ROOT/trusted-verifier' && RUST_LOG=info cargo run --bin trusted-verifier -- --testnet"
 fi
 

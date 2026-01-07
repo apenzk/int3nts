@@ -51,7 +51,44 @@ async fn main() -> Result<()> {
 
     info!("Starting Trusted Verifier Service");
 
-    // Load configuration from config/verifier.toml
+    // Parse command line arguments
+    let args: Vec<String> = std::env::args().collect();
+    
+    // Check for help flag
+    if args.iter().any(|arg| arg == "--help" || arg == "-h") {
+        println!("Trusted Verifier Service");
+        println!();
+        println!("Usage: trusted-verifier [OPTIONS]");
+        println!();
+        println!("Options:");
+        println!("  --testnet, -t    Use testnet configuration (config/verifier_testnet.toml)");
+        println!("  --config <path>   Use custom config file path (overrides --testnet)");
+        println!("  --help, -h        Show this help message");
+        println!();
+        println!("Environment variables:");
+        println!("  VERIFIER_CONFIG_PATH    Path to config file (overrides --config and --testnet)");
+        return Ok(());
+    }
+    
+    // Check for custom config path
+    let mut config_path = None;
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "--config" && i + 1 < args.len() {
+            config_path = Some(args[i + 1].clone());
+            break;
+        }
+    }
+    
+    // Set config path based on flags
+    if let Some(path) = config_path {
+        std::env::set_var("VERIFIER_CONFIG_PATH", &path);
+        info!("Using custom config: {}", path);
+    } else if args.iter().any(|arg| arg == "--testnet" || arg == "-t") {
+        std::env::set_var("VERIFIER_CONFIG_PATH", "config/verifier_testnet.toml");
+        info!("Using testnet configuration");
+    }
+
+    // Load configuration from config/verifier.toml (or VERIFIER_CONFIG_PATH)
     let config = Config::load()?;
     info!("Configuration loaded successfully");
 

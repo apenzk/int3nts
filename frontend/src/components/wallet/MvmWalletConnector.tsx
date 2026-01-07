@@ -69,7 +69,10 @@ export function MvmWalletConnector() {
   }
 
   const isConnected = connected || directNightlyAccount !== null;
-  const displayAddress = account?.address || directNightlyAccount;
+  const displayAddress = directNightlyAccount ?? account?.address;
+  if (isConnected && !displayAddress) {
+    throw new Error('Connected but no address available');
+  }
 
   return (
     <div className="border border-gray-700 rounded p-4 mb-4">
@@ -131,19 +134,25 @@ export function MvmWalletConnector() {
                               
                               // Store the connected account
                               // Response structure: { status: 'Approved', address: '...', publicKey: '...' }
-                              let address: string | null = null;
+                              let address: string;
                               if (response && response.address) {
                                 address = response.address;
                               } else if (Array.isArray(response) && response.length > 0) {
-                                // Fallback for array response
-                                address = response[0]?.address || response[0];
+                                const first = response[0];
+                                if (first?.address) {
+                                  address = first.address;
+                                } else if (typeof first === 'string') {
+                                  address = first;
+                                } else {
+                                  throw new Error('Invalid response format: address not found');
+                                }
+                              } else {
+                                throw new Error('Invalid response format: no address in response');
                               }
                               
-                              if (address) {
-                                setDirectNightlyAccount(address);
-                                // Persist to localStorage
-                                localStorage.setItem('nightly_connected_address', address);
-                              }
+                              setDirectNightlyAccount(address);
+                              // Persist to localStorage
+                              localStorage.setItem('nightly_connected_address', address);
                               
                               // Also try to connect via adapter if possible
                               const nightlyWallet = wallets.find(w => w.name.toLowerCase().includes('nightly'));
