@@ -29,6 +29,11 @@ log_and_echo "=========================================================="
 ./testing-infra/ci-e2e/chain-connected-evm/cleanup.sh
 
 log_and_echo ""
+log_and_echo "🔑 Step 1b: Generating verifier keys..."
+log_and_echo "======================================="
+generate_verifier_keys
+
+log_and_echo ""
 log_and_echo "🔨 Step 2: Building Rust services (verifier and solver)..."
 log_and_echo "==========================================================="
 pushd "$PROJECT_ROOT/trusted-verifier" > /dev/null

@@ -30,7 +30,7 @@ log "🔑 Configuration:"
 log "   Computing verifier Ethereum address from config..."
 
 # Generate fresh ephemeral keys for CI/E2E testing
-generate_verifier_keys
+load_verifier_keys
 
 # Get verifier Ethereum address (derived from ECDSA public key)
 VERIFIER_DIR="$PROJECT_ROOT/trusted-verifier"

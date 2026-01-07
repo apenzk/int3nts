@@ -35,7 +35,7 @@ REQUESTER_CHAIN1_ADDRESS=$(get_profile_address "requester-chain1")
 SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
 
 # Generate fresh ephemeral keys
-generate_verifier_keys
+load_verifier_keys
 
 # Create config file path
 VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"

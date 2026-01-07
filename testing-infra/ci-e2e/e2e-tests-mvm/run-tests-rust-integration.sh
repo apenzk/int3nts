@@ -24,6 +24,11 @@ echo "================================================================"
 ./testing-infra/ci-e2e/chain-connected-mvm/cleanup.sh
 
 echo ""
+echo "🔑 Step 1b: Generating verifier keys..."
+echo "======================================="
+generate_verifier_keys
+
+echo ""
 echo "🔨 Step 2: Building Rust services (verifier and solver)..."
 echo "==========================================================="
 pushd "$PROJECT_ROOT/trusted-verifier" > /dev/null
