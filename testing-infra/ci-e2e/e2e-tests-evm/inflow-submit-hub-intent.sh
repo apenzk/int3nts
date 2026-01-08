@@ -256,6 +256,11 @@ if [ -n "$HUB_INTENT_ADDRESS" ] && [ "$HUB_INTENT_ADDRESS" != "null" ]; then
 fi
 
 # Export values for use by other scripts
+# Ensure SOLVER_EVM_ADDRESS is set before saving (re-export to be safe)
+if [ -z "$SOLVER_EVM_ADDRESS" ] && [ -n "$RETRIEVED_SOLVER_EVM" ]; then
+    export SOLVER_EVM_ADDRESS="$RETRIEVED_SOLVER_EVM"
+    log "   Re-exported SOLVER_EVM_ADDRESS: $SOLVER_EVM_ADDRESS"
+fi
 save_intent_info "$INTENT_ID" "$HUB_INTENT_ADDRESS"
 
 # Check final balances using common function

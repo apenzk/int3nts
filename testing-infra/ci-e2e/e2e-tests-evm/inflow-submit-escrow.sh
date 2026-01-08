@@ -13,8 +13,8 @@ setup_logging "inflow-submit-escrow"
 cd "$PROJECT_ROOT"
 
 
-# Load INTENT_ID from info file if not provided
-if ! load_intent_info "INTENT_ID"; then
+# Load INTENT_ID and SOLVER_EVM_ADDRESS from info file if not provided
+if ! load_intent_info "INTENT_ID,SOLVER_EVM_ADDRESS"; then
     exit 1
 fi
 

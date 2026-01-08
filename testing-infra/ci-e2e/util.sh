@@ -227,6 +227,14 @@ save_intent_info() {
         echo "HUB_INTENT_ADDRESS=$hub_intent_addr" >> "$INTENT_INFO_FILE"
     fi
     
+    # Save SOLVER_EVM_ADDRESS if set (for EVM inflow escrow creation)
+    if [ -n "$SOLVER_EVM_ADDRESS" ] && [ "$SOLVER_EVM_ADDRESS" != "null" ]; then
+        echo "SOLVER_EVM_ADDRESS=$SOLVER_EVM_ADDRESS" >> "$INTENT_INFO_FILE"
+        log "   Saved SOLVER_EVM_ADDRESS to intent info file"
+    else
+        log "   SOLVER_EVM_ADDRESS not set or null, skipping save"
+    fi
+    
     log "   📝 Intent info saved to: $INTENT_INFO_FILE"
 }
 
