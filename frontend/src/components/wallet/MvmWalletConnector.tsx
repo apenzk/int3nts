@@ -122,7 +122,6 @@ export function MvmWalletConnector() {
       <h2 className="text-xl font-bold mb-2">MVM Wallet</h2>
       {isConnected ? (
         <div>
-          <p className="text-sm text-gray-400 mb-2">Connected</p>
           <p className="text-xs font-mono mb-1">Address: {displayAddress}</p>
           <button
             onClick={() => {

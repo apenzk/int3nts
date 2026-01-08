@@ -29,7 +29,6 @@ export function WalletConnector() {
         <h2 className="text-xl font-bold mb-2">EVM Wallet</h2>
       {isConnected ? (
         <div>
-          <p className="text-sm text-gray-400 mb-2">Connected</p>
           <p className="text-xs font-mono mb-1">Address: {address}</p>
           <p className="text-xs font-mono mb-2">Chain ID: {chainId}</p>
           <button

@@ -1067,8 +1067,6 @@ export function IntentBuilder() {
 
   return (
     <div className="border border-gray-700 rounded p-6">
-      <h2 className="text-2xl font-bold mb-6">Create Intent</h2>
-      
       {/* Flow Type Selector */}
       <div className="mb-6">
         <label className="block text-sm font-medium mb-2">Flow Type</label>
@@ -1128,7 +1126,6 @@ export function IntentBuilder() {
             Default Outflow
           </button>
         </div>
-        <p className="text-xs text-gray-500 mt-1">USDC Base 0.001 ↔ USDC.e Movement 0.001</p>
       </div>
 
 
@@ -1136,7 +1133,7 @@ export function IntentBuilder() {
         {/* Offered Token */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Offered Token
+            Send
           </label>
           <select
             value={offeredToken ? `${offeredToken.chain}::${offeredToken.symbol}` : ''}
@@ -1159,19 +1156,6 @@ export function IntentBuilder() {
               </option>
             ))}
           </select>
-          {offeredToken && (
-            <div className="mt-2 text-xs">
-              {loadingOfferedBalance ? (
-                <span className="text-gray-500">Loading balance...</span>
-              ) : offeredBalance ? (
-                <span className="text-gray-400">
-                  Balance: {offeredBalance.formatted} {offeredBalance.symbol}
-                </span>
-              ) : (
-                <span className="text-gray-500">Balance unavailable</span>
-              )}
-            </div>
-          )}
         </div>
 
         <div>
@@ -1192,12 +1176,25 @@ export function IntentBuilder() {
               </span>
             )}
           </div>
+          {offeredToken && (
+            <div className="mt-2 text-xs">
+              {loadingOfferedBalance ? (
+                <span className="text-gray-500">Loading balance...</span>
+              ) : offeredBalance ? (
+                <span className="text-gray-400">
+                  Balance: {offeredBalance.formatted} {offeredBalance.symbol}
+                </span>
+              ) : (
+                <span className="text-gray-500">Balance unavailable</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Desired Token */}
         <div>
           <label className="block text-sm font-medium mb-2">
-            Desired Token
+            Receive
           </label>
           <select
             value={desiredToken ? `${desiredToken.chain}::${desiredToken.symbol}` : ''}
@@ -1222,27 +1219,11 @@ export function IntentBuilder() {
               </option>
             ))}
           </select>
-          {desiredToken && (
-            <div className="mt-2 text-xs">
-              {loadingDesiredBalance ? (
-                <span className="text-gray-500">Loading balance...</span>
-              ) : desiredBalance ? (
-                <span className="text-gray-400">
-                  Balance: {desiredBalance.formatted} {desiredBalance.symbol}
-                </span>
-              ) : (
-                <span className="text-gray-500">Balance unavailable</span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Desired Amount (auto-calculated from solver's exchange rate) */}
         {desiredToken && (
           <div>
-            <label className="block text-sm font-medium mb-2">
-              Desired Amount (auto-calculated)
-            </label>
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -1261,6 +1242,19 @@ export function IntentBuilder() {
                 {desiredToken.symbol}
               </span>
             </div>
+            {desiredToken && (
+              <div className="mt-2 text-xs">
+                {loadingDesiredBalance ? (
+                  <span className="text-gray-500">Loading balance...</span>
+                ) : desiredBalance ? (
+                  <span className="text-gray-400">
+                    Balance: {desiredBalance.formatted} {desiredBalance.symbol}
+                  </span>
+                ) : (
+                  <span className="text-gray-500">Balance unavailable</span>
+                )}
+              </div>
+            )}
           </div>
         )}
 
