@@ -166,7 +166,25 @@ export function IntentBuilder() {
       setEscrowHash(escrowReceipt.transactionHash);
     }
   }, [escrowReceipt, isCreatingEscrow]);
-  
+
+  // Helper to get chain name from chain ID
+  const getChainNameFromId = (chainId: string): string => {
+    const chainEntry = Object.entries(CHAIN_CONFIGS).find(([, config]) => String(config.chainId) === chainId);
+    return chainEntry ? chainEntry[1].name : `Chain ${chainId}`;
+  };
+
+  // Helper to find token from savedDraftData (for escrow creation when offeredToken is null)
+  const getOfferedTokenFromDraft = (): TokenConfig | null => {
+    if (!savedDraftData) return null;
+    // Find token by matching chain ID and metadata
+    return SUPPORTED_TOKENS.find(t => {
+      const chainConfig = CHAIN_CONFIGS[t.chain];
+      return chainConfig && 
+             String(chainConfig.chainId) === savedDraftData.offeredChainId &&
+             t.metadata.toLowerCase().includes(savedDraftData.offeredMetadata.replace(/^0x0*/, '').toLowerCase());
+    }) || null;
+  };
+
   // Store draft data for transaction building
   const [savedDraftData, setSavedDraftData] = useState<{
     intentId: string;
@@ -277,11 +295,39 @@ export function IntentBuilder() {
     setPollingFulfillment(false);
     pollingFulfillmentRef.current = false;
     setError(null); // Clear any stale errors
+    // Reset escrow state
+    setEscrowHash(null);
+    setApprovingToken(false);
+    setCreatingEscrow(false);
+    resetApprove();
+    resetEscrow();
     if (typeof window !== 'undefined') {
       localStorage.removeItem('last_draft_id');
       localStorage.removeItem('last_draft_created_at');
     }
   };
+
+  // Debug: Log escrow button state for inflow intents
+  useEffect(() => {
+    if (transactionHash && !escrowHash && savedDraftData) {
+      const isInflowByChain = savedDraftData.offeredChainId !== '250';
+      const derivedToken = getOfferedTokenFromDraft();
+      console.log('🔍 Escrow button state check:', {
+        isInflowByChain,
+        transactionHash: !!transactionHash,
+        escrowHash: !!escrowHash,
+        signature: !!signature,
+        savedDraftData: !!savedDraftData,
+        offeredToken: !!offeredToken,
+        derivedToken: derivedToken?.symbol || 'null',
+        offeredChainId: savedDraftData.offeredChainId,
+        willShowButton: isInflowByChain,
+      });
+      if (isInflowByChain && !offeredToken && !derivedToken) {
+        console.error('🚨 Cannot find token for escrow! offeredChainId:', savedDraftData.offeredChainId, 'offeredMetadata:', savedDraftData.offeredMetadata);
+      }
+    }
+  }, [transactionHash, escrowHash, savedDraftData, offeredToken, signature]);
 
 
   // Track if polling is active to prevent multiple polling loops
@@ -1004,13 +1050,17 @@ export function IntentBuilder() {
 
   // Handle escrow creation for inflow intents
   const handleCreateEscrow = async () => {
-    console.log('handleCreateEscrow called', { savedDraftData, offeredToken, flowType, evmAddress, signature: !!signature, chainId });
+    // Use offeredToken if available, otherwise look it up from savedDraftData
+    const effectiveOfferedToken = offeredToken || getOfferedTokenFromDraft();
+    const isInflow = savedDraftData && savedDraftData.offeredChainId !== '250';
     
-    if (!savedDraftData || !offeredToken || flowType !== 'inflow' || !evmAddress || !signature) {
+    console.log('handleCreateEscrow called', { savedDraftData, offeredToken, effectiveOfferedToken, isInflow, evmAddress, signature: !!signature, chainId });
+    
+    if (!savedDraftData || !effectiveOfferedToken || !isInflow || !evmAddress || !signature) {
       const missing = [];
       if (!savedDraftData) missing.push('savedDraftData');
-      if (!offeredToken) missing.push('offeredToken');
-      if (flowType !== 'inflow') missing.push(`flowType=${flowType}`);
+      if (!effectiveOfferedToken) missing.push('offeredToken (could not resolve from draft)');
+      if (!isInflow) missing.push(`not inflow (offeredChainId=${savedDraftData?.offeredChainId})`);
       if (!evmAddress) missing.push('evmAddress');
       if (!signature) missing.push('signature');
       setError(`Missing required data for escrow creation: ${missing.join(', ')}`);
@@ -1020,8 +1070,13 @@ export function IntentBuilder() {
     try {
       setError(null);
       
-      // Check if we're on the right chain (Base Sepolia = 84532)
-      const requiredChainId = offeredToken.chain === 'base-sepolia' ? 84532 : 11155111; // Base Sepolia or Ethereum Sepolia
+      // Check if we're on the right chain
+      const chainConfig = CHAIN_CONFIGS[effectiveOfferedToken.chain];
+      if (!chainConfig) {
+        setError(`Unsupported chain: ${effectiveOfferedToken.chain}`);
+        return;
+      }
+      const requiredChainId = chainConfig.chainId;
       if (chainId !== requiredChainId) {
         console.log(`Switching chain from ${chainId} to ${requiredChainId}`);
         try {
@@ -1029,17 +1084,18 @@ export function IntentBuilder() {
           console.log('Chain switched successfully');
         } catch (switchError) {
           console.error('Failed to switch chain:', switchError);
-          setError(`Please switch to ${offeredToken.chain === 'base-sepolia' ? 'Base Sepolia' : 'Ethereum Sepolia'} in your wallet`);
+          setError(`Please switch to ${chainConfig.name} in your wallet`);
           return;
         }
       }
       
       setApprovingToken(true);
 
-      const escrowAddress = getEscrowContractAddress(offeredToken.chain);
-      console.log('Creating escrow with:', { escrowAddress, tokenAddress: offeredToken.metadata, intentId: savedDraftData.intentId, chainId });
-      const tokenAddress = offeredToken.metadata as `0x${string}`;
-      const amount = BigInt(toSmallestUnits(parseFloat(offeredAmount), offeredToken.decimals));
+      const escrowAddress = getEscrowContractAddress(effectiveOfferedToken.chain);
+      console.log('Creating escrow with:', { escrowAddress, tokenAddress: effectiveOfferedToken.metadata, intentId: savedDraftData.intentId, chainId });
+      const tokenAddress = effectiveOfferedToken.metadata as `0x${string}`;
+      // Use amount from savedDraftData since offeredAmount state might be stale
+      const amount = BigInt(savedDraftData.offeredAmount);
       const intentIdEvm = intentIdToEvmFormat(savedDraftData.intentId);
       
       // Get solver's EVM address from signature response (required for inflow escrows)
@@ -1350,14 +1406,39 @@ export function IntentBuilder() {
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {transactionHash 
-              ? '✓ Committed' 
-              : submittingTransaction 
-                ? 'Committing...' 
-                : signature 
-                  ? 'Commit' 
-                  : 'Commit'}
+            {(() => {
+              const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
+              if (transactionHash) return isOutflow ? '✓ Committed and Sent' : '✓ Committed';
+              if (submittingTransaction) return isOutflow ? 'Committing and Sending...' : 'Committing...';
+              return isOutflow ? 'Commit and Send' : 'Commit';
+            })()}
           </button>
+
+          {/* Step 3: Send Button (for inflow only) */}
+          {(savedDraftData?.offeredChainId !== '250') && transactionHash && (
+            <button
+              type="button"
+              onClick={handleCreateEscrow}
+              disabled={!!escrowHash || approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress}
+              className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
+                escrowHash
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
+            >
+              {escrowHash 
+                ? '✓ Sent' 
+                : isApprovePending
+                  ? 'Confirm in wallet...'
+                  : approvingToken || isApproving
+                    ? 'Approving token...'
+                    : isEscrowPending
+                      ? 'Confirm escrow in wallet...'
+                      : creatingEscrow || isCreatingEscrow
+                        ? 'Sending...'
+                        : 'Send'}
+            </button>
+          )}
           
           {/* Status note below buttons */}
           {!requesterAddr && (
@@ -1406,42 +1487,12 @@ export function IntentBuilder() {
               <div className="mt-2">
                 {transactionHash && (
                   <div className="mt-2 space-y-2">
-                    <p className="text-xs font-mono break-all text-gray-400">Tx: {transactionHash}</p>
-                    {savedDraftData?.intentId && (
-                      <p className="text-xs font-mono break-all text-gray-400">Intent ID: {savedDraftData.intentId}</p>
-                    )}
                     
-                    {/* Escrow creation for inflow intents */}
-                    {flowType === 'inflow' && transactionHash && !escrowHash && (
-                        <div className="mt-3 p-2 bg-blue-900/30 rounded border border-blue-600/50">
-                          <p className="text-xs text-blue-400 mb-2">
-                            Send on {offeredToken?.chain === 'base-sepolia' ? 'Base Sepolia' : 'EVM chain'}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={handleCreateEscrow}
-                            disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress || !!escrowHash}
-                            className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-xs font-medium"
-                          >
-                            {isApprovePending
-                              ? 'Confirm in wallet...'
-                            : approvingToken || isApproving
-                            ? 'Approving token...'
-                            : isEscrowPending
-                            ? 'Confirm escrow in wallet...'
-                            : creatingEscrow || isCreatingEscrow
-                            ? 'Creating escrow...'
-                            : escrowHash
-                            ? '✓ Escrow Created'
-                            : 'Send'}
-                          </button>
-                        {escrowHash && (
-                          <p className="mt-1 text-xs font-mono break-all text-gray-400">Escrow Tx: {escrowHash}</p>
-                        )}
-                      </div>
-                    )}
-                    
-                    {intentStatus === 'created' && pollingFulfillment && (
+                    {/* Show waiting message only after tokens are sent: 
+                        - Outflow: immediately after commit (tokens sent on commit)
+                        - Inflow: only after escrow is created (escrowHash exists) */}
+                    {intentStatus === 'created' && pollingFulfillment && 
+                     (savedDraftData?.offeredChainId === '250' || escrowHash) && (
                       <div className="p-2 bg-yellow-900/30 rounded border border-yellow-600/50">
                         <p className="text-xs text-yellow-400">
                           ⏳ Waiting for funds to arrive...
@@ -1452,7 +1503,6 @@ export function IntentBuilder() {
                     {intentStatus === 'fulfilled' && (
                       <div className="p-2 bg-green-900/30 rounded border border-green-600/50">
                         <p className="text-xs font-bold text-green-400">🎉 Funds received!</p>
-                        <p className="mt-1 text-xs text-gray-400">Verified by trusted verifier</p>
                       </div>
                     )}
                   </div>
@@ -1469,6 +1519,19 @@ export function IntentBuilder() {
               >
                 Clear & Create New Intent
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Debug info - Tx and Intent ID */}
+        {transactionHash && (
+          <div className="mt-2 text-xs text-gray-500 space-y-1">
+            <p className="font-mono break-all">Intent Tx: {transactionHash}</p>
+            {savedDraftData?.intentId && (
+              <p className="font-mono break-all">Intent ID: {savedDraftData.intentId}</p>
+            )}
+            {escrowHash && (
+              <p className="font-mono break-all">Escrow Tx: {escrowHash}</p>
             )}
           </div>
         )}
