@@ -188,9 +188,36 @@ export function IntentBuilder() {
       if (savedDraftId && savedCreatedAt) {
         setDraftId(savedDraftId);
         setDraftCreatedAt(parseInt(savedCreatedAt, 10));
+      } else {
+        // Clear any stale state if draft data is missing from localStorage
+        // This happens on page refresh when localStorage was cleared or expired
+        setDraftId(null);
+        setDraftCreatedAt(null);
+        setSignature(null);
+        setSavedDraftData(null);
+        setTransactionHash(null);
+        setError(null); // Clear any stale errors
       }
     }
   }, []);
+
+  // Clear entire draft if savedDraftData is missing (stale state after page refresh)
+  // savedDraftData is not persisted, so if we have draftId but no savedDraftData, we can't use the draft
+  useEffect(() => {
+    if (draftId && !savedDraftData && mounted) {
+      console.log('Clearing stale draft - savedDraftData missing after page refresh');
+      // Clear everything - we can't use this draft without savedDraftData
+      setDraftId(null);
+      setDraftCreatedAt(null);
+      setSignature(null);
+      setTransactionHash(null);
+      setError(null); // Clear any stale errors
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('last_draft_id');
+        localStorage.removeItem('last_draft_created_at');
+      }
+    }
+  }, [draftId, savedDraftData, mounted]);
 
   // Store the fixed expiry time (Unix timestamp in seconds) - never recalculate it
   const [fixedExpiryTime, setFixedExpiryTime] = useState<number | null>(null);
@@ -249,6 +276,7 @@ export function IntentBuilder() {
     setIntentStatus('pending');
     setPollingFulfillment(false);
     pollingFulfillmentRef.current = false;
+    setError(null); // Clear any stale errors
     if (typeof window !== 'undefined') {
       localStorage.removeItem('last_draft_id');
       localStorage.removeItem('last_draft_created_at');
@@ -358,6 +386,13 @@ export function IntentBuilder() {
     // If no offered token selected, show all tokens
     return SUPPORTED_TOKENS;
   }, [offeredToken]);
+
+  // Helper to organize tokens for dropdown: USDCs first, then separator, then MOVE and ETH
+  const organizeTokensForDropdown = (tokens: TokenConfig[]) => {
+    const usdcs = tokens.filter(t => t.symbol === 'USDC' || t.symbol === 'USDC.e');
+    const others = tokens.filter(t => t.symbol !== 'USDC' && t.symbol !== 'USDC.e');
+    return { usdcs, others };
+  };
 
   // Auto-calculate desired amount based on solver's exchange rate
   // This runs when offered token/amount or desired token changes
@@ -1103,11 +1138,26 @@ export function IntentBuilder() {
             required
           >
             <option value="">Select token...</option>
-            {offeredTokens.map((token) => (
-              <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
-                {token.name}
-              </option>
-            ))}
+            {(() => {
+              const { usdcs, others } = organizeTokensForDropdown(offeredTokens);
+              return (
+                <>
+                  {usdcs.map((token) => (
+                    <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
+                      {token.name}
+                    </option>
+                  ))}
+                  {usdcs.length > 0 && others.length > 0 && (
+                    <option disabled>------</option>
+                  )}
+                  {others.map((token) => (
+                    <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
+                      {token.name}
+                    </option>
+                  ))}
+                </>
+              );
+            })()}
           </select>
         </div>
 
@@ -1148,6 +1198,36 @@ export function IntentBuilder() {
           )}
         </div>
 
+        {/* Swap Direction Button */}
+        <div className="flex justify-center -my-2">
+          <button
+            type="button"
+            onClick={() => {
+              // Swap tokens
+              const tempToken = offeredToken;
+              setOfferedToken(desiredToken);
+              setDesiredToken(tempToken);
+              // Swap amounts
+              const tempAmount = offeredAmount;
+              setOfferedAmount(desiredAmount === 'not available yet' ? '' : desiredAmount);
+              setDesiredAmount(tempAmount === '' ? 'not available yet' : tempAmount);
+            }}
+            className="p-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-full transition-colors"
+            title="Swap Send and Receive"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+              className="w-5 h-5 text-gray-400"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+            </svg>
+          </button>
+        </div>
+
         {/* Desired Token */}
         <div>
           <label className="block text-sm font-medium mb-2">
@@ -1174,11 +1254,26 @@ export function IntentBuilder() {
             required
           >
             <option value="">Select token...</option>
-            {desiredTokens.map((token) => (
-              <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
-                {token.name}
-              </option>
-            ))}
+            {(() => {
+              const { usdcs, others } = organizeTokensForDropdown(desiredTokens);
+              return (
+                <>
+                  {usdcs.map((token) => (
+                    <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
+                      {token.name}
+                    </option>
+                  ))}
+                  {usdcs.length > 0 && others.length > 0 && (
+                    <option disabled>------</option>
+                  )}
+                  {others.map((token) => (
+                    <option key={`${token.chain}::${token.symbol}`} value={`${token.chain}::${token.symbol}`}>
+                      {token.name}
+                    </option>
+                  ))}
+                </>
+              );
+            })()}
           </select>
         </div>
 
@@ -1246,11 +1341,11 @@ export function IntentBuilder() {
           <button
             type="button"
             onClick={handleCreateIntent}
-            disabled={!signature || submittingTransaction || !requesterAddr || !evmAddress || !!transactionHash}
+            disabled={!signature || !savedDraftData || submittingTransaction || !requesterAddr || !evmAddress || !!transactionHash}
             className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
               transactionHash
                 ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                : signature 
+                : signature && savedDraftData
                   ? 'bg-green-600 hover:bg-green-700' 
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed'
             }`}
@@ -1285,20 +1380,20 @@ export function IntentBuilder() {
               ⏳ Waiting for solver signature...
             </p>
           )}
-          {signature && !transactionHash && (
+          {signature && savedDraftData && !transactionHash && (
             <p className="text-xs text-green-400 text-center">
-              ✅ Solver approved! Click "Commit" to submit on-chain
+              ✅ Solver approved! Now commit to the intent.
             </p>
           )}
         </div>
 
         {/* Status Display */}
-        {mounted && draftId && (
+        {mounted && draftId && savedDraftData && (
           <div className="p-3 bg-gray-800/50 border border-gray-700 rounded text-sm text-gray-300">
             <div className="flex justify-between items-start">
               <div>
-                {/* Only show timer if not fulfilled */}
-                {intentStatus !== 'fulfilled' && timeRemaining !== null && (
+                {/* Only show timer if solver approved and not fulfilled */}
+                {signature && intentStatus !== 'fulfilled' && timeRemaining !== null && (
                   <p className="mt-1 text-xs">
                     Time remaining: {Math.floor(timeRemaining / 1000)}s
                     {timeRemaining === 0 && ' (Expired)'}
@@ -1318,18 +1413,18 @@ export function IntentBuilder() {
                     
                     {/* Escrow creation for inflow intents */}
                     {flowType === 'inflow' && transactionHash && !escrowHash && (
-                      <div className="mt-3 p-2 bg-blue-900/30 rounded border border-blue-600/50">
-                        <p className="text-xs text-blue-400 mb-2">
-                          ⚠️ Create escrow on {offeredToken?.chain === 'base-sepolia' ? 'Base Sepolia' : 'EVM chain'} to complete intent
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleCreateEscrow}
-                          disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress || !!escrowHash}
-                          className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-xs font-medium"
-                        >
-                          {isApprovePending
-                            ? 'Confirm in wallet...'
+                        <div className="mt-3 p-2 bg-blue-900/30 rounded border border-blue-600/50">
+                          <p className="text-xs text-blue-400 mb-2">
+                            Send on {offeredToken?.chain === 'base-sepolia' ? 'Base Sepolia' : 'EVM chain'}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleCreateEscrow}
+                            disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress || !!escrowHash}
+                            className="w-full px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-xs font-medium"
+                          >
+                            {isApprovePending
+                              ? 'Confirm in wallet...'
                             : approvingToken || isApproving
                             ? 'Approving token...'
                             : isEscrowPending
@@ -1338,8 +1433,8 @@ export function IntentBuilder() {
                             ? 'Creating escrow...'
                             : escrowHash
                             ? '✓ Escrow Created'
-                            : 'Create Escrow'}
-                        </button>
+                            : 'Send'}
+                          </button>
                         {escrowHash && (
                           <p className="mt-1 text-xs font-mono break-all text-gray-400">Escrow Tx: {escrowHash}</p>
                         )}
