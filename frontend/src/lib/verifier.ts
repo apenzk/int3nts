@@ -242,6 +242,28 @@ class VerifierClient {
       error: 'Polling timeout',
     };
   }
+
+  // Get exchange rate for token pair
+  async getExchangeRate(
+    offeredChainId: number,
+    offeredToken: string,
+    desiredChainId?: number,
+    desiredToken?: string
+  ): Promise<ApiResponse<{
+    desired_token: string;
+    desired_chain_id: number;
+    exchange_rate: number;
+  }>> {
+    const params = new URLSearchParams({
+      offered_chain_id: offeredChainId.toString(),
+      offered_token: offeredToken,
+    });
+    if (desiredChainId !== undefined && desiredToken !== undefined) {
+      params.append('desired_chain_id', desiredChainId.toString());
+      params.append('desired_token', desiredToken);
+    }
+    return this.fetch(`/acceptance?${params.toString()}`);
+  }
 }
 
 export const verifierClient = new VerifierClient();

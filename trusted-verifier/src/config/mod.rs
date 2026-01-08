@@ -4,6 +4,7 @@
 //! Configuration includes chain endpoints, verifier keys, API settings, and validation parameters.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ============================================================================
 // CONFIGURATION STRUCTURES
@@ -31,6 +32,10 @@ pub struct Config {
     pub verifier: VerifierConfig,
     /// API server configuration (host, port, CORS settings)
     pub api: ApiConfig,
+    /// Default solver acceptance criteria (exchange rates for token pairs)
+    /// Used to provide exchange rate information to frontend
+    #[serde(default)]
+    pub acceptance: Option<AcceptanceConfig>,
 }
 
 /// Configuration for a blockchain connection.
@@ -143,6 +148,18 @@ pub struct ApiConfig {
     pub port: u16,
     /// Allowed CORS origins for cross-origin requests
     pub cors_origins: Vec<String>,
+}
+
+/// Acceptance criteria configuration for default solver.
+///
+/// Defines which token pairs are supported and their exchange rates.
+/// Key format: "offered_chain_id:offered_token:desired_chain_id:desired_token"
+/// Value: Exchange rate (how many offered tokens per 1 desired token)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AcceptanceConfig {
+    /// Supported token pairs with exchange rates
+    #[serde(flatten)]
+    pub token_pairs: HashMap<String, f64>,
 }
 
 // ============================================================================
@@ -260,6 +277,7 @@ impl Config {
                 cors_origins: vec!["http://localhost:3333".to_string()],
             },
             connected_chain_evm: None, // Optional connected EVM chain configuration
+            acceptance: None, // Optional acceptance criteria
         }
     }
 }

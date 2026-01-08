@@ -260,6 +260,105 @@ pub async fn get_public_key_handler(
     }))
 }
 
+/// Response structure for exchange rate query
+#[derive(Debug, Serialize)]
+pub struct ExchangeRateResponse {
+    /// Desired token metadata address
+    pub desired_token: String,
+    /// Desired chain ID
+    pub desired_chain_id: u64,
+    /// Exchange rate (how many offered tokens per 1 desired token)
+    pub exchange_rate: f64,
+}
+
+/// Handler for the acceptance/exchange rate endpoint.
+///
+/// Query parameters:
+/// - offered_chain_id: Chain ID of the offered token
+/// - offered_token: Metadata address of the offered token
+/// - desired_chain_id: Chain ID of the desired token (optional - if not provided, returns first match)
+/// - desired_token: Metadata address of the desired token (optional - if not provided, returns first match)
+///
+/// Returns the desired token, desired chain ID, and exchange rate.
+pub async fn get_exchange_rate_handler(
+    config: Arc<crate::config::Config>,
+    query: String,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    use std::collections::HashMap;
+    use url::Url;
+    
+    // Parse query parameters
+    let parsed = Url::parse(&format!("http://dummy?{}", query))
+        .map_err(|e| warp::reject::custom(JsonDeserializeError(format!("Invalid query string: {}", e))))?;
+    
+    let params: HashMap<String, String> = parsed
+        .query_pairs()
+        .into_owned()
+        .collect();
+    
+    let offered_chain_id = params.get("offered_chain_id")
+        .ok_or_else(|| warp::reject::custom(JsonDeserializeError("Missing offered_chain_id parameter".to_string())))?;
+    let offered_token = params.get("offered_token")
+        .ok_or_else(|| warp::reject::custom(JsonDeserializeError("Missing offered_token parameter".to_string())))?;
+    
+    let desired_chain_id = params.get("desired_chain_id");
+    let desired_token = params.get("desired_token");
+    
+    // Get acceptance config
+    let acceptance = config.acceptance.as_ref()
+        .ok_or_else(|| warp::reject::custom(JsonDeserializeError("Acceptance criteria not configured".to_string())))?;
+    
+    // Build the full pair key if both desired params are provided
+    let (pair_key_str, exchange_rate) = if let (Some(d_chain_id), Some(d_token)) = (desired_chain_id, desired_token) {
+        // Look for exact match
+        let exact_key = format!("{}:{}:{}:{}", offered_chain_id, offered_token, d_chain_id, d_token);
+        acceptance.token_pairs.get(&exact_key)
+            .map(|rate| (exact_key, *rate))
+            .ok_or_else(|| {
+                warp::reject::custom(JsonDeserializeError(format!(
+                    "No exchange rate found for token pair: {}:{} -> {}:{}",
+                    offered_chain_id, offered_token, d_chain_id, d_token
+                )))
+            })?
+    } else {
+        // Find first matching pair that starts with offered_chain_id:offered_token
+        let pair_key = format!("{}:{}", offered_chain_id, offered_token);
+        acceptance.token_pairs.iter()
+            .find(|(key, _)| key.starts_with(&pair_key))
+            .map(|(key, rate)| (key.clone(), *rate))
+            .ok_or_else(|| {
+                warp::reject::custom(JsonDeserializeError(format!(
+                    "No exchange rate found for offered token {} on chain {}",
+                    offered_token, offered_chain_id
+                )))
+            })?
+    };
+    
+    // Parse the pair key to extract desired chain and token
+    // Format: "offered_chain_id:offered_token:desired_chain_id:desired_token"
+    let parts: Vec<&str> = pair_key_str.split(':').collect();
+    if parts.len() != 4 {
+        return Err(warp::reject::custom(JsonDeserializeError(format!(
+            "Invalid token pair format: {}",
+            pair_key_str
+        ))));
+    }
+    
+    let desired_chain_id = parts[2].parse::<u64>()
+        .map_err(|e| warp::reject::custom(JsonDeserializeError(format!("Invalid desired_chain_id: {}", e))))?;
+    let desired_token = parts[3].to_string();
+    
+    Ok(warp::reply::json(&ApiResponse::<ExchangeRateResponse> {
+        success: true,
+        data: Some(ExchangeRateResponse {
+            desired_token,
+            desired_chain_id,
+            exchange_rate,
+        }),
+        error: None,
+    }))
+}
+
 // ============================================================================
 // WARP FILTER HELPERS
 // ============================================================================
@@ -553,6 +652,19 @@ impl ApiServer {
             .and(warp::get())
             .and(with_crypto_service(crypto_service.clone()))
             .and_then(get_public_key_handler);
+        
+        // Get exchange rate endpoint - returns desired token and exchange rate for offered token
+        let exchange_rate_config = self.config.clone();
+        let exchange_rate = warp::path("acceptance")
+            .and(warp::get())
+            .and(warp::query::raw())
+            .and_then(move |query: String| {
+                let config = exchange_rate_config.clone();
+                async move {
+                    get_exchange_rate_handler(config, query).await
+                }
+            });
+        
 
         // Outflow validation endpoint - validates connected chain transactions for outflow intents
         // Signature is for hub chain intent fulfillment
@@ -675,6 +787,7 @@ impl ApiServer {
             .or(get_pending)
             .or(submit_signature)
             .or(get_signature)
+            .or(exchange_rate)
             .with(create_cors_filter(&self.config.api.cors_origins))
             .recover(handle_rejection)
     }

@@ -57,6 +57,7 @@ export function IntentBuilder() {
   const [offeredToken, setOfferedToken] = useState<TokenConfig | null>(null);
   const [offeredAmount, setOfferedAmount] = useState('');
   const [desiredToken, setDesiredToken] = useState<TokenConfig | null>(null);
+  // Desired amount is auto-calculated based on solver's exchange rate
   const [desiredAmount, setDesiredAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,7 +358,58 @@ export function IntentBuilder() {
     setFlowType(newFlowType);
     setOfferedToken(null);
     setDesiredToken(null);
+    setDesiredAmount('');
   };
+
+  // Auto-calculate desired amount based on solver's exchange rate
+  // This runs when offered token/amount or desired token changes
+  useEffect(() => {
+    if (!offeredToken || !desiredToken || !offeredAmount || parseFloat(offeredAmount) <= 0) {
+      // Only reset if not already showing not available yet (which indicates a fetch was attempted)
+      if (desiredAmount !== 'not available yet') {
+        setDesiredAmount('');
+      }
+      return;
+    }
+
+    const fetchExchangeRate = async () => {
+      // Set to "Calculating..." immediately to show loading state
+      setDesiredAmount('');
+      try {
+        const offeredChainId = CHAIN_CONFIGS[offeredToken.chain].chainId;
+        const desiredChainId = CHAIN_CONFIGS[desiredToken.chain].chainId;
+        
+        // Query exchange rate for this specific token pair
+        const response = await verifierClient.getExchangeRate(
+          offeredChainId,
+          offeredToken.metadata,
+          desiredChainId,
+          desiredToken.metadata
+        );
+
+        if (!response.success || !response.data) {
+          // Exchange rate not available - show "not available yet" instead of error
+          setDesiredAmount('not available yet');
+          setError(null);
+          return;
+        }
+
+        const { exchange_rate } = response.data;
+
+        // Calculate desired amount: desired = offered / exchange_rate
+        const offeredAmountNum = parseFloat(offeredAmount);
+        const desiredAmountNum = offeredAmountNum / exchange_rate;
+        setDesiredAmount(desiredAmountNum.toFixed(6));
+        setError(null); // Clear any previous errors
+      } catch (err) {
+        // Exchange rate not available - show "not available yet" instead of error
+        setDesiredAmount('not available yet');
+        setError(null);
+      }
+    };
+
+    fetchExchangeRate();
+  }, [offeredToken, desiredToken, offeredAmount]);
 
   // Get requester address based on flow type
   // For inflow: requester is on connected chain (EVM), but we use MVM address for hub
@@ -643,8 +695,17 @@ export function IntentBuilder() {
       setError('Please select both offered and desired tokens');
       return;
     }
+    if (!desiredAmount || desiredAmount === 'not available yet' || parseFloat(desiredAmount) <= 0) {
+      setError('Exchange rate not available. Cannot create draft intent.');
+      return;
+    }
 
     const offeredAmountNum = parseFloat(offeredAmount);
+    // Skip parsing if not available yet (already checked above)
+    if (desiredAmount === 'not available yet') {
+      setError('Exchange rate not available. Cannot create draft intent.');
+      return;
+    }
     const desiredAmountNum = parseFloat(desiredAmount);
     if (isNaN(offeredAmountNum) || offeredAmountNum <= 0) {
       setError('Offered amount must be a positive number');
@@ -1143,11 +1204,13 @@ export function IntentBuilder() {
             onChange={(e) => {
               if (!e.target.value) {
                 setDesiredToken(null);
+                setDesiredAmount('');
                 return;
               }
               const [chain, symbol] = e.target.value.split('::');
               const token = desiredTokens.find(t => t.chain === chain && t.symbol === symbol);
               setDesiredToken(token || null);
+              setDesiredAmount(''); // Reset amount when token changes
             }}
             className="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded text-sm"
             required
@@ -1174,25 +1237,32 @@ export function IntentBuilder() {
           )}
         </div>
 
-        <div>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={desiredAmount}
-              onChange={(e) => setDesiredAmount(e.target.value)}
-              placeholder="1"
-              min="0"
-              step="0.000001"
-              className="flex-1 px-4 py-2 bg-gray-900 border border-gray-600 rounded text-sm"
-              required
-            />
-            {desiredToken && (
+        {/* Desired Amount (auto-calculated from solver's exchange rate) */}
+        {desiredToken && (
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Desired Amount (auto-calculated)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={desiredAmount}
+                readOnly
+                placeholder={
+                  desiredAmount && desiredAmount !== 'not available yet'
+                    ? '' 
+                    : offeredToken && offeredAmount 
+                      ? "Calculating..." 
+                      : "Enter offered amount first"
+                }
+                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-300 cursor-not-allowed"
+              />
               <span className="text-sm text-gray-400 font-mono">
                 {desiredToken.symbol}
               </span>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Error Display */}
         {error && (
@@ -1205,11 +1275,13 @@ export function IntentBuilder() {
         <div className="space-y-3">
           <button
             type="submit"
-            disabled={loading || !requesterAddr || !!draftId}
+            disabled={loading || !requesterAddr || !!draftId || desiredAmount === 'not available yet'}
             className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
               draftId 
                 ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                : desiredAmount === 'not available yet'
+                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
             }`}
           >
             {loading ? 'Creating Draft Intent...' : draftId ? '✓ Draft Created' : 'Create Draft Intent'}
