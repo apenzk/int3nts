@@ -31,6 +31,7 @@ nix develop -c bash -c "cd move-intent-framework && movement move test --dev --n
 nix develop -c bash -c "cd evm-intent-framework && npm test"
 RUST_LOG=off nix develop -c bash -c "cd trusted-verifier && cargo test --quiet"
 RUST_LOG=off nix develop -c bash -c "cd solver && cargo test --quiet"
+nix develop -c bash -c "cd frontend && npm test"
 ```
 
 #### E2E Integration Tests (requires Docker)

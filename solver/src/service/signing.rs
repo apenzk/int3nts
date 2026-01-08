@@ -233,6 +233,7 @@ impl SigningService {
         let expiry_time = draft.expiry_time;
         let requester_addr = draft.requester_addr.clone();
         let solver_addr_clone = solver_addr.clone();
+        let e2e_mode = self.config.service.e2e_mode;
 
         // Get private key, intent hash, and sign - all blocking operations
         let (signature_hex, public_key_hex) = tokio::task::spawn_blocking(move || -> Result<(String, String)> {
@@ -266,6 +267,7 @@ impl SigningService {
                 &requester_addr,
                 &solver_addr_clone,
                 chain_num,
+                e2e_mode,
             )
             .context("Failed to get intent hash")?;
 

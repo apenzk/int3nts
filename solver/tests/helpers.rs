@@ -106,6 +106,7 @@ pub fn create_default_service_config() -> solver::config::ServiceConfig {
     solver::config::ServiceConfig {
         verifier_url: "http://127.0.0.1:3333".to_string(),
         polling_interval_ms: 2000,
+        e2e_mode: false,
     }
 }
 
@@ -124,6 +125,7 @@ pub fn create_default_hub_chain_config() -> solver::config::ChainConfig {
         chain_id: 1,
         module_addr: DUMMY_MODULE_ADDR_HUB.to_string(),
         profile: "hub-profile".to_string(),
+        e2e_mode: false,
     }
 }
 
@@ -142,6 +144,7 @@ pub fn create_default_connected_mvm_chain_config() -> solver::config::ChainConfi
         chain_id: 2,
         module_addr: DUMMY_MODULE_ADDR_CON.to_string(),
         profile: "connected-profile".to_string(),
+        e2e_mode: false,
     }
 }
 

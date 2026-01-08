@@ -72,6 +72,7 @@ generate_solver_config_mvm() {
 [service]
 verifier_url = "$verifier_url"
 polling_interval_ms = 1000  # Poll frequently for tests
+e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
 [hub_chain]
 name = "Hub Chain (E2E Test)"
@@ -79,6 +80,7 @@ rpc_url = "$hub_rpc"
 chain_id = $hub_chain_id
 module_addr = "$hub_module_addr"
 profile = "solver-chain1"
+e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
 [connected_chain]
 type = "mvm"
@@ -87,6 +89,7 @@ rpc_url = "$connected_rpc"
 chain_id = $connected_chain_id
 module_addr = "$connected_module_addr"
 profile = "solver-chain2"
+e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
 [acceptance]
 # Accept USDhub/USDcon swaps at 1:1 rate for E2E testing

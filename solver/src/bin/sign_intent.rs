@@ -48,6 +48,7 @@ fn main() -> Result<()> {
     let mut issuer = None;
     let mut solver = None;
     let mut chain_num = None;
+    let mut e2e_mode = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -100,6 +101,10 @@ fn main() -> Result<()> {
                 chain_num = Some(args[i + 1].parse().context("Invalid chain-num")?);
                 i += 2;
             }
+            "--e2e-mode" => {
+                e2e_mode = true;
+                i += 1;
+            }
             _ => {
                 eprintln!("Unknown argument: {}", args[i]);
                 std::process::exit(1);
@@ -134,6 +139,7 @@ fn main() -> Result<()> {
         &issuer,
         &solver,
         chain_num,
+        e2e_mode,
     )?;
 
     // Step 2: Get private key from Aptos config

@@ -128,6 +128,7 @@ fn test_get_intent_hash_rejects_address_without_prefix() {
         "0xissuer",
         solver_addr_no_prefix, // Missing 0x prefix
         1,
+        false, // e2e_mode: false (testnet mode)
     );
 
     assert!(result.is_err(), "Should reject address without 0x prefix");

@@ -9,7 +9,7 @@ use trusted_verifier::validator::CrossChainValidator;
 mod test_helpers;
 use test_helpers::{
     build_test_config_with_mvm, create_default_escrow_event, create_default_intent_mvm,
-    setup_mock_server_with_solver_registry, DUMMY_SOLVER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_CON,
+    setup_mock_server_with_solver_registry, DUMMY_SOLVER_ADDR_MVM_CON,
 };
 
 // ============================================================================

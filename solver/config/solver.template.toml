@@ -9,6 +9,7 @@
 [service]
 verifier_url = "http://127.0.0.1:3333"  # Verifier API base URL
 polling_interval_ms = 2000               # Polling interval for checking pending drafts (milliseconds)
+e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 
 # Hub Chain Configuration
 # The hub chain is where intents are created
@@ -18,6 +19,7 @@ rpc_url = "http://127.0.0.1:8080/v1"     # RPC endpoint URL for blockchain commu
 chain_id = 1                              # Unique chain identifier
 module_addr = "0x123"                 # Address of the intent framework module
 profile = "solver-chain1"                 # Aptos/Movement CLI profile name for this chain
+e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 
 # Connected Chain Configuration
 # The connected chain is where escrows occur
@@ -31,6 +33,7 @@ rpc_url = "http://127.0.0.1:8082/v1"     # RPC endpoint URL for blockchain commu
 chain_id = 2                              # Unique chain identifier
 module_addr = "0x123"                 # Address of the intent framework module
 profile = "solver-chain2"                # Aptos/Movement CLI profile name for this chain
+e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 
 # Option 2: EVM Chain (uncomment and use instead of MVM config above)
 # [connected_chain]

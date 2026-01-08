@@ -41,6 +41,9 @@ pub struct ServiceConfig {
     pub verifier_url: String,
     /// Polling interval for checking pending drafts in milliseconds
     pub polling_interval_ms: u64,
+    /// E2E testing mode: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
+    #[serde(default)]
+    pub e2e_mode: bool,
 }
 
 /// Configuration for a blockchain connection.
@@ -56,6 +59,9 @@ pub struct ChainConfig {
     pub module_addr: String,
     /// Aptos/Movement CLI profile name for this chain
     pub profile: String,
+    /// E2E testing mode: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
+    #[serde(default)]
+    pub e2e_mode: bool,
 }
 
 /// Configuration for the connected chain (can be MVM or EVM).

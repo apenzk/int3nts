@@ -22,6 +22,7 @@ pub fn get_intent_hash(
     issuer: &str,
     solver: &str,
     chain_num: u8,
+    e2e_mode: bool,
 ) -> Result<Vec<u8>> {
     // Validate solver address format early (before any CLI calls)
     // Solver address must have 0x prefix (required format), then strip for API call
@@ -32,19 +33,16 @@ pub fn get_intent_hash(
             solver
         ))?;
 
-    // Check if we're in testnet mode (MOVEMENT_SOLVER_PRIVATE_KEY set) or E2E mode
-    let is_testnet_mode = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY").is_ok();
-    
-    // Determine CLI and RPC URL based on mode
-    let (cli, rpc_url) = if is_testnet_mode {
+    // Determine CLI and RPC URL based on e2e_mode flag
+    let (cli, rpc_url) = if e2e_mode {
+        // E2E mode: use aptos CLI and local RPC
+        let rest_port = if chain_num == 1 { "8080" } else { "8082" };
+        ("aptos", format!("http://127.0.0.1:{}/v1", rest_port))
+    } else {
         // Testnet mode: use movement CLI and testnet RPC
         let rpc = std::env::var("HUB_RPC_URL")
             .unwrap_or_else(|_| "https://testnet.movementnetwork.xyz/v1".to_string());
         ("movement", rpc)
-    } else {
-        // E2E mode: use aptos CLI and local RPC
-        let rest_port = if chain_num == 1 { "8080" } else { "8082" };
-        ("aptos", format!("http://127.0.0.1:{}/v1", rest_port))
     };
 
     // Build command arguments
@@ -54,8 +52,14 @@ pub fn get_intent_hash(
         "run".to_string(),
     ];
     
-    // Add authentication based on mode
-    if is_testnet_mode {
+    // Add authentication based on e2e_mode flag
+    if e2e_mode {
+        // Use profile for E2E tests
+        args.extend(vec![
+            "--profile".to_string(),
+            profile.to_string(),
+        ]);
+    } else {
         // Use private key directly for testnet
         let private_key = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
             .context("MOVEMENT_SOLVER_PRIVATE_KEY not set")?;
@@ -69,12 +73,6 @@ pub fn get_intent_hash(
             private_key,
             "--url".to_string(),
             rpc_url.clone(),
-        ]);
-    } else {
-        // Use profile for E2E tests
-        args.extend(vec![
-            "--profile".to_string(),
-            profile.to_string(),
         ]);
     }
     

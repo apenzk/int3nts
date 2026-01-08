@@ -93,6 +93,7 @@ generate_solver_config_evm() {
 [service]
 verifier_url = "$verifier_url"
 polling_interval_ms = 1000  # Poll frequently for tests
+e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
 [hub_chain]
 name = "Hub Chain (E2E Test)"
@@ -100,6 +101,7 @@ rpc_url = "$hub_rpc"
 chain_id = $hub_chain_id
 module_addr = "$module_addr"
 profile = "solver-chain1"
+e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
 [connected_chain]
 type = "evm"

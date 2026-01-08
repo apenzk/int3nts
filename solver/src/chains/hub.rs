@@ -138,6 +138,8 @@ pub struct HubChainClient {
     module_addr: String,
     /// CLI profile name
     profile: String,
+    /// E2E mode flag: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
+    e2e_mode: bool,
 }
 
 impl HubChainClient {
@@ -169,6 +171,7 @@ impl HubChainClient {
             base_url,
             module_addr: config.module_addr.clone(),
             profile: config.profile.clone(),
+            e2e_mode: config.e2e_mode,
         })
     }
 
@@ -333,33 +336,66 @@ impl HubChainClient {
         intent_addr: &str,
         payment_amount: u64,
     ) -> Result<String> {
-        // Require MOVEMENT_SOLVER_PRIVATE_KEY - no fallback
-        let pk_hex = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
-            .context("MOVEMENT_SOLVER_PRIVATE_KEY environment variable not set")?;
+        // Determine CLI based on e2e_mode flag
+        let cli = if self.e2e_mode {
+            "aptos"
+        } else {
+            "movement"
+        };
 
-        let output = Command::new("movement")
-            .args(&[
-                "move",
-                "run",
-                "--assume-yes",
-                "--function-id",
-                &format!("{}::fa_intent_inflow::fulfill_inflow_intent", self.module_addr),
-                "--args",
-                &format!("address:{}", intent_addr),
-                &format!("u64:{}", payment_amount),
+        // Store formatted strings to avoid lifetime issues
+        let function_id = format!("{}::fa_intent_inflow::fulfill_inflow_intent", self.module_addr);
+        let intent_addr_arg = format!("address:{}", intent_addr);
+        let payment_amount_arg = format!("u64:{}", payment_amount);
+
+        // Prepare private key if needed (for testnet mode)
+        let pk_hex_stripped = if !self.e2e_mode {
+            let pk_hex = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
+                .context("MOVEMENT_SOLVER_PRIVATE_KEY not set")?;
+            Some(pk_hex.strip_prefix("0x").unwrap_or(&pk_hex).to_string())
+        } else {
+            None
+        };
+
+        let mut args = vec![
+            "move",
+            "run",
+            "--assume-yes",
+            "--function-id",
+            &function_id,
+            "--args",
+            &intent_addr_arg,
+            &payment_amount_arg,
+        ];
+
+        // Add authentication based on e2e_mode flag
+        if self.e2e_mode {
+            // Use profile for E2E tests
+            args.extend(vec![
+                "--profile",
+                &self.profile,
+            ]);
+        } else {
+            // Use private key directly for testnet
+            args.extend(vec![
                 "--private-key",
-                pk_hex.strip_prefix("0x").unwrap_or(&pk_hex),
+                pk_hex_stripped.as_ref().unwrap(),
                 "--url",
                 &self.base_url,
-            ])
+            ]);
+        }
+
+        let output = Command::new(cli)
+            .args(&args)
             .output()
-            .context("Failed to execute movement move run")?;
+            .context(format!("Failed to execute {} move run", cli))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             anyhow::bail!(
-                "movement move run failed:\nstderr: {}\nstdout: {}",
+                "{} move run failed:\nstderr: {}\nstdout: {}",
+                cli,
                 stderr,
                 stdout
             );
@@ -398,33 +434,66 @@ impl HubChainClient {
         // Convert signature bytes to hex string
         let signature_hex = hex::encode(verifier_signature_bytes);
 
-        // Require MOVEMENT_SOLVER_PRIVATE_KEY - no fallback
-        let pk_hex = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
-            .context("MOVEMENT_SOLVER_PRIVATE_KEY environment variable not set")?;
+        // Determine CLI based on e2e_mode flag
+        let cli = if self.e2e_mode {
+            "aptos"
+        } else {
+            "movement"
+        };
 
-        let output = Command::new("movement")
-            .args(&[
-                "move",
-                "run",
-                "--assume-yes",
-                "--function-id",
-                &format!("{}::fa_intent_outflow::fulfill_outflow_intent", self.module_addr),
-                "--args",
-                &format!("address:{}", intent_addr),
-                &format!("hex:{}", signature_hex),
+        // Store formatted strings to avoid lifetime issues
+        let function_id = format!("{}::fa_intent_outflow::fulfill_outflow_intent", self.module_addr);
+        let intent_addr_arg = format!("address:{}", intent_addr);
+        let signature_hex_arg = format!("hex:{}", signature_hex);
+
+        // Prepare private key if needed (for testnet mode)
+        let pk_hex_stripped = if !self.e2e_mode {
+            let pk_hex = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
+                .context("MOVEMENT_SOLVER_PRIVATE_KEY not set")?;
+            Some(pk_hex.strip_prefix("0x").unwrap_or(&pk_hex).to_string())
+        } else {
+            None
+        };
+
+        let mut args = vec![
+            "move",
+            "run",
+            "--assume-yes",
+            "--function-id",
+            &function_id,
+            "--args",
+            &intent_addr_arg,
+            &signature_hex_arg,
+        ];
+
+        // Add authentication based on e2e_mode flag
+        if self.e2e_mode {
+            // Use profile for E2E tests
+            args.extend(vec![
+                "--profile",
+                &self.profile,
+            ]);
+        } else {
+            // Use private key directly for testnet
+            args.extend(vec![
                 "--private-key",
-                pk_hex.strip_prefix("0x").unwrap_or(&pk_hex),
+                pk_hex_stripped.as_ref().unwrap(),
                 "--url",
                 &self.base_url,
-            ])
+            ]);
+        }
+
+        let output = Command::new(cli)
+            .args(&args)
             .output()
-            .context("Failed to execute movement move run")?;
+            .context(format!("Failed to execute {} move run", cli))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
             anyhow::bail!(
-                "movement move run failed:\nstderr: {}\nstdout: {}",
+                "{} move run failed:\nstderr: {}\nstdout: {}",
+                cli,
                 stderr,
                 stdout
             );
