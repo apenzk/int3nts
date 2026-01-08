@@ -240,10 +240,12 @@ export function IntentBuilder() {
   // Store the fixed expiry time (Unix timestamp in seconds) - never recalculate it
   const [fixedExpiryTime, setFixedExpiryTime] = useState<number | null>(null);
 
-  // Set fixed expiry time based on when draft was created (60 second timeout)
+  // Set fixed expiry time based on when draft was created
+  // Frontend shows 60 seconds, but actual intent expiry is 90 seconds
+  // This gives 30 seconds buffer after frontend timer expires
   useEffect(() => {
     if (draftCreatedAt) {
-      setFixedExpiryTime(Math.floor(draftCreatedAt / 1000) + 60);
+      setFixedExpiryTime(Math.floor(draftCreatedAt / 1000) + 60); // Frontend timer: 60 seconds
     } else {
       setFixedExpiryTime(null);
     }
@@ -340,7 +342,7 @@ export function IntentBuilder() {
     const pollSignature = async () => {
       pollingActiveRef.current = true;
       setPollingSignature(true);
-      const maxAttempts = 60; // 60 attempts * 2 seconds = 120 seconds max (longer than 30s expiry)
+      const maxAttempts = 60; // 60 attempts * 2 seconds = 120 seconds max (longer than 90s expiry)
       let attempts = 0;
 
       const poll = async () => {
@@ -811,8 +813,9 @@ export function IntentBuilder() {
     const offeredAmountSmallest = toSmallestUnits(offeredAmountNum, offeredToken.decimals);
     const desiredAmountSmallest = toSmallestUnits(desiredAmountNum, desiredToken.decimals);
 
-    // Expiry is fixed to 60 seconds from now (hardcoded, not user-configurable)
-    const expiryTime = Math.floor(Date.now() / 1000) + 60;
+    // Actual expiry is 90 seconds, but frontend timer shows 60 seconds
+    // This gives 30 seconds buffer after frontend timer expires for user to sign
+    const expiryTime = Math.floor(Date.now() / 1000) + 90;
 
     // Get chain IDs from config
     const offeredChainId = CHAIN_CONFIGS[offeredToken.chain].chainId;
@@ -1379,64 +1382,84 @@ export function IntentBuilder() {
 
         {/* Action Buttons */}
         <div className="space-y-3">
-          <button
-            type="submit"
-            disabled={loading || !requesterAddr || !evmAddress || !!draftId || desiredAmount === 'not available yet'}
-            className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
-              draftId 
-                ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
-                : desiredAmount === 'not available yet' || !requesterAddr || !evmAddress
-                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
-            }`}
-          >
-            {loading ? 'Requesting...' : draftId ? '✓ Requested' : 'Request'}
-          </button>
-
-          {/* Step 2: Commit Button */}
-          <button
-            type="button"
-            onClick={handleCreateIntent}
-            disabled={!signature || !savedDraftData || submittingTransaction || !requesterAddr || !evmAddress || !!transactionHash}
-            className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
-              transactionHash
-                ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                : signature && savedDraftData
-                  ? 'bg-green-600 hover:bg-green-700' 
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {(() => {
-              const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
-              if (transactionHash) return isOutflow ? '✓ Committed and Sent' : '✓ Committed';
-              if (submittingTransaction) return isOutflow ? 'Committing and Sending...' : 'Committing...';
-              return isOutflow ? 'Commit and Send' : 'Commit';
-            })()}
-          </button>
-
-          {/* Step 3: Send Button (for inflow only) */}
-          {(savedDraftData?.offeredChainId !== '250') && transactionHash && (
+          {/* Request Button - show when ready to request, stay visible (greyed out) after requested */}
+          {!draftId && (
             <button
-              type="button"
-              onClick={handleCreateEscrow}
-              disabled={!!escrowHash || approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress}
+              type="submit"
+              disabled={loading || !requesterAddr || !evmAddress || desiredAmount === 'not available yet'}
               className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
-                escrowHash
+                desiredAmount === 'not available yet' || !requesterAddr || !evmAddress
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               }`}
             >
-              {escrowHash 
-                ? '✓ Sent' 
-                : isApprovePending
-                  ? 'Confirm in wallet...'
-                  : approvingToken || isApproving
-                    ? 'Approving token...'
-                    : isEscrowPending
-                      ? 'Confirm escrow in wallet...'
-                      : creatingEscrow || isCreatingEscrow
-                        ? 'Sending...'
-                        : 'Send'}
+              {loading ? 'Requesting...' : 'Request'}
+            </button>
+          )}
+          {draftId && (
+            <button
+              type="button"
+              disabled
+              className="w-full px-4 py-2 rounded text-sm font-medium bg-gray-600 text-gray-400 cursor-not-allowed"
+            >
+              ✓ Requested
+            </button>
+          )}
+
+          {/* Commit Button - show when signature received, stay visible (greyed out) after committed */}
+          {signature && savedDraftData && !transactionHash && (
+            <button
+              type="button"
+              onClick={handleCreateIntent}
+              disabled={submittingTransaction || !requesterAddr || !evmAddress}
+              className="w-full px-4 py-2 rounded text-sm font-medium transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {(() => {
+                const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
+                if (submittingTransaction) return isOutflow ? 'Committing and Sending...' : 'Committing...';
+                return isOutflow ? 'Commit and Send' : 'Commit';
+              })()}
+            </button>
+          )}
+          {signature && savedDraftData && transactionHash && (
+            <button
+              type="button"
+              disabled
+              className="w-full px-4 py-2 rounded text-sm font-medium bg-gray-600 text-gray-400 cursor-not-allowed"
+            >
+              {(() => {
+                const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
+                return isOutflow ? '✓ Committed and Sent' : '✓ Committed';
+              })()}
+            </button>
+          )}
+
+          {/* Send Button (for inflow only) - show when committed, stay visible (greyed out) after sent */}
+          {(savedDraftData?.offeredChainId !== '250') && transactionHash && !escrowHash && (
+            <button
+              type="button"
+              onClick={handleCreateEscrow}
+              disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress}
+              className="w-full px-4 py-2 rounded text-sm font-medium transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isApprovePending
+                ? 'Confirm in wallet...'
+                : approvingToken || isApproving
+                  ? 'Approving token...'
+                  : isEscrowPending
+                    ? 'Confirm escrow in wallet...'
+                    : creatingEscrow || isCreatingEscrow
+                      ? 'Sending...'
+                      : 'Send'}
+            </button>
+          )}
+          {(savedDraftData?.offeredChainId !== '250') && transactionHash && escrowHash && (
+            <button
+              type="button"
+              disabled
+              className="w-full px-4 py-2 rounded text-sm font-medium bg-gray-600 text-gray-400 cursor-not-allowed"
+            >
+              ✓ Sent
             </button>
           )}
           
@@ -1453,74 +1476,63 @@ export function IntentBuilder() {
           )}
           {requesterAddr && evmAddress && !draftId && (
             <p className="text-xs text-gray-500 text-center">
-              Step 1: Request intent for solver approval
+              Request intent for solver approval
             </p>
           )}
           {draftId && !signature && pollingSignature && (
             <p className="text-xs text-yellow-400 text-center">
-              ⏳ Waiting for solver signature...
+              Waiting for solver commitment
             </p>
           )}
           {signature && savedDraftData && !transactionHash && (
             <p className="text-xs text-green-400 text-center">
-              ✅ Solver approved! Now commit to the intent.
+              Solver approved! Now commit to the intent.
             </p>
           )}
         </div>
 
+        {/* Timer - outside status box */}
+        {mounted && draftId && savedDraftData && signature && intentStatus !== 'fulfilled' && timeRemaining !== null && 
+         ((savedDraftData?.offeredChainId === '250' && !transactionHash) || 
+          (savedDraftData?.offeredChainId !== '250' && !escrowHash)) && (
+          <p className="text-xs text-gray-400 text-center">
+            Time remaining: {Math.floor(timeRemaining / 1000)}s
+            {timeRemaining === 0 && ' (Expired)'}
+          </p>
+        )}
+
         {/* Status Display */}
-        {mounted && draftId && savedDraftData && (
-          <div className="p-3 bg-gray-800/50 border border-gray-700 rounded text-sm text-gray-300">
-            <div className="flex justify-between items-start">
-              <div>
-                {/* Only show timer if solver approved and not fulfilled */}
-                {signature && intentStatus !== 'fulfilled' && timeRemaining !== null && (
-                  <p className="mt-1 text-xs">
-                    Time remaining: {Math.floor(timeRemaining / 1000)}s
-                    {timeRemaining === 0 && ' (Expired)'}
+        {mounted && draftId && savedDraftData && signature && (
+          <div className="mt-2">
+            {transactionHash && (
+              <div className="mt-2 space-y-2">
+                {/* Show waiting message only after tokens are sent: 
+                    - Outflow: immediately after commit (tokens sent on commit)
+                    - Inflow: only after escrow is created (escrowHash exists) */}
+                {intentStatus === 'created' && pollingFulfillment && 
+                 (savedDraftData?.offeredChainId === '250' || escrowHash) && (
+                  <p className="text-xs text-yellow-400 text-center">
+                    ⏳ Waiting for funds to arrive...
                   </p>
                 )}
-              </div>
-            </div>
-            
-            {signature && (
-              <div className="mt-2">
-                {transactionHash && (
-                  <div className="mt-2 space-y-2">
-                    
-                    {/* Show waiting message only after tokens are sent: 
-                        - Outflow: immediately after commit (tokens sent on commit)
-                        - Inflow: only after escrow is created (escrowHash exists) */}
-                    {intentStatus === 'created' && pollingFulfillment && 
-                     (savedDraftData?.offeredChainId === '250' || escrowHash) && (
-                      <div className="p-2 bg-yellow-900/30 rounded border border-yellow-600/50">
-                        <p className="text-xs text-yellow-400">
-                          ⏳ Waiting for funds to arrive...
-                        </p>
-                      </div>
-                    )}
-                    
-                    {intentStatus === 'fulfilled' && (
-                      <div className="p-2 bg-green-900/30 rounded border border-green-600/50">
-                        <p className="text-xs font-bold text-green-400">🎉 Funds received!</p>
-                      </div>
-                    )}
-                  </div>
+                
+                {intentStatus === 'fulfilled' && (
+                  <p className="text-xs font-bold text-green-400 text-center">Funds received!</p>
                 )}
               </div>
             )}
-            
-            {/* Clear button at bottom when fulfilled */}
-            {intentStatus === 'fulfilled' && (
-              <button
-                type="button"
-                onClick={clearDraft}
-                className="mt-3 w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-medium rounded text-sm"
-              >
-                Clear & Create New Intent
-              </button>
-            )}
           </div>
+        )}
+        
+        {/* Clear button at bottom when fulfilled */}
+        {mounted && draftId && savedDraftData && intentStatus === 'fulfilled' && (
+          <button
+            type="button"
+            onClick={clearDraft}
+            className="mt-3 w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-black font-medium rounded text-sm"
+          >
+            Clear & Create New Intent
+          </button>
         )}
 
         {/* Debug info - Tx and Intent ID */}
