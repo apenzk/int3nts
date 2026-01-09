@@ -21,9 +21,21 @@ rpc_url = "https://testnet.movementnetwork.xyz/v1"
 native_token = "MOVE"
 native_token_decimals = 8
 
-# USDC on Movement Testnet (USDC.e)
-usdc = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7"
+# USDC.e on Movement Testnet (USDC.e)
+usdc_e = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7"
+usdc_e_decimals = 6
+
+# USDC on Movement Testnet (FA metadata address, paired with coin 0xa6cc...::tokens::USDC)
+usdc = "0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e"
 usdc_decimals = 6
+
+# USDT on Movement Testnet (FA metadata address, paired with coin 0xa6cc...::tokens::USDT)
+usdt = "0xe8d4819362f685b3276275ab44e1a20e2a30ae8e8bbbfb5126329a45e44ac4e0"
+usdt_decimals = 6
+
+# WETH on Movement Testnet (FA metadata address, paired with coin 0xa6cc...::tokens::WETH)
+weth = "0x2fa1ab0e37fdd22cbf9da880826e9f79f06e8e5d9df9bce774b1f47b708fe121"
+weth_decimals = 18
 
 # pyUSD on Movement Testnet (Paxos USD)
 # TODO: Update with actual pyUSD deployment address once deployed

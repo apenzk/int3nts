@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
 import { INTENT_MODULE_ADDRESS } from '@/lib/move-transactions';
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
 import { ERC20_ABI, INTENT_ESCROW_ABI, getEscrowContractAddress } from '@/lib/escrow';
 
 export function WalletTransactionTest() {
@@ -12,9 +13,37 @@ export function WalletTransactionTest() {
   
   // EVM hooks
   const { address: evmAddress, isConnected: evmConnected } = useAccount();
+  // MVM hooks
+  const { account: mvmAccount, connected: mvmConnected } = useWallet();
   const chainId = useChainId();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const { writeContract, data: txHash, error: writeError, isPending: isWritePending, reset } = useWriteContract();
+
+  const test0_WhoAmI = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      // Get MVM address
+      let mvmAddr = 'Not connected';
+      if (mvmAccount?.address) {
+        mvmAddr = mvmAccount.address;
+      } else if (typeof window !== 'undefined') {
+        const savedAddress = localStorage.getItem('nightly_connected_address');
+        if (savedAddress) {
+          mvmAddr = savedAddress;
+        }
+      }
+      
+      // Get EVM address
+      const evmAddr = evmAddress || 'Not connected';
+      
+      setResult(`MVM Address: ${mvmAddr}\nEVM Address: ${evmAddr}`);
+    } catch (err) {
+      setResult(`FAIL: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const test1_WalletConnection = async () => {
     setLoading(true);
@@ -731,6 +760,14 @@ ${!hasEscrowEvent && isCreateEscrow ? '⚠️ CRITICAL: createEscrow called but 
       </p>
       
       <div className="grid grid-cols-1 gap-2 mb-4">
+        <button
+          onClick={test0_WhoAmI}
+          disabled={loading}
+          className="px-3 py-2 bg-blue-700 hover:bg-blue-600 rounded text-xs text-left disabled:opacity-50 font-medium"
+        >
+          WhoAmI: Show MVM & EVM Addresses
+        </button>
+        
         <button
           onClick={test1_WalletConnection}
           disabled={loading}

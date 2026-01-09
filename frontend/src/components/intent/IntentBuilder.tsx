@@ -435,11 +435,11 @@ export function IntentBuilder() {
     return SUPPORTED_TOKENS;
   }, [offeredToken]);
 
-  // Helper to organize tokens for dropdown: USDCs first, then separator, then MOVE and ETH
+  // Helper to organize tokens for dropdown: USD tokens (USDC, USDC.e, USDT) first, then separator, then MOVE and ETH
   const organizeTokensForDropdown = (tokens: TokenConfig[]) => {
-    const usdcs = tokens.filter(t => t.symbol === 'USDC' || t.symbol === 'USDC.e');
-    const others = tokens.filter(t => t.symbol !== 'USDC' && t.symbol !== 'USDC.e');
-    return { usdcs, others };
+    const usdTokens = tokens.filter(t => t.symbol === 'USDC' || t.symbol === 'USDC.e' || t.symbol === 'USDT');
+    const others = tokens.filter(t => t.symbol !== 'USDC' && t.symbol !== 'USDC.e' && t.symbol !== 'USDT');
+    return { usdcs: usdTokens, others };
   };
 
   // Auto-calculate desired amount based on solver's exchange rate

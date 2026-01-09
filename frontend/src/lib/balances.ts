@@ -48,7 +48,8 @@ export async function fetchMovementBalance(
     const rpcUrl = getRpcUrl('movement');
     console.log('Fetching Movement FA balance:', { rpcUrl, address, metadata: token.metadata });
     
-    const response = await fetch(`${rpcUrl}/view`, {
+    // First try FA balance using primary_fungible_store::balance
+    const faResponse = await fetch(`${rpcUrl}/view`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -58,19 +59,39 @@ export async function fetchMovementBalance(
       }),
     });
     
-    console.log('Movement balance response status:', response.status);
+    console.log('Movement FA balance response status:', faResponse.status);
     
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('Movement balance request failed:', response.status, text);
-      return null;
+    let raw = '0';
+    if (faResponse.ok) {
+      const faResult = await faResponse.json();
+      console.log('Movement FA balance result:', faResult);
+      raw = faResult[0] || '0';
     }
     
-    const result = await response.json();
-    console.log('Movement balance result:', result);
-    const raw = result[0] || '0';
-    const formatted = fromSmallestUnits(parseInt(raw), token.decimals).toFixed(token.decimals);
+    // If FA balance is 0 and token has a coinType, check CoinStore balance
+    if (raw === '0' && token.coinType) {
+      console.log('FA balance is 0, checking CoinStore:', token.coinType);
+      const coinResponse = await fetch(`${rpcUrl}/view`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          function: '0x1::coin::balance',
+          type_arguments: [token.coinType],
+          arguments: [address],
+        }),
+      });
+      
+      if (coinResponse.ok) {
+        const coinResult = await coinResponse.json();
+        console.log('Movement CoinStore balance result:', coinResult);
+        const coinBalance = coinResult[0] || '0';
+        if (parseInt(coinBalance) > parseInt(raw)) {
+          raw = coinBalance;
+        }
+      }
+    }
     
+    const formatted = fromSmallestUnits(parseInt(raw), token.decimals).toFixed(token.decimals);
     return { raw, formatted, symbol: token.symbol };
   } catch (error) {
     console.error('Error fetching Movement balance:', error);

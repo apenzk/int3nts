@@ -235,6 +235,7 @@ impl SolverConfig {
         let mut pairs = HashMap::new();
 
         for (pair_str, rate) in &self.acceptance.token_pairs {
+            // Parse token pair string: "offered_chain_id:offered_token:desired_chain_id:desired_token"
             let parts: Vec<&str> = pair_str.split(':').collect();
             if parts.len() != 4 {
                 return Err(anyhow::anyhow!(

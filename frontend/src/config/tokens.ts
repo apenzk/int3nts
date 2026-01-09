@@ -4,9 +4,10 @@
 export interface TokenConfig {
   symbol: string;
   name: string;
-  metadata: string; // Metadata address
+  metadata: string; // Metadata address (FA metadata for Movement, contract address for EVM)
   decimals: number;
   chain: 'movement' | 'base-sepolia' | 'ethereum-sepolia';
+  coinType?: string; // Optional: Move coin type for tokens that may exist in CoinStore
 }
 
 export const SUPPORTED_TOKENS: TokenConfig[] = [
@@ -25,6 +26,30 @@ export const SUPPORTED_TOKENS: TokenConfig[] = [
     metadata: '0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7',
     decimals: 6,
     chain: 'movement',
+  },
+  {
+    symbol: 'USDC',
+    name: 'USDC (Movement)',
+    metadata: '0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e',
+    decimals: 6,
+    chain: 'movement',
+    coinType: '0xa6cc575a28e9c97d1cec569392fe6f698c593990e7029ef49fed6740a36a31b0::tokens::USDC',
+  },
+  {
+    symbol: 'USDT',
+    name: 'USDT (Movement)',
+    metadata: '0xe8d4819362f685b3276275ab44e1a20e2a30ae8e8bbbfb5126329a45e44ac4e0',
+    decimals: 6,
+    chain: 'movement',
+    coinType: '0xa6cc575a28e9c97d1cec569392fe6f698c593990e7029ef49fed6740a36a31b0::tokens::USDT',
+  },
+  {
+    symbol: 'WETH',
+    name: 'WETH (Movement)',
+    metadata: '0x2fa1ab0e37fdd22cbf9da880826e9f79f06e8e5d9df9bce774b1f47b708fe121',
+    decimals: 18,
+    chain: 'movement',
+    coinType: '0xa6cc575a28e9c97d1cec569392fe6f698c593990e7029ef49fed6740a36a31b0::tokens::WETH',
   },
   // Base Sepolia
   {
