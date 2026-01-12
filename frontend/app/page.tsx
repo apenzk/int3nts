@@ -2,7 +2,6 @@
 
 import { WalletConnector } from "@/components/wallet/WalletConnector";
 import { MvmWalletConnector } from "@/components/wallet/MvmWalletConnector";
-import { VerifierTest } from "@/components/verifier/VerifierTest";
 import { WalletTransactionTest } from "@/components/debug/WalletTransactionTest";
 import { IntentBuilder } from "@/components/intent/IntentBuilder";
 import { Tabs } from "@/components/Tabs";
@@ -36,7 +35,6 @@ export default function Home() {
               content: (
                 <div className="space-y-6">
                   <WalletTransactionTest />
-                  <VerifierTest />
                 </div>
               ),
             },
