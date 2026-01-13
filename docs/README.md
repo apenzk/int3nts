@@ -2,7 +2,7 @@
 
 ## Overview
 
-A framework for creating conditional trading intents. Supports single-chain intents (unreserved, reserved, oracle-guarded) and cross-chain intents (inflow with escrows, outflow with transfers). For cross-chain operations, a verifier service monitors both chains to provide approval signatures.
+A framework for creating programmable intents. Supports single-chain intents (unreserved, reserved, oracle-guarded) and cross-chain intents (inflow with escrows, outflow with transfers). For cross-chain operations, a verifier service monitors both chains to provide approval signatures.
 
 ## Getting Started
 

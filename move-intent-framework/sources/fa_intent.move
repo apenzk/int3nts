@@ -124,7 +124,7 @@ module mvmt_intent::fa_intent {
         timestamp: u64
     }
 
-    /// Creates a fungible asset to fungible asset trading intent.
+    /// Creates a fungible asset to fungible asset intent.
     ///
     /// This function locks the source fungible asset in a store and creates an intent
     /// that can only be completed by providing the desired fungible asset.

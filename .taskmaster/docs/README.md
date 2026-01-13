@@ -50,6 +50,20 @@ Comprehensive reference for all data structures used across the Intent Framework
 - Verification Domain (Rust normalized event structures)
 - Cross-Chain Data Linking patterns
 
+### [Security Hardening Checklist](security-checklist.md)
+
+Comprehensive security review guide for production deployment. Covers endpoint abuse prevention, client trust elimination, auth hardening, logging, 3rd party resilience, secrets management, and breach response planning.
+
+**Key Sections**:
+
+- Endpoint Abuse Prevention (rate limits, idempotency, validation)
+- Client Trust Elimination (server-side checks only)
+- Auth Hardening (edge cases, signature verification)
+- Logging Infrastructure (audit trails, correlation IDs)
+- 3rd Party Resilience (retries, fallbacks)
+- Secrets Management (.env, rotation)
+- Breach Response Plan (revocation, communication)
+
 ### [Conception Documents](conception/)
 
 Documentation describing the conceptual design of the Intent Framework, including flows, scenarios, error cases, and security properties.
@@ -71,6 +85,7 @@ Documentation describing the conceptual design of the Intent Framework, includin
 4. **Need data structure details?** See [Data Models Documentation](data-models.md) for field-by-field documentation of all data structures.
 5. **Understanding system behavior?** See [Conception Documents](conception/) for flows, scenarios, and error cases.
 6. **Planning implementation?** Use the Topological Order sections to understand build dependencies and implementation sequence.
+7. **Preparing for production?** See [Security Hardening Checklist](security-checklist.md) for security review requirements.
 
 ## Related Documentation
 

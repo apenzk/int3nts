@@ -4,7 +4,7 @@ This document provides an overview of the Intent Framework conception, covering 
 
 ## Introduction
 
-The Intent Framework is a system for creating conditional trading intents. It enables users to create time-bound, conditional offers that can be executed by third parties (solvers) when specific conditions are met. The framework provides a generic system for creating tradeable intents with built-in expiry, witness validation, and owner revocation capabilities, enabling sophisticated trading mechanisms like limit orders and conditional swaps.
+The Intent Framework is a system for creating programmable intents. It enables users to create time-bound, conditional offers that can be executed by third parties (solvers) when specific conditions are met. The framework provides a generic system for creating intents with built-in expiry, witness validation, and owner revocation capabilities, enabling use cases beyond trading such as conditional payments, escrow mechanisms, and cross-chain coordination.
 
 The system consists of several components:
 

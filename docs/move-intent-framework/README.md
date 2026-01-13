@@ -1,6 +1,6 @@
 # Move Intent Framework
 
-A framework for creating conditional trading intents with time-bound, conditional offers that can be executed by third parties. Provides a generic system for tradeable intents with expiry, witness validation, and revocation capabilities.
+A framework for creating programmable intents with time-bound, conditional offers that can be executed by third parties. Provides a generic system for intents with expiry, witness validation, and revocation capabilities.
 
 Inspired by [AIP-511: Aptos Intent Framework](https://github.com/aptos-foundation/AIPs/pull/511).
 
