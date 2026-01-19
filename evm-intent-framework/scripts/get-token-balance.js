@@ -7,17 +7,17 @@ const hre = require("hardhat");
 /// Gets token balance for an account
 ///
 /// # Environment Variables
-/// - `TOKEN_ADDRESS`: ERC20 token contract address
+/// - `TOKEN_ADDR`: ERC20 token contract address
 /// - `ACCOUNT`: Account address to query balance for
 ///
 /// # Returns
 /// Outputs balance as a decimal string (base units) on success.
 async function main() {
-  const tokenAddress = process.env.TOKEN_ADDRESS;
+  const tokenAddress = process.env.TOKEN_ADDR;
   const account = process.env.ACCOUNT;
 
   if (!tokenAddress || !account) {
-    const error = new Error("Missing required environment variables: TOKEN_ADDRESS, ACCOUNT");
+    const error = new Error("Missing required environment variables: TOKEN_ADDR, ACCOUNT");
     console.error("Error:", error.message);
     if (require.main === module) {
       process.exit(1);

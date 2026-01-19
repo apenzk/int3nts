@@ -1,4 +1,10 @@
-// Protocol types for cross-chain intents
+// ============================================================================
+// Protocol Types
+// ============================================================================
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 /**
  * Generate a random 32-byte hex string for intent_id.
@@ -12,6 +18,10 @@ export function generateIntentId(): string {
     .join('');
   return `0x${hex}`;
 }
+
+// ============================================================================
+// Draft Intent Types
+// ============================================================================
 
 export interface DraftIntentRequest {
   requester_addr: string;
@@ -47,16 +57,26 @@ export interface DraftIntentStatus {
 
 export interface DraftIntentSignature {
   signature: string;
-  solver_addr: string;
+  // Hub solver address (MVM) for this draft signature.
+  solver_hub_addr: string;
   solver_evm_addr?: string; // Solver's EVM address (for inflow to EVM chains)
+  solver_svm_addr?: string; // Solver's SVM address (for inflow to SVM chains)
   timestamp: number;
 }
+
+// ============================================================================
+// API Response Types
+// ============================================================================
 
 export interface ApiResponse<T> {
   success: boolean;
   data: T | null;
   error: string | null;
 }
+
+// ============================================================================
+// Event Types
+// ============================================================================
 
 export interface IntentEvent {
   intent_id: string;
@@ -84,7 +104,7 @@ export interface EscrowEvent {
   requester_addr: string;
   reserved_solver_addr: string | null;
   chain_id: number;
-  chain_type: 'Mvm' | 'Evm';
+  chain_type: 'Mvm' | 'Evm' | 'Svm';
   expiry_time: number;
   timestamp: number;
 }

@@ -60,134 +60,34 @@ pub async fn validate_intent_fulfillment(
         intent_event.intent_id, escrow_event.escrow_id
     );
 
-    // Validate that intent has connected_chain_id (required for escrow validation)
-    if intent_event.connected_chain_id.is_none() {
-        return Ok(ValidationResult {
-            valid: false,
-            message: "Request-intent must specify connected_chain_id for escrow validation"
-                .to_string(),
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
+    if let Some(result) = validate_connected_chain_id(intent_event) {
+        return Ok(result);
     }
 
-    // Validate the escrow's offered_amount matches the specified offered_amount in the hub intent
-    // Amounts are u64 (matching Move contract constraint)
-    if escrow_event.offered_amount != intent_event.offered_amount {
-        return Ok(ValidationResult {
-            valid: false,
-            message: format!(
-                "Escrow offered amount {} does not match hub intent offered amount {}",
-                escrow_event.offered_amount, intent_event.offered_amount
-            ),
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
+    if let Some(result) = validate_offered_amount(intent_event, escrow_event) {
+        return Ok(result);
     }
 
-    // Validate the escrow's offered_metadata matches the specified offered_metadata in the hub intent
-    // Normalize addresses to handle differences like 0x036c... vs 0x36c... (leading zeros)
-    let escrow_metadata_normalized = normalize_metadata_for_comparison(&escrow_event.offered_metadata);
-    let intent_metadata_normalized = normalize_metadata_for_comparison(&intent_event.offered_metadata);
-    if escrow_metadata_normalized != intent_metadata_normalized {
-        return Ok(ValidationResult {
-            valid: false,
-            message: format!(
-                "Escrow offered metadata '{}' does not match hub intent offered metadata '{}' (normalized: '{}' vs '{}')",
-                escrow_event.offered_metadata, intent_event.offered_metadata,
-                escrow_metadata_normalized, intent_metadata_normalized
-            ),
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
+    if let Some(result) = validate_offered_metadata(intent_event, escrow_event) {
+        return Ok(result);
     }
 
-    // Validate the escrow's chain_id matches the specified offered_chain_id in the hub intent
-    // Note: offered_chain_id from Move event is stored as connected_chain_id in IntentEvent.
-    // The escrow_event.chain_id is set by the verifier based on which monitor discovered it (from config),
-    // so we can trust it for validation.
-    if let Some(intent_offered_chain_id) = intent_event.connected_chain_id {
-        if escrow_event.chain_id != intent_offered_chain_id {
-            return Ok(ValidationResult {
-                valid: false,
-                message: format!(
-                    "Escrow chain_id {} does not match hub intent offered_chain_id {}. Escrow was discovered on chain {} but intent specifies chain {}",
-                    escrow_event.chain_id, intent_offered_chain_id, escrow_event.chain_id, intent_offered_chain_id
-                ),
-                timestamp: chrono::Utc::now().timestamp() as u64,
-            });
-        }
+    if let Some(result) = validate_chain_id_match(intent_event, escrow_event) {
+        return Ok(result);
     }
 
-    // Validate that escrow's desired_amount is 0 (escrow only holds offered funds, requirement is in hub intent)
-    // Amounts are u64 (matching Move contract constraint)
-    if escrow_event.desired_amount != 0 {
-        return Ok(ValidationResult {
-            valid: false,
-            message: format!(
-                "Escrow desired amount must be 0, but got {}. Escrow only holds offered funds; the actual requirement is specified in the hub intent",
-                escrow_event.desired_amount
-            ),
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
+    if let Some(result) = validate_desired_amount_zero(escrow_event) {
+        return Ok(result);
     }
 
     // Note: We don't validate escrow's desired_metadata because it's a placeholder.
     // The actual requirement is the hub intent's desired_metadata, which the solver
     // must fulfill on the hub chain before the verifier approves escrow release
 
-    // Validate solver addresses match between escrow and intent
-    // For Move VM escrows: Check if escrow's reserved_solver (connected chain MVM address) matches registered solver's connected chain MVM address
-    // For EVM escrows: Check if escrow's reserved_solver (EVM address) matches registered solver's EVM address
-    if let (Some(escrow_solver), Some(_intent_solver)) = (
-        &escrow_event.reserved_solver_addr,
-        &intent_event.reserved_solver_addr,
-    ) {
-        // Determine chain type from the chain_type field set by the monitor
-        let is_evm_escrow = escrow_event.chain_type == ChainType::Evm;
-        let hub_rpc_url = &validator.config.hub_chain.rpc_url;
-        let solver_registry_addr = &validator.config.hub_chain.intent_module_addr; // Registry is at module address
-
-        if is_evm_escrow {
-            // EVM escrow: Compare EVM addresses
-            // The escrow_solver is an EVM address, intent_solver is a Move VM address
-            // We need to query the solver registry to get the EVM address for intent_solver
-            let validation_result = inflow_evm::validate_evm_escrow_solver(
-                intent_event,
-                escrow_solver,
-                hub_rpc_url,
-                solver_registry_addr,
-            )
-            .await?;
-
-            if !validation_result.valid {
-                return Ok(validation_result);
-            }
-        } else {
-            // Move VM escrow: Look up connected chain MVM address from registry
-            // The escrow_solver is a connected chain MVM address, intent_solver is a hub chain MVM address
-            // We need to query the solver registry to get the connected chain MVM address for intent_solver
-            let validation_result = inflow_mvm::validate_mvm_escrow_solver(
-                intent_event,
-                escrow_solver,
-                hub_rpc_url,
-                solver_registry_addr,
-            )
-            .await?;
-
-            if !validation_result.valid {
-                return Ok(validation_result);
-            }
-        }
-    } else if escrow_event.reserved_solver_addr.is_some()
-        || intent_event.reserved_solver_addr.is_some()
+    if let Some(result) =
+        validate_reserved_solver(validator, intent_event, escrow_event).await?
     {
-        // One is reserved but the other is not - mismatch
-        return Ok(ValidationResult {
-            valid: false,
-            message: format!(
-                "Escrow and intent reservation mismatch: escrow reserved_solver={:?}, intent solver={:?}",
-                escrow_event.reserved_solver_addr, intent_event.reserved_solver_addr
-            ),
-            timestamp: chrono::Utc::now().timestamp() as u64,
-        });
+        return Ok(result);
     }
 
     // All validations passed
@@ -196,4 +96,224 @@ pub async fn validate_intent_fulfillment(
         message: "Request-intent fulfillment validation successful".to_string(),
         timestamp: chrono::Utc::now().timestamp() as u64,
     })
+}
+
+/// Validates that the intent specifies a connected chain ID.
+///
+/// # Arguments
+///
+/// * `intent_event` - Hub intent event being fulfilled
+///
+/// # Returns
+///
+/// * `Some(ValidationResult)` - Validation failure details
+/// * `None` - Validation passed
+fn validate_connected_chain_id(intent_event: &IntentEvent) -> Option<ValidationResult> {
+    if intent_event.connected_chain_id.is_some() {
+        return None;
+    }
+
+    Some(ValidationResult {
+        valid: false,
+        message: "Request-intent must specify connected_chain_id for escrow validation"
+            .to_string(),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+    })
+}
+
+/// Validates that the escrow offered amount matches the intent offered amount.
+///
+/// # Arguments
+///
+/// * `intent_event` - Hub intent event being fulfilled
+/// * `escrow_event` - Connected chain escrow event
+///
+/// # Returns
+///
+/// * `Some(ValidationResult)` - Validation failure details
+/// * `None` - Validation passed
+fn validate_offered_amount(
+    intent_event: &IntentEvent,
+    escrow_event: &EscrowEvent,
+) -> Option<ValidationResult> {
+    if escrow_event.offered_amount == intent_event.offered_amount {
+        return None;
+    }
+
+    Some(ValidationResult {
+        valid: false,
+        message: format!(
+            "Escrow offered amount {} does not match hub intent offered amount {}",
+            escrow_event.offered_amount, intent_event.offered_amount
+        ),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+    })
+}
+
+/// Validates that the escrow offered metadata matches the intent offered metadata.
+///
+/// # Arguments
+///
+/// * `intent_event` - Hub intent event being fulfilled
+/// * `escrow_event` - Connected chain escrow event
+///
+/// # Returns
+///
+/// * `Some(ValidationResult)` - Validation failure details
+/// * `None` - Validation passed
+fn validate_offered_metadata(
+    intent_event: &IntentEvent,
+    escrow_event: &EscrowEvent,
+) -> Option<ValidationResult> {
+    let escrow_metadata_normalized =
+        normalize_metadata_for_comparison(&escrow_event.offered_metadata);
+    let intent_metadata_normalized =
+        normalize_metadata_for_comparison(&intent_event.offered_metadata);
+    if escrow_metadata_normalized == intent_metadata_normalized {
+        return None;
+    }
+
+    Some(ValidationResult {
+        valid: false,
+        message: format!(
+            "Escrow offered metadata '{}' does not match hub intent offered metadata '{}' (normalized: '{}' vs '{}')",
+            escrow_event.offered_metadata,
+            intent_event.offered_metadata,
+            escrow_metadata_normalized,
+            intent_metadata_normalized
+        ),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+    })
+}
+
+/// Validates that the escrow chain ID matches the intent connected chain ID.
+///
+/// # Arguments
+///
+/// * `intent_event` - Hub intent event being fulfilled
+/// * `escrow_event` - Connected chain escrow event
+///
+/// # Returns
+///
+/// * `Some(ValidationResult)` - Validation failure details
+/// * `None` - Validation passed
+fn validate_chain_id_match(
+    intent_event: &IntentEvent,
+    escrow_event: &EscrowEvent,
+) -> Option<ValidationResult> {
+    let intent_chain_id = intent_event.connected_chain_id?;
+    if escrow_event.chain_id == intent_chain_id {
+        return None;
+    }
+
+    Some(ValidationResult {
+        valid: false,
+        message: format!(
+            "Escrow chain_id {} does not match hub intent offered_chain_id {}. Escrow was discovered on chain {} but intent specifies chain {}",
+            escrow_event.chain_id, intent_chain_id, escrow_event.chain_id, intent_chain_id
+        ),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+    })
+}
+
+/// Validates that the escrow desired amount is zero for inflow escrows.
+///
+/// # Arguments
+///
+/// * `escrow_event` - Connected chain escrow event
+///
+/// # Returns
+///
+/// * `Some(ValidationResult)` - Validation failure details
+/// * `None` - Validation passed
+fn validate_desired_amount_zero(escrow_event: &EscrowEvent) -> Option<ValidationResult> {
+    if escrow_event.desired_amount == 0 {
+        return None;
+    }
+
+    Some(ValidationResult {
+        valid: false,
+        message: format!(
+            "Escrow desired amount must be 0, but got {}. Escrow only holds offered funds; the actual requirement is specified in the hub intent",
+            escrow_event.desired_amount
+        ),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+    })
+}
+
+/// Validates the escrow reserved solver matches the intent reserved solver.
+///
+/// # Arguments
+///
+/// * `validator` - Cross-chain validator (for hub config access)
+/// * `intent_event` - Hub intent event being fulfilled
+/// * `escrow_event` - Connected chain escrow event
+///
+/// # Returns
+///
+/// * `Ok(Some(ValidationResult))` - Validation failure details
+/// * `Ok(None)` - Validation passed
+/// * `Err(anyhow::Error)` - Failed to query hub registry
+async fn validate_reserved_solver(
+    validator: &CrossChainValidator,
+    intent_event: &IntentEvent,
+    escrow_event: &EscrowEvent,
+) -> Result<Option<ValidationResult>> {
+    let (Some(escrow_solver), Some(_intent_solver)) = (
+        &escrow_event.reserved_solver_addr,
+        &intent_event.reserved_solver_addr,
+    ) else {
+        if escrow_event.reserved_solver_addr.is_some()
+            || intent_event.reserved_solver_addr.is_some()
+        {
+            return Ok(Some(ValidationResult {
+                valid: false,
+                message: format!(
+                    "Escrow and intent reservation mismatch: escrow reserved_solver={:?}, intent solver={:?}",
+                    escrow_event.reserved_solver_addr, intent_event.reserved_solver_addr
+                ),
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            }));
+        }
+        return Ok(None);
+    };
+
+    let hub_rpc_url = &validator.config.hub_chain.rpc_url;
+    let solver_registry_addr = &validator.config.hub_chain.intent_module_addr;
+
+    let validation_result = match escrow_event.chain_type {
+        ChainType::Evm => {
+            inflow_evm::validate_evm_escrow_solver(
+                intent_event,
+                escrow_solver,
+                hub_rpc_url,
+                solver_registry_addr,
+            )
+            .await?
+        }
+        ChainType::Mvm => {
+            inflow_mvm::validate_mvm_escrow_solver(
+                intent_event,
+                escrow_solver,
+                hub_rpc_url,
+                solver_registry_addr,
+            )
+            .await?
+        }
+        ChainType::Svm => {
+            crate::validator::inflow_svm::validate_svm_escrow_solver(
+                intent_event,
+                escrow_solver,
+                hub_rpc_url,
+                solver_registry_addr,
+            )
+            .await?
+        }
+    };
+
+    if validation_result.valid {
+        Ok(None)
+    } else {
+        Ok(Some(validation_result))
+    }
 }

@@ -1,3 +1,7 @@
+// ============================================================================
+// Types
+// ============================================================================
+
 // Supported tokens configuration
 // Metadata addresses and decimals for testnet tokens
 
@@ -6,9 +10,13 @@ export interface TokenConfig {
   name: string;
   metadata: string; // Metadata address (FA metadata for Movement, contract address for EVM)
   decimals: number;
-  chain: 'movement' | 'base-sepolia' | 'ethereum-sepolia';
+  chain: 'movement' | 'base-sepolia' | 'ethereum-sepolia' | 'svm-devnet';
   coinType?: string; // Optional: Move coin type for tokens that may exist in CoinStore
 }
+
+// ============================================================================
+// Token Definitions
+// ============================================================================
 
 export const SUPPORTED_TOKENS: TokenConfig[] = [
   // Movement Bardock Testnet
@@ -82,19 +90,46 @@ export const SUPPORTED_TOKENS: TokenConfig[] = [
     decimals: 18,
     chain: 'ethereum-sepolia',
   },
+  // Solana Devnet
+  {
+    symbol: 'SOL',
+    name: 'SOL (Solana Devnet)',
+    metadata: 'SOL', // Native token placeholder for SVM
+    decimals: 9,
+    chain: 'svm-devnet',
+  },
+  {
+    symbol: 'USDC',
+    name: 'USDC (Solana Devnet)',
+    metadata: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
+    decimals: 6,
+    chain: 'svm-devnet',
+  },
 ];
 
-// Helper to get tokens by chain
-export function getTokensByChain(chain: 'movement' | 'base-sepolia' | 'ethereum-sepolia'): TokenConfig[] {
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Get supported tokens for a given chain.
+ */
+export function getTokensByChain(
+  chain: 'movement' | 'base-sepolia' | 'ethereum-sepolia' | 'svm-devnet'
+): TokenConfig[] {
   return SUPPORTED_TOKENS.filter(token => token.chain === chain);
 }
 
-// Helper to convert main value to smallest units
+/**
+ * Convert a human-readable amount to smallest units.
+ */
 export function toSmallestUnits(amount: number, decimals: number): number {
   return Math.floor(amount * Math.pow(10, decimals));
 }
 
-// Helper to convert smallest units to main value
+/**
+ * Convert smallest units to a human-readable amount.
+ */
 export function fromSmallestUnits(amount: number, decimals: number): number {
   return amount / Math.pow(10, decimals);
 }

@@ -8,8 +8,8 @@ use trusted_verifier::monitor::{EventMonitor, FulfillmentEvent};
 #[path = "../mod.rs"]
 mod test_helpers;
 use test_helpers::{
-    build_test_config_with_evm, DUMMY_ESCROW_ID_MVM, DUMMY_EXPIRY, DUMMY_INTENT_ADDR_MVM,
-    DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_EVM,
+    build_test_config_with_evm, DUMMY_ESCROW_ID_MVM, DUMMY_EXPIRY, DUMMY_INTENT_ADDR_HUB,
+    DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_HUB, DUMMY_SOLVER_ADDR_HUB,
 };
 
 /// Test that EVM escrow detection logic correctly identifies EVM escrows
@@ -26,8 +26,8 @@ async fn test_evm_escrow_detection_logic() {
     // This should be detected as an EVM escrow
     let fulfillment = FulfillmentEvent {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 1,
@@ -71,8 +71,8 @@ async fn test_evm_escrow_ecdsa_signature_creation() {
 
     let fulfillment = FulfillmentEvent {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 1,
@@ -114,7 +114,7 @@ async fn test_evm_vs_mvm_escrow_differentiation() {
         escrow_cache.push(trusted_verifier::monitor::EscrowEvent {
             escrow_id: DUMMY_ESCROW_ID_MVM.to_string(),
             intent_id: DUMMY_INTENT_ID.to_string(),
-            requester_addr: DUMMY_REQUESTER_ADDR_MVM_HUB.to_string(),
+            requester_addr: DUMMY_REQUESTER_ADDR_HUB.to_string(),
             offered_metadata: "{}".to_string(),
             offered_amount: 1000,
             desired_metadata: "{}".to_string(),
@@ -131,8 +131,8 @@ async fn test_evm_vs_mvm_escrow_differentiation() {
     // Test Move VM escrow - should use Ed25519 signature
     let mvm_fulfillment = FulfillmentEvent {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 2,
@@ -159,8 +159,8 @@ async fn test_evm_vs_mvm_escrow_differentiation() {
     // Test EVM escrow - should use ECDSA signature
     let evm_fulfillment = FulfillmentEvent {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 3,
@@ -197,8 +197,8 @@ async fn test_evm_escrow_approval_flow() {
 
     let fulfillment = FulfillmentEvent {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 1,
@@ -250,8 +250,8 @@ async fn test_evm_escrow_with_invalid_intent_id() {
     // Test with empty intent ID
     let fulfillment_empty = FulfillmentEvent {
         intent_id: "".to_string(), // Empty intent ID for testing error handling
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 1,
@@ -269,8 +269,8 @@ async fn test_evm_escrow_with_invalid_intent_id() {
     // Test with invalid hex format (if signature creation requires valid hex)
     let fulfillment_invalid = FulfillmentEvent {
         intent_id: "not_a_valid_hex_string".to_string(), // Invalid hex for testing error handling
-        intent_addr: DUMMY_INTENT_ADDR_MVM.to_string(),
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        intent_addr: DUMMY_INTENT_ADDR_HUB.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 1000,
         timestamp: 1,

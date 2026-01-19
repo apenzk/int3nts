@@ -20,8 +20,10 @@ pub mod outflow_generic;
 // Flow + chain specific modules
 pub mod inflow_evm;
 pub mod inflow_mvm;
+pub mod inflow_svm;
 mod outflow_evm;
 mod outflow_mvm;
+mod outflow_svm;
 
 // Re-export public types and functions
 #[allow(unused_imports)] // These are used in tests via trusted_verifier::validator::*
@@ -29,8 +31,9 @@ pub use generic::{
     get_chain_type_from_chain_id, normalize_address, CrossChainValidator,
     FulfillmentTransactionParams, ValidationResult,
 };
-pub use outflow_evm::extract_evm_fulfillment_params;
 pub use outflow_generic::validate_outflow_fulfillment;
 pub use outflow_mvm::extract_mvm_fulfillment_params;
+pub use outflow_evm::extract_evm_fulfillment_params;
+pub use outflow_svm::extract_svm_fulfillment_params;
 // Note: validate_intent_fulfillment is used internally but not re-exported
 // Use trusted_verifier::validator::inflow_generic::validate_intent_fulfillment if needed

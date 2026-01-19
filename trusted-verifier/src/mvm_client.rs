@@ -739,6 +739,134 @@ impl MvmClient {
         }
     }
 
+    /// Queries the solver registry to get a solver's connected chain SVM address.
+    ///
+    /// # Arguments
+    ///
+    /// * `solver_addr` - Move VM address of the solver (hub chain)
+    /// * `solver_registry_addr` - Address where the solver registry is deployed (usually @mvmt_intent)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Option<String>)` - Connected chain SVM address (0x-hex, 32 bytes) if set
+    /// * `Err(anyhow::Error)` - Failed to query registry
+    pub async fn get_solver_connected_chain_svm_address(
+        &self,
+        solver_addr: &str,
+        solver_registry_addr: &str,
+    ) -> Result<Option<String>> {
+        let registry_addr_normalized = solver_registry_addr
+            .strip_prefix("0x")
+            .unwrap_or(solver_registry_addr)
+            .trim_start_matches('0');
+
+        let resources = self.get_resources(solver_registry_addr).await?;
+
+        let registry_resource_type_with_prefix =
+            format!("0x{}::solver_registry::SolverRegistry", registry_addr_normalized);
+        let registry_resource_type_without_prefix =
+            format!("{}::solver_registry::SolverRegistry", registry_addr_normalized);
+        let registry_addr_with_zeros = solver_registry_addr
+            .strip_prefix("0x")
+            .unwrap_or(solver_registry_addr);
+        let registry_resource_type_with_zeros =
+            format!("0x{}::solver_registry::SolverRegistry", registry_addr_with_zeros);
+
+        let solver_addr = solver_addr
+            .strip_prefix("0x")
+            .unwrap_or(solver_addr)
+            .to_lowercase();
+
+        let registry_resource = resources.iter().find(|r| {
+            r.resource_type == registry_resource_type_with_prefix
+                || r.resource_type == registry_resource_type_without_prefix
+                || r.resource_type == registry_resource_type_with_zeros
+        });
+
+        let Some(registry_resource) = registry_resource else {
+            return Ok(None);
+        };
+
+        let data = match registry_resource.data.as_object() {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let solvers = match data.get("solvers").and_then(|s| s.as_object()) {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let data_array = match solvers.get("data").and_then(|d| d.as_array()) {
+            Some(d) => d,
+            None => return Ok(None),
+        };
+
+        let solver_entry = data_array.iter().find_map(|entry| {
+            let entry_obj = entry.as_object()?;
+            let key = entry_obj.get("key")?.as_str()?;
+            let key_normalized = key.strip_prefix("0x").unwrap_or(key).to_lowercase();
+            (key_normalized == solver_addr).then_some(entry_obj)
+        });
+
+        let Some(entry_obj) = solver_entry else {
+            return Ok(None);
+        };
+
+        let value = match entry_obj.get("value").and_then(|v| v.as_object()) {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+
+        let svm_addr = match value
+            .get("connected_chain_svm_addr")
+            .and_then(|m| m.as_object())
+        {
+            Some(m) => m,
+            None => return Ok(None),
+        };
+
+        let vec_array = match svm_addr.get("vec").and_then(|v| v.as_array()) {
+            Some(v) => v,
+            None => return Ok(None),
+        };
+
+        if vec_array.is_empty() {
+            return Ok(None);
+        }
+
+        let bytes_value = vec_array.get(0).ok_or_else(|| {
+            anyhow::anyhow!("connected_chain_svm_addr vec is non-empty but vec[0] is missing")
+        })?;
+
+        let bytes = if let Some(arr) = bytes_value.as_array() {
+            let mut out = Vec::new();
+            for b in arr {
+                let byte = b
+                    .as_u64()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid byte in SVM address array"))?;
+                out.push(byte as u8);
+            }
+            out
+        } else if let Some(hex_str) = bytes_value.as_str() {
+            let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+            hex::decode(hex_str).context("Failed to decode SVM address hex string")?
+        } else {
+            return Err(anyhow::anyhow!(
+                "connected_chain_svm_addr vec[0] has unsupported format"
+            ));
+        };
+
+        if bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "connected_chain_svm_addr has invalid length {} (expected 32 bytes)",
+                bytes.len()
+            ));
+        }
+
+        Ok(Some(format!("0x{}", hex::encode(bytes))))
+    }
+
     /// Queries the solver registry to get a solver's public key.
     ///
     /// # Arguments

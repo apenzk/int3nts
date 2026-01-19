@@ -30,6 +30,7 @@ This document covers development setup, testing, configuration, and dependencies
 ### Running Tests
 
 Run all tests with:
+
 ```bash
 movement move test --dev --named-addresses mvmt_intent=0x123
 ```
@@ -92,6 +93,7 @@ subdir = "aptos-move/framework/aptos-framework"
 ```
 
 **Key Configuration:**
+
 - **Package Name**: `movement-intent`
 - **Address**: Uses `_` for deployment flexibility
 - **Dev Address**: `0x123` for testing
@@ -100,6 +102,7 @@ subdir = "aptos-move/framework/aptos-framework"
 ### Development Environment
 
 The development environment is provided via the root [`flake.nix`](../../flake.nix), which includes:
+
 - Rust toolchain
 - Movement CLI (via [`movement.nix`](../../movement.nix)) - for testnet deployments
 - Aptos CLI (via [`aptos.nix`](../../aptos.nix)) - for local Docker testing
@@ -139,7 +142,7 @@ Enter the environment with `nix develop` from the project root.
 
 ### Local Chain Setup
 
-Deploy the Intent Framework to a local Move VM network (for Docker-based E2E testing):
+Deploy the Intent Framework to a local MVM network (for Docker-based E2E testing):
 
 ```bash
 # 1. Setup local chain (optional)

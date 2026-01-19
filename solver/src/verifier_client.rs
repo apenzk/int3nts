@@ -56,8 +56,8 @@ pub struct PendingDraft {
 /// Request structure for submitting a signature for a draftintent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignatureSubmission {
-    /// Address of the solver submitting the signature
-    pub solver_addr: String,
+    /// Hub solver address submitting the signature
+    pub solver_hub_addr: String,
     /// Signature in hex format (Ed25519, 64 bytes = 128 hex characters)
     pub signature: String,
     /// Public key of the solver (hex format)
@@ -78,8 +78,8 @@ pub struct SignatureSubmissionResponse {
 pub struct SignatureResponse {
     /// Signature in hex format
     pub signature: String,
-    /// Address of the solver who signed (first signer)
-    pub solver_addr: String,
+    /// Hub solver address of the signer (first signer)
+    pub solver_hub_addr: String,
     /// Timestamp when signature was received
     pub timestamp: u64,
 }

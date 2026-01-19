@@ -27,8 +27,8 @@ pub enum DraftintentStatus {
 /// First signature received for a draft intent (FCFS - First Come First Served).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftSignature {
-    /// Address of the solver who signed (first signer wins)
-    pub solver_addr: String,
+    /// Hub solver address of the signer (first signer wins)
+    pub solver_hub_addr: String,
     /// Signature in hex format
     pub signature: String,
     /// Public key of the solver (hex format)
@@ -158,7 +158,7 @@ impl DraftintentStore {
     /// # Arguments
     ///
     /// * `draft_id` - The draft ID
-    /// * `solver_addr` - Address of the solver signing
+    /// * `solver_hub_addr` - Address of the solver signing
     /// * `signature` - Signature in hex format
     /// * `public_key` - Public key in hex format
     ///
@@ -169,7 +169,7 @@ impl DraftintentStore {
     pub async fn add_signature(
         &self,
         draft_id: &str,
-        solver_addr: String,
+        solver_hub_addr: String,
         signature: String,
         public_key: String,
     ) -> Result<(), String> {
@@ -190,7 +190,7 @@ impl DraftintentStore {
 
         // Store first signature
         draft.signature = Some(DraftSignature {
-            solver_addr,
+            solver_hub_addr,
             signature,
             public_key,
             signature_timestamp: current_time,

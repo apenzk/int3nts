@@ -1,14 +1,24 @@
+// ============================================================================
+// Types
+// ============================================================================
+
 // Balance fetching utilities for Movement and EVM chains
 
 import type { TokenConfig } from '@/config/tokens';
 import { fromSmallestUnits } from '@/config/tokens';
 import { getRpcUrl } from '@/config/chains';
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 export interface TokenBalance {
   raw: string; // Balance in smallest units
   formatted: string; // Balance in main units
   symbol: string;
 }
+
+// ============================================================================
+// Movement (MVM)
+// ============================================================================
 
 /**
  * Fetch Movement token balance (Fungible Asset)
@@ -99,6 +109,10 @@ export async function fetchMovementBalance(
     return null;
   }
 }
+
+// ============================================================================
+// EVM
+// ============================================================================
 
 /**
  * Fetch EVM token balance (ERC20)
@@ -196,6 +210,52 @@ export async function fetchEvmBalance(
   }
 }
 
+// ============================================================================
+// SVM
+// ============================================================================
+
+/**
+ * Fetch SVM token balance (SPL token or native SOL)
+ */
+export async function fetchSvmBalance(
+  address: string,
+  token: TokenConfig
+): Promise<TokenBalance | null> {
+  try {
+    const rpcUrl = getRpcUrl('svm-devnet');
+    const connection = new Connection(rpcUrl, 'confirmed');
+    const owner = new PublicKey(address);
+
+    if (token.symbol === 'SOL' || token.metadata === 'SOL') {
+      const lamports = await connection.getBalance(owner);
+      const raw = lamports.toString();
+      const formatted = (lamports / LAMPORTS_PER_SOL).toFixed(token.decimals);
+      return { raw, formatted, symbol: token.symbol };
+    }
+
+    const mint = new PublicKey(token.metadata);
+    const ata = getAssociatedTokenAddressSync(mint, owner);
+    const accountInfo = await connection.getAccountInfo(ata);
+    if (!accountInfo) {
+      return { raw: '0', formatted: '0', symbol: token.symbol };
+    }
+
+    const balance = await connection.getTokenAccountBalance(ata);
+    const raw = balance.value.amount || '0';
+    const decimals = balance.value.decimals ?? token.decimals;
+    const formatted = fromSmallestUnits(parseInt(raw), decimals).toFixed(decimals);
+    return { raw, formatted, symbol: token.symbol };
+  } catch (error) {
+    console.error('Error fetching SVM balance:', error);
+    console.error('Token:', token.symbol, 'Address:', address);
+    return null;
+  }
+}
+
+// ============================================================================
+// Dispatcher
+// ============================================================================
+
 /**
  * Fetch balance for any token based on chain type
  */
@@ -205,6 +265,8 @@ export async function fetchTokenBalance(
 ): Promise<TokenBalance | null> {
   if (token.chain === 'movement') {
     return fetchMovementBalance(address, token);
+  } else if (token.chain === 'svm-devnet') {
+    return fetchSvmBalance(address, token);
   } else {
     return fetchEvmBalance(address, token);
   }

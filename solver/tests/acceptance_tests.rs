@@ -9,7 +9,7 @@ use std::collections::HashMap;
 #[path = "helpers.rs"]
 mod test_helpers;
 use test_helpers::{
-    create_default_token_pair, DUMMY_INTENT_ID, DUMMY_TOKEN_ADDR_MVM_HUB, DUMMY_TOKEN_ADDR_MVM_CON,
+    create_default_token_pair, DUMMY_INTENT_ID, DUMMY_TOKEN_ADDR_HUB, DUMMY_TOKEN_ADDR_MVMCON,
 };
 
 // ============================================================================
@@ -55,10 +55,10 @@ fn test_config() -> AcceptanceConfig {
 fn create_default_draft_data() -> DraftintentData {
     DraftintentData {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        offered_token: DUMMY_TOKEN_ADDR_MVM_HUB.to_string(),
+        offered_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
         offered_amount: 1000000,
         offered_chain_id: 1,
-        desired_token: DUMMY_TOKEN_ADDR_MVM_CON.to_string(),
+        desired_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         desired_amount: 1000000,
         desired_chain_id: 2,
     }

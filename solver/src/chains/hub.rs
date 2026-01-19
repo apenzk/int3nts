@@ -575,8 +575,9 @@ impl HubChainClient {
     /// # Arguments
     ///
     /// * `public_key_bytes` - Ed25519 public key as bytes (32 bytes)
-    /// * `evm_addr` - EVM address on connected chain (20 bytes), or empty vec if not applicable
     /// * `mvm_addr` - Move VM address on connected chain, or None if not applicable
+    /// * `evm_addr` - EVM address on connected chain (20 bytes), or empty vec if not applicable
+    /// * `svm_addr` - SVM address on connected chain (32 bytes), or empty vec if not applicable
     /// * `private_key` - Optional private key bytes. If provided, uses --private-key flag with movement CLI.
     ///                   If None, uses --profile flag with aptos CLI (for E2E tests).
     ///
@@ -587,13 +588,17 @@ impl HubChainClient {
     pub fn register_solver(
         &self,
         public_key_bytes: &[u8],
-        evm_addr: &[u8],
         mvm_addr: Option<&str>,
+        evm_addr: &[u8],
+        svm_addr: &[u8],
         private_key: Option<&[u8; 32]>,
     ) -> Result<String> {
         // Convert public key to hex
         let public_key_hex = hex::encode(public_key_bytes);
         
+        // Prepare MVM address (use 0x0 if None)
+        let mvm_addr_normalized = mvm_addr.unwrap_or("0x0");
+
         // Convert EVM address to hex (pad to 20 bytes if needed)
         let evm_addr_hex = if evm_addr.is_empty() {
             "".to_string()
@@ -601,19 +606,26 @@ impl HubChainClient {
             hex::encode(evm_addr)
         };
         
-        // Prepare MVM address (use 0x0 if None)
-        let mvm_addr_normalized = mvm_addr.unwrap_or("0x0");
-        
         // Build command arguments - store formatted strings to avoid temporary value issues
         // Movement CLI expects 'hex:' for vector<u8> types, not 'vector<u8>:'
         let function_id = format!("{}::solver_registry::register_solver", self.module_addr);
         let public_key_arg = format!("hex:{}", public_key_hex);
+        let mvm_addr_arg = format!("address:{}", mvm_addr_normalized);
         let evm_addr_arg = if evm_addr_hex.is_empty() {
             "hex:".to_string()
         } else {
             format!("hex:{}", evm_addr_hex)
         };
-        let mvm_addr_arg = format!("address:{}", mvm_addr_normalized);
+        let svm_addr_hex = if svm_addr.is_empty() {
+            "".to_string()
+        } else {
+            hex::encode(svm_addr)
+        };
+        let svm_addr_arg = if svm_addr_hex.is_empty() {
+            "hex:".to_string()
+        } else {
+            format!("hex:{}", svm_addr_hex)
+        };
         
         // Format private key if provided
         let private_key_hex = private_key.map(|pk| format!("0x{}", hex::encode(pk)));
@@ -635,8 +647,9 @@ impl HubChainClient {
                     &function_id,
                     "--args",
                     &public_key_arg,
-                    &evm_addr_arg,
                     &mvm_addr_arg,
+                    &evm_addr_arg,
+                    &svm_addr_arg,
                 ],
             )
         } else {
@@ -653,8 +666,9 @@ impl HubChainClient {
                     &function_id,
                     "--args",
                     &public_key_arg,
-                    &evm_addr_arg,
                     &mvm_addr_arg,
+                    &evm_addr_arg,
+                    &svm_addr_arg,
                 ],
             )
         };
@@ -685,6 +699,382 @@ impl HubChainClient {
         }
 
         anyhow::bail!("Could not extract transaction hash from registration output: {}", output_str)
+    }
+
+    /// Gets the solver's current registration info from the registry
+    ///
+    /// # Arguments
+    ///
+    /// * `solver_addr` - Solver address to query
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(SolverRegistrationInfo)` - Current registration info
+    /// * `Err(anyhow::Error)` - Failed to query or solver not registered
+    pub async fn get_solver_info(&self, solver_addr: &str) -> Result<SolverRegistrationInfo> {
+        // Normalize address (ensure 0x prefix)
+        let solver_addr_normalized = if solver_addr.starts_with("0x") {
+            solver_addr.to_string()
+        } else {
+            format!("0x{}", solver_addr)
+        };
+
+        // Call the view function via RPC
+        let view_url = format!("{}/v1/view", self.base_url);
+        let request_body = serde_json::json!({
+            "function": format!("{}::solver_registry::get_solver_info", self.module_addr),
+            "type_arguments": [],
+            "arguments": [solver_addr_normalized]
+        });
+
+        let response = self
+            .client
+            .post(&view_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to query solver info")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "Failed to query solver info: HTTP {} - {}",
+                status,
+                error_body
+            );
+        }
+
+        let result: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse solver info response")?;
+
+        // Handle different response formats depending on deployed module version:
+        // - 6 elements: (is_registered, public_key, mvm_addr, evm_addr, svm_addr, registered_at)
+        // - 5 elements: (is_registered, public_key, evm_addr, svm_addr, registered_at) - older version without mvm_addr
+        
+        tracing::debug!("get_solver_info response: {} elements", result.len());
+        
+        if result.len() >= 5 {
+            let is_registered = result[0].as_bool().unwrap_or(false);
+            if !is_registered {
+                anyhow::bail!("Solver is not registered");
+            }
+
+            let public_key = parse_hex_from_json(&result[1]);
+            
+            // Parse based on number of elements
+            let (mvm_addr, evm_addr, svm_addr) = if result.len() >= 6 {
+                // New format with mvm_addr
+                (
+                    parse_optional_address(&result[2]),
+                    parse_optional_hex(&result[3]),
+                    parse_optional_hex(&result[4]),
+                )
+            } else {
+                // Old format without mvm_addr (5 elements)
+                (
+                    None,
+                    parse_optional_hex(&result[2]),
+                    parse_optional_hex(&result[3]),
+                )
+            };
+
+            tracing::debug!(
+                "Parsed solver info: public_key={} bytes, mvm={:?}, evm={} bytes, svm={} bytes",
+                public_key.len(),
+                mvm_addr,
+                evm_addr.len(),
+                svm_addr.len()
+            );
+
+            return Ok(SolverRegistrationInfo {
+                public_key,
+                mvm_addr,
+                evm_addr,
+                svm_addr,
+            });
+        }
+
+        anyhow::bail!(
+            "Unexpected response format from get_solver_info view function: got {} elements, expected 5 or 6. Response: {:?}",
+            result.len(),
+            result
+        )
+    }
+
+    /// Updates the solver's registration on-chain
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key_bytes` - Ed25519 public key as bytes (32 bytes)
+    /// * `mvm_addr` - Move VM address on connected chain, or None if not applicable
+    /// * `evm_addr` - EVM address on connected chain (20 bytes), or empty vec if not applicable
+    /// * `svm_addr` - SVM address on connected chain (32 bytes), or empty vec if not applicable
+    /// * `private_key` - Optional private key bytes. If provided, uses --private-key flag with movement CLI.
+    ///                   If None, uses --profile flag with aptos CLI (for E2E tests).
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transaction hash
+    /// * `Err(anyhow::Error)` - Failed to update solver
+    pub fn update_solver(
+        &self,
+        public_key_bytes: &[u8],
+        mvm_addr: Option<&str>,
+        evm_addr: &[u8],
+        svm_addr: &[u8],
+        private_key: Option<&[u8; 32]>,
+    ) -> Result<String> {
+        // Convert public key to hex
+        let public_key_hex = hex::encode(public_key_bytes);
+        
+        // Prepare MVM address (use 0x0 if None)
+        let mvm_addr_normalized = mvm_addr.unwrap_or("0x0");
+
+        // Convert EVM address to hex
+        let evm_addr_hex = if evm_addr.is_empty() {
+            "".to_string()
+        } else {
+            hex::encode(evm_addr)
+        };
+        
+        // Convert SVM address to hex
+        let svm_addr_hex = if svm_addr.is_empty() {
+            "".to_string()
+        } else {
+            hex::encode(svm_addr)
+        };
+        
+        // Build command arguments
+        let function_id = format!("{}::solver_registry::update_solver", self.module_addr);
+        let public_key_arg = format!("hex:{}", public_key_hex);
+        let mvm_addr_arg = format!("address:{}", mvm_addr_normalized);
+        let evm_addr_arg = if evm_addr_hex.is_empty() {
+            "hex:".to_string()
+        } else {
+            format!("hex:{}", evm_addr_hex)
+        };
+        let svm_addr_arg = if svm_addr_hex.is_empty() {
+            "hex:".to_string()
+        } else {
+            format!("hex:{}", svm_addr_hex)
+        };
+        
+        // Format private key if provided
+        let private_key_hex = private_key.map(|pk| format!("0x{}", hex::encode(pk)));
+        
+        // Build command based on whether we have a private key or profile
+        let (cli, args): (&str, Vec<&str>) = if let Some(ref pk_hex) = private_key_hex {
+            // Use movement CLI with --private-key for testnet
+            (
+                "movement",
+                vec![
+                    "move",
+                    "run",
+                    "--private-key",
+                    pk_hex,
+                    "--url",
+                    &self.base_url,
+                    "--assume-yes",
+                    "--function-id",
+                    &function_id,
+                    "--args",
+                    &public_key_arg,
+                    &mvm_addr_arg,
+                    &evm_addr_arg,
+                    &svm_addr_arg,
+                ],
+            )
+        } else {
+            // Use aptos CLI with --profile for E2E tests
+            (
+                "aptos",
+                vec![
+                    "move",
+                    "run",
+                    "--profile",
+                    &self.profile,
+                    "--assume-yes",
+                    "--function-id",
+                    &function_id,
+                    "--args",
+                    &public_key_arg,
+                    &mvm_addr_arg,
+                    &evm_addr_arg,
+                    &svm_addr_arg,
+                ],
+            )
+        };
+        
+        tracing::info!("Updating solver registration with {} CLI", cli);
+        
+        let output = Command::new(cli)
+            .args(&args)
+            .output()
+            .context(format!("Failed to execute {} move run for solver update", cli))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "{} move run failed for solver update:\nstderr: {}\nstdout: {}",
+                cli,
+                stderr,
+                stdout
+            );
+        }
+
+        // Extract transaction hash from output
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        if let Some(hash) = extract_transaction_hash(&output_str) {
+            return Ok(hash);
+        }
+
+        anyhow::bail!("Could not extract transaction hash from update output: {}", output_str)
+    }
+}
+
+/// Solver registration info from the registry
+#[derive(Debug, Clone)]
+pub struct SolverRegistrationInfo {
+    pub public_key: Vec<u8>,
+    pub mvm_addr: Option<String>,
+    pub evm_addr: Vec<u8>,
+    pub svm_addr: Vec<u8>,
+}
+
+/// Parse hex bytes from JSON value (handles Move's vector<u8> format)
+fn parse_hex_from_json(value: &serde_json::Value) -> Vec<u8> {
+    if let Some(s) = value.as_str() {
+        // Format: "0x..." hex string
+        let hex_str = s.strip_prefix("0x").unwrap_or(s);
+        hex::decode(hex_str).unwrap_or_default()
+    } else {
+        Vec::new()
+    }
+}
+
+/// Parse optional address from JSON (Move's Option<address>)
+fn parse_optional_address(value: &serde_json::Value) -> Option<String> {
+    // Move Option is serialized as: {"vec": []} for None, {"vec": ["0x..."]} for Some
+    if let Some(obj) = value.as_object() {
+        if let Some(vec_val) = obj.get("vec") {
+            if let Some(arr) = vec_val.as_array() {
+                if let Some(first) = arr.first() {
+                    if let Some(s) = first.as_str() {
+                        return Some(s.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parse optional hex bytes from JSON (Move's Option<vector<u8>>)
+fn parse_optional_hex(value: &serde_json::Value) -> Vec<u8> {
+    // Move Option<vector<u8>> is serialized as: {"vec": []} for None, {"vec": ["0x..."]} for Some
+    if let Some(obj) = value.as_object() {
+        if let Some(vec_val) = obj.get("vec") {
+            if let Some(arr) = vec_val.as_array() {
+                if let Some(first) = arr.first() {
+                    return parse_hex_from_json(first);
+                }
+            }
+        }
+    }
+    Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_parse_hex_from_json_with_prefix() {
+        let value = json!("0xdeadbeef");
+        let result = parse_hex_from_json(&value);
+        assert_eq!(result, vec![0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn test_parse_hex_from_json_without_prefix() {
+        let value = json!("deadbeef");
+        let result = parse_hex_from_json(&value);
+        assert_eq!(result, vec![0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn test_parse_hex_from_json_empty() {
+        let value = json!("");
+        let result = parse_hex_from_json(&value);
+        assert_eq!(result, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_parse_hex_from_json_not_string() {
+        let value = json!(123);
+        let result = parse_hex_from_json(&value);
+        assert_eq!(result, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_parse_optional_address_some() {
+        // Move Option<address> with value: {"vec": ["0x1234..."]}
+        let value = json!({"vec": ["0x92759d64e3225b2c8455562cdbf5be4f7461cd3555d29a1b124db503874603f5"]});
+        let result = parse_optional_address(&value);
+        assert_eq!(result, Some("0x92759d64e3225b2c8455562cdbf5be4f7461cd3555d29a1b124db503874603f5".to_string()));
+    }
+
+    #[test]
+    fn test_parse_optional_address_none() {
+        // Move Option<address> with no value: {"vec": []}
+        let value = json!({"vec": []});
+        let result = parse_optional_address(&value);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_optional_address_invalid() {
+        let value = json!("not an option");
+        let result = parse_optional_address(&value);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_optional_hex_some() {
+        // Move Option<vector<u8>> with value: {"vec": ["0xdeadbeef"]}
+        let value = json!({"vec": ["0xdeadbeef"]});
+        let result = parse_optional_hex(&value);
+        assert_eq!(result, vec![0xde, 0xad, 0xbe, 0xef]);
+    }
+
+    #[test]
+    fn test_parse_optional_hex_none() {
+        // Move Option<vector<u8>> with no value: {"vec": []}
+        let value = json!({"vec": []});
+        let result = parse_optional_hex(&value);
+        assert_eq!(result, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_parse_optional_hex_invalid() {
+        let value = json!("not an option");
+        let result = parse_optional_hex(&value);
+        assert_eq!(result, Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_parse_optional_hex_32_byte_address() {
+        // Typical SVM address (32 bytes)
+        let svm_hex = "6e5f2e9b6d3f4a1c8e7d0b2a5f4c3e8d1a0b9f7e6c5d4a3b2c1e0f9a8b7c6d5e";
+        let value = json!({"vec": [format!("0x{}", svm_hex)]});
+        let result = parse_optional_hex(&value);
+        assert_eq!(result.len(), 32);
+        assert_eq!(hex::encode(&result), svm_hex);
     }
 }
 

@@ -5,7 +5,7 @@
 
 use trusted_verifier::mvm_client::MvmClient;
 
-/// Test that the Aptos client can connect to Chain 1 (Hub)
+/// Test that the Aptos client can connect to Hub
 /// Why: Verify the client can communicate with running Aptos nodes
 #[tokio::test]
 async fn test_client_can_connect_to_chain1() {
@@ -13,7 +13,7 @@ async fn test_client_can_connect_to_chain1() {
     
     // Test health check
     let result = client.health_check().await;
-    assert!(result.is_ok(), "Should be able to connect to Chain 1");
+    assert!(result.is_ok(), "Should be able to connect to Hub");
 }
 
 /// Test that the Aptos client can connect to Chain 2 (Connected)

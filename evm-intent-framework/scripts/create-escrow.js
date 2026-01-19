@@ -4,11 +4,11 @@
 //! It approves the token and deposits funds atomically via createEscrow().
 //!
 //! Environment Variables:
-//!   - ESCROW_CONTRACT_ADDRESS: IntentEscrow contract address
+//!   - ESCROW_CONTRACT_ADDR: IntentEscrow contract address
 //!   - INTENT_ID: Intent ID from Movement (hex string with 0x prefix)
-//!   - TOKEN_ADDRESS: ERC20 token address (USDC)
+//!   - TOKEN_ADDR: ERC20 token address (USDC)
 //!   - AMOUNT: Amount to deposit (in smallest units, e.g., 1000000 = 1 USDC)
-//!   - SOLVER_ADDRESS: Solver's EVM address (reserved for claiming)
+//!   - SOLVER_ADDR: Solver's EVM address (reserved for claiming)
 //!   - REQUESTER_PRIVATE_KEY: Private key of the requester (for signing tx)
 //!   - RPC_URL: Base Sepolia RPC URL
 
@@ -17,19 +17,19 @@ const { ethers } = require("hardhat");
 
 async function main() {
   // Load environment variables
-  const escrowAddress = process.env.ESCROW_CONTRACT_ADDRESS;
+  const escrowAddress = process.env.ESCROW_CONTRACT_ADDR;
   const intentIdHex = process.env.INTENT_ID;
-  const tokenAddress = process.env.TOKEN_ADDRESS;
+  const tokenAddress = process.env.TOKEN_ADDR;
   const amount = process.env.AMOUNT;
-  const solverAddress = process.env.SOLVER_ADDRESS;
+  const solverAddress = process.env.SOLVER_ADDR;
   const requesterPrivateKey = process.env.REQUESTER_PRIVATE_KEY;
 
   // Validate required environment variables
-  if (!escrowAddress) throw new Error("ESCROW_CONTRACT_ADDRESS not set");
+  if (!escrowAddress) throw new Error("ESCROW_CONTRACT_ADDR not set");
   if (!intentIdHex) throw new Error("INTENT_ID not set");
-  if (!tokenAddress) throw new Error("TOKEN_ADDRESS not set");
+  if (!tokenAddress) throw new Error("TOKEN_ADDR not set");
   if (!amount) throw new Error("AMOUNT not set");
-  if (!solverAddress) throw new Error("SOLVER_ADDRESS not set");
+  if (!solverAddress) throw new Error("SOLVER_ADDR not set");
   if (!requesterPrivateKey) throw new Error("REQUESTER_PRIVATE_KEY not set");
 
   console.log("Creating escrow for inflow intent...");

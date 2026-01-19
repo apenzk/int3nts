@@ -22,14 +22,14 @@ The negotiation routing system enables:
 
 ### Requester Prerequisites
 
-- Must have a Move VM address (for `requester_addr`)
-- Must prepare draft data matching the `Draftintent` structure from Move
+- Must have an MVM address (for `requester_addr`)
+- Must prepare draft data matching the `Draftintent` structure from the MVM framework
 
 ## Requester Workflow
 
 ### 1. Submit Draft Intent
 
-Submit a draft intent to the verifier. The draft is open to any solver (no `solver_addr` required).
+Submit a draft intent to the verifier. The draft is open to any solver (no `solver_hub_addr` required).
 
 ```bash
 curl -X POST http://127.0.0.1:3333/draftintent \
@@ -58,8 +58,8 @@ while true; do
   RESPONSE=$(curl -s http://127.0.0.1:3333/draftintent/$DRAFT_ID/signature)
   if echo "$RESPONSE" | jq -e '.success == true' > /dev/null; then
     SIGNATURE=$(echo "$RESPONSE" | jq -r '.data.signature')
-    SOLVER_ADDRESS=$(echo "$RESPONSE" | jq -r '.data.solver_addr')
-    echo "Signature received from $SOLVER_ADDRESS: $SIGNATURE"
+    SOLVER_ADDR=$(echo "$RESPONSE" | jq -r '.data.solver_hub_addr')
+    echo "Signature received from $SOLVER_ADDR: $SIGNATURE"
     break
   fi
   sleep 5
@@ -74,13 +74,13 @@ done
 
 ### 3. Use Signature On-Chain
 
-Once you receive the signature, use it along with `solver_addr` to create a reserved intent on-chain.
+Once you receive the signature, use it along with `solver_hub_addr` to create a reserved intent on-chain.
 
 ```bash
 # Convert hex signature to bytes if needed
 movement move run \
   --function-id "0x<module>::intent::create_reserved_intent" \
-  --args "address:<solver_addr>" "hex:<signature>" ...
+  --args "address:<solver_hub_addr>" "hex:<signature>" ...
 ```
 
 ## Solver Workflow
@@ -92,7 +92,7 @@ Register your solver on-chain with public key and addresses:
 ```bash
 movement move run \
   --function-id "0x<module>::solver_registry::register_solver" \
-  --args "vector<u8>:<public_key_bytes>" "address:<evm_address>" "address:<mvm_address>"
+  --args "vector<u8>:<public_key_bytes>" "address:<mvm_address>" "address:<evm_address>" "vector<u8>:<svm_address>"
 ```
 
 ### 2. Poll for Pending Drafts
@@ -116,13 +116,13 @@ done
 Sign the draft and submit your signature. **FCFS Logic**: First signature wins, later signatures are rejected with 409 Conflict.
 
 ```bash
-# Sign draft (add solver_addr to create IntentToSign)
-SIGNATURE=$(sign_draft "$DRAFT_DATA" "$SOLVER_ADDRESS" "$PRIVATE_KEY")
+# Sign draft (add solver_hub_addr to create IntentToSign)
+SIGNATURE=$(sign_draft "$DRAFT_DATA" "$SOLVER_ADDR" "$PRIVATE_KEY")
 
 curl -X POST http://127.0.0.1:3333/draftintent/$DRAFT_ID/signature \
   -H "Content-Type: application/json" \
   -d "{
-    \"solver_addr\": \"$SOLVER_ADDRESS\",
+    \"solver_hub_addr\": \"$SOLVER_ADDR\",
     \"signature\": \"$SIGNATURE\",
     \"public_key\": \"$PUBLIC_KEY\"
   }"
@@ -208,7 +208,7 @@ while true; do
   SIG_RESPONSE=$(curl -s http://127.0.0.1:3333/draftintent/$DRAFT_ID/signature)
   if echo "$SIG_RESPONSE" | jq -e '.success == true' > /dev/null; then
     SIGNATURE=$(echo "$SIG_RESPONSE" | jq -r '.data.signature')
-    SOLVER=$(echo "$SIG_RESPONSE" | jq -r '.data.solver_addr')
+    SOLVER=$(echo "$SIG_RESPONSE" | jq -r '.data.solver_hub_addr')
     echo "Got signature from $SOLVER"
     break
   fi
@@ -231,12 +231,12 @@ while true; do
     DRAFT_DATA=$(echo "$DRAFT" | jq -r '.draft_data')
     
     # 2. Sign draft
-    SIGNATURE=$(sign_draft "$DRAFT_DATA" "$SOLVER_ADDRESS" "$PRIVATE_KEY")
+    SIGNATURE=$(sign_draft "$DRAFT_DATA" "$SOLVER_ADDR" "$PRIVATE_KEY")
     
     # 3. Submit signature
     RESPONSE=$(curl -s -X POST http://127.0.0.1:3333/draftintent/$DRAFT_ID/signature \
       -H "Content-Type: application/json" \
-      -d "{\"solver_addr\": \"$SOLVER_ADDRESS\", \"signature\": \"$SIGNATURE\", \"public_key\": \"$PUBLIC_KEY\"}")
+      -d "{\"solver_hub_addr\": \"$SOLVER_ADDR\", \"signature\": \"$SIGNATURE\", \"public_key\": \"$PUBLIC_KEY\"}")
     
     if echo "$RESPONSE" | jq -e '.success == true' > /dev/null; then
       echo "Successfully signed draft $DRAFT_ID"

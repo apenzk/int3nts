@@ -21,9 +21,9 @@ cd "$PROJECT_ROOT"
 # Note: aptos init funds accounts with 100_000_000, then we fund again with 100_000_000 = 200_000_000 total
 EXPECTED_FUNDING_AMOUNT=200000000
 
-log "🧪 Requester and Solver Account Setup - CONNECTED CHAIN (Chain 2)"
+log " Requester and Solver Account Setup - CONNECTED CHAIN (Chain 2)"
 log "==========================================================="
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 
 log ""
 log "% - - - - - - - - - - - SETUP - - - - - - - - - - - -"
@@ -31,7 +31,7 @@ log "% - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
 # Create test accounts for Chain 2
 log ""
-log "👥 Creating test accounts for Chain 2..."
+log " Creating test accounts for Chain 2..."
 
 # Create requester account for Chain 2
 log "Creating requester-chain2 account for Chain 2..."
@@ -56,6 +56,6 @@ fund_and_verify_account "solver-chain2" "2" "Solver Chain 2" "$EXPECTED_FUNDING_
 log_and_echo "✅ Connected chain accounts funded"
 
 log ""
-log "🎉 CONNECTED CHAIN REQUESTER AND SOLVER SETUP COMPLETE!"
+log " CONNECTED CHAIN REQUESTER AND SOLVER SETUP COMPLETE!"
 log "=================================================="
-log "✨ Connected chain accounts ready!"
+log " Connected chain accounts ready!"

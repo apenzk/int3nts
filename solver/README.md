@@ -2,7 +2,7 @@
 
 Tools and service for solvers to interact with the Intent Framework, including automatic signature generation for reserved intents.
 
-📚 **Full documentation: [docs/solver/](../docs/solver/README.md)**
+ **Full documentation: [docs/solver/](../docs/solver/README.md)**
 
 ## Quick Start
 

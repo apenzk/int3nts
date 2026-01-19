@@ -10,7 +10,7 @@ use std::process::Command;
 use std::time::Duration;
 use tracing::{debug, warn};
 
-use crate::config::ChainConfig;
+use crate::config::MvmChainConfig;
 
 /// Move VM Optional wrapper: {"vec": [value]} or {"vec": []}
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,7 +75,7 @@ impl ConnectedMvmClient {
     ///
     /// * `Ok(ConnectedMvmClient)` - Successfully created client
     /// * `Err(anyhow::Error)` - Failed to create client
-    pub fn new(config: &ChainConfig) -> Result<Self> {
+    pub fn new(config: &MvmChainConfig) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
             .no_proxy() // Avoid macOS system-configuration issues in tests

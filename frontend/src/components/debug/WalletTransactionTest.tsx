@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
 
+/**
+ * Debug component for test wallet transactions.
+ */
 export function WalletTransactionTest() {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

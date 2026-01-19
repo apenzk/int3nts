@@ -4,7 +4,7 @@
 #
 # This script generates a FRESH address for each deployment to avoid
 # backward-incompatible module update errors. Funds are transferred from
-# the deployer account in .testnet-keys.env to the new module address.
+# the deployer account in .env.testnet to the new module address.
 #
 # The new module address must be updated in verifier and solver config
 # files after deployment.
@@ -23,7 +23,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 export PROJECT_ROOT
 
-echo "🚀 Deploying Move Intent Framework to Movement Bardock Testnet"
+echo " Deploying Move Intent Framework to Movement Bardock Testnet"
 echo "=============================================================="
 echo ""
 
@@ -47,12 +47,12 @@ fi
 echo "✅ Movement CLI found: $(movement --version)"
 echo ""
 
-# Load .testnet-keys.env for the funding account
-TESTNET_KEYS_FILE="$PROJECT_ROOT/.testnet-keys.env"
+# Load .env.testnet for the funding account
+TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
-    echo "❌ ERROR: .testnet-keys.env not found at $TESTNET_KEYS_FILE"
-    echo "   Create it from env.testnet.example first"
+    echo "❌ ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
+    echo "   Create it from env.testnet.example in this directory"
     exit 1
 fi
 
@@ -60,20 +60,20 @@ source "$TESTNET_KEYS_FILE"
 
 # Check required variables for funding account
 if [ -z "$MOVEMENT_DEPLOYER_PRIVATE_KEY" ]; then
-    echo "❌ ERROR: MOVEMENT_DEPLOYER_PRIVATE_KEY not set in .testnet-keys.env"
+    echo "❌ ERROR: MOVEMENT_DEPLOYER_PRIVATE_KEY not set in .env.testnet"
     exit 1
 fi
 
-if [ -z "$MOVEMENT_DEPLOYER_ADDRESS" ]; then
-    echo "❌ ERROR: MOVEMENT_DEPLOYER_ADDRESS not set in .testnet-keys.env"
+if [ -z "$MOVEMENT_DEPLOYER_ADDR" ]; then
+    echo "❌ ERROR: MOVEMENT_DEPLOYER_ADDR not set in .env.testnet"
     exit 1
 fi
 
-FUNDER_ADDRESS="${MOVEMENT_DEPLOYER_ADDRESS#0x}"
-FUNDER_ADDRESS_FULL="0x${FUNDER_ADDRESS}"
+FUNDER_ADDR="${MOVEMENT_DEPLOYER_ADDR#0x}"
+FUNDER_ADDR_FULL="0x${FUNDER_ADDR}"
 
 # Setup funding account profile
-echo "🔧 Step 1: Setting up funding account..."
+echo " Step 1: Setting up funding account..."
 movement init --profile movement-funder \
   --network custom \
   --rest-url https://testnet.movementnetwork.xyz/v1 \
@@ -82,11 +82,11 @@ movement init --profile movement-funder \
   --skip-faucet \
   --assume-yes 2>/dev/null
 
-echo "   Funder address: $FUNDER_ADDRESS_FULL"
+echo "   Funder address: $FUNDER_ADDR_FULL"
 echo ""
 
 # Generate a fresh key pair for module deployment
-echo "🔑 Step 2: Generating fresh module address..."
+echo " Step 2: Generating fresh module address..."
 
 # Create temp directory for key generation
 TEMP_DIR=$(mktemp -d)
@@ -109,27 +109,27 @@ movement init --profile "$TEMP_PROFILE" \
   --assume-yes 2>/dev/null
 
 # Extract the address from the profile
-DEPLOY_ADDRESS=$(movement config show-profiles --profile "$TEMP_PROFILE" 2>/dev/null | jq -r ".Result.\"$TEMP_PROFILE\".account // empty" || echo "")
+DEPLOY_ADDR=$(movement config show-profiles --profile "$TEMP_PROFILE" 2>/dev/null | jq -r ".Result.\"$TEMP_PROFILE\".account // empty" || echo "")
 
-if [ -z "$DEPLOY_ADDRESS" ]; then
+if [ -z "$DEPLOY_ADDR" ]; then
     echo "❌ ERROR: Failed to extract address from generated key"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
 
-DEPLOY_ADDRESS_FULL="0x${DEPLOY_ADDRESS}"
-echo "   Module address: $DEPLOY_ADDRESS_FULL"
+DEPLOY_ADDR_FULL="0x${DEPLOY_ADDR}"
+echo "   Module address: $DEPLOY_ADDR_FULL"
 echo ""
 
 # Fund the new address - try faucet first, fall back to transfer from deployer
-echo "💰 Step 3: Funding module address..."
+echo " Step 3: Funding module address..."
 
 FUND_AMOUNT=100000000  # 1 MOVE in octas
 FAUCET_SUCCESS=false
 
 # Try faucet via curl (Movement testnet faucet API)
 echo "   Trying faucet..."
-FAUCET_RESPONSE=$(curl -s -X POST "https://faucet.movementnetwork.xyz/mint?amount=$FUND_AMOUNT&address=$DEPLOY_ADDRESS_FULL" 2>/dev/null || echo "")
+FAUCET_RESPONSE=$(curl -s -X POST "https://faucet.movementnetwork.xyz/mint?amount=$FUND_AMOUNT&address=$DEPLOY_ADDR_FULL" 2>/dev/null || echo "")
 
 if [ -n "$FAUCET_RESPONSE" ] && ! echo "$FAUCET_RESPONSE" | grep -qi "error"; then
     echo "   ✅ Faucet request sent"
@@ -149,9 +149,9 @@ fi
 # Check if funding worked
 if [ "$FAUCET_SUCCESS" = true ]; then
     sleep 2
-    BALANCE=$(curl -s "https://testnet.movementnetwork.xyz/v1/accounts/$DEPLOY_ADDRESS_FULL/resources" 2>/dev/null | jq -r '.[] | select(.type == "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>") | .data.coin.value // "0"' || echo "0")
+    BALANCE=$(curl -s "https://testnet.movementnetwork.xyz/v1/accounts/$DEPLOY_ADDR_FULL/resources" 2>/dev/null | jq -r '.[] | select(.type == "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>") | .data.coin.value // "0"' || echo "0")
     if [ "$BALANCE" = "0" ] || [ -z "$BALANCE" ]; then
-        echo "   ⚠️  Faucet didn't fund the account"
+        echo "   ️  Faucet didn't fund the account"
         FAUCET_SUCCESS=false
     fi
 fi
@@ -160,10 +160,10 @@ fi
 if [ "$FAUCET_SUCCESS" = false ]; then
     echo ""
     echo "   Faucet unavailable or failed."
-    echo "   Module address: $DEPLOY_ADDRESS_FULL"
+    echo "   Module address: $DEPLOY_ADDR_FULL"
     echo ""
     echo "   Options:"
-    echo "   [y] Transfer 1 MOVE from your deployer account ($FUNDER_ADDRESS_FULL)"
+    echo "   [y] Transfer 1 MOVE from your deployer account ($FUNDER_ADDR_FULL)"
     echo "   [m] Manually fund via https://faucet.movementlabs.xyz (then press Enter)"
     echo "   [n] Cancel deployment"
     echo ""
@@ -175,13 +175,13 @@ if [ "$FAUCET_SUCCESS" = false ]; then
         movement move run \
           --profile movement-funder \
           --function-id "0x1::aptos_account::transfer" \
-          --args "address:$DEPLOY_ADDRESS_FULL" "u64:$FUND_AMOUNT" \
+          --args "address:$DEPLOY_ADDR_FULL" "u64:$FUND_AMOUNT" \
           --assume-yes
         echo "   ✅ Transferred $FUND_AMOUNT octas (1 MOVE) from deployer"
     elif [[ $REPLY =~ ^[Mm]$ ]]; then
         echo ""
         echo "   Please fund this address manually:"
-        echo "   $DEPLOY_ADDRESS_FULL"
+        echo "   $DEPLOY_ADDR_FULL"
         echo ""
         echo "   Visit: https://faucet.movementlabs.xyz"
         echo ""
@@ -199,7 +199,7 @@ sleep 3
 # Verify balance with retry option
 while true; do
     echo "   Verifying balance..."
-    BALANCE=$(curl -s "https://testnet.movementnetwork.xyz/v1/accounts/$DEPLOY_ADDRESS_FULL/resources" 2>/dev/null | jq -r '.[] | select(.type == "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>") | .data.coin.value // "0"' || echo "0")
+    BALANCE=$(curl -s "https://testnet.movementnetwork.xyz/v1/accounts/$DEPLOY_ADDR_FULL/resources" 2>/dev/null | jq -r '.[] | select(.type == "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>") | .data.coin.value // "0"' || echo "0")
     if [ -z "$BALANCE" ]; then BALANCE="0"; fi
     echo "   Module address balance: $BALANCE octas"
     
@@ -209,7 +209,7 @@ while true; do
     fi
     
     echo ""
-    echo "⚠️  Balance is still 0."
+    echo "️  Balance is still 0."
     echo "   [r] Retry balance check"
     echo "   [y] Continue anyway (deployment may fail)"
     echo "   [n] Cancel deployment"
@@ -231,30 +231,30 @@ while true; do
 done
 echo ""
 
-echo "📋 Configuration:"
-echo "   Funder Address: $FUNDER_ADDRESS_FULL"
-echo "   Module Address: $DEPLOY_ADDRESS_FULL"
+echo " Configuration:"
+echo "   Funder Address: $FUNDER_ADDR_FULL"
+echo "   Module Address: $DEPLOY_ADDR_FULL"
 echo "   Network: Movement Bardock Testnet"
 echo "   RPC URL: https://testnet.movementnetwork.xyz/v1"
 echo ""
 
 # Compile Move modules
-echo "🔨 Step 4: Compiling Move modules..."
+echo " Step 4: Compiling Move modules..."
 cd "$PROJECT_ROOT/move-intent-framework"
 
 movement move compile \
-  --named-addresses mvmt_intent="$DEPLOY_ADDRESS_FULL" \
+  --named-addresses mvmt_intent="$DEPLOY_ADDR_FULL" \
   --skip-fetch-latest-git-deps
 
 echo "✅ Compilation successful"
 echo ""
 
 # Deploy Move modules
-echo "📤 Step 5: Deploying Move modules to Movement Bardock Testnet..."
+echo " Step 5: Deploying Move modules to Movement Bardock Testnet..."
 
 movement move publish \
   --profile "$TEMP_PROFILE" \
-  --named-addresses mvmt_intent="$DEPLOY_ADDRESS_FULL" \
+  --named-addresses mvmt_intent="$DEPLOY_ADDR_FULL" \
   --skip-fetch-latest-git-deps \
   --assume-yes
 
@@ -262,75 +262,75 @@ echo "✅ Deployment successful"
 echo ""
 
 # Verify deployment by calling a view function
-echo "🔍 Step 6: Verifying deployment..."
+echo " Step 6: Verifying deployment..."
 
 movement move view \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDRESS_FULL}::solver_registry::is_registered" \
-  --args "address:$DEPLOY_ADDRESS_FULL" && {
+  --function-id "${DEPLOY_ADDR_FULL}::solver_registry::is_registered" \
+  --args "address:$DEPLOY_ADDR_FULL" && {
     echo "   ✅ View function works - module deployed correctly with #[view] attribute"
   } || {
-    echo "   ⚠️  Warning: View function verification failed"
+    echo "   ️  Warning: View function verification failed"
     echo "   This may indicate the module wasn't deployed correctly"
   }
 
 echo ""
 
 # Initialize solver registry
-echo "🔧 Step 7: Initializing solver registry..."
+echo " Step 7: Initializing solver registry..."
 
 movement move run \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDRESS_FULL}::solver_registry::initialize" \
+  --function-id "${DEPLOY_ADDR_FULL}::solver_registry::initialize" \
   --assume-yes 2>/dev/null && {
     echo "   ✅ Solver registry initialized"
   } || {
-    echo "   ⚠️  Solver registry may already be initialized (this is OK)"
+    echo "   ️  Solver registry may already be initialized (this is OK)"
   }
 
 echo ""
 
 # Initialize fa_intent chain info (required for cross-chain intent detection)
-echo "🔧 Step 8: Initializing fa_intent chain info..."
+echo " Step 8: Initializing fa_intent chain info..."
 
 movement move run \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDRESS_FULL}::fa_intent::initialize" \
+  --function-id "${DEPLOY_ADDR_FULL}::fa_intent::initialize" \
   --args u64:250 \
   --assume-yes 2>/dev/null && {
     echo "   ✅ fa_intent chain info initialized (chain_id=250)"
   } || {
-    echo "   ⚠️  fa_intent chain info may already be initialized (this is OK)"
+    echo "   ️  fa_intent chain info may already be initialized (this is OK)"
   }
 
 echo ""
 
 # Initialize intent registry (required before creating intents)
-echo "🔧 Step 9: Initializing intent registry..."
+echo " Step 9: Initializing intent registry..."
 
 movement move run \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDRESS_FULL}::intent_registry::initialize" \
+  --function-id "${DEPLOY_ADDR_FULL}::intent_registry::initialize" \
   --assume-yes 2>/dev/null && {
     echo "   ✅ Intent registry initialized"
   } || {
-    echo "   ⚠️  Intent registry may already be initialized (this is OK)"
+    echo "   ️  Intent registry may already be initialized (this is OK)"
   }
 
 echo ""
 
 # Initialize verifier config for outflow intents
-echo "🔧 Step 10: Initializing verifier config..."
+echo " Step 10: Initializing verifier config..."
 
 if [ -z "$VERIFIER_PUBLIC_KEY" ]; then
-    echo "❌ ERROR: VERIFIER_PUBLIC_KEY not set in .testnet-keys.env"
+    echo "❌ ERROR: VERIFIER_PUBLIC_KEY not set in .env.testnet"
     exit 1
 fi
 
 VERIFIER_PUBLIC_KEY_HEX=$(echo "$VERIFIER_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
 movement move run \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDRESS_FULL}::fa_intent_outflow::initialize_verifier" \
+  --function-id "${DEPLOY_ADDR_FULL}::fa_intent_outflow::initialize_verifier" \
   --args "hex:${VERIFIER_PUBLIC_KEY_HEX}" \
   --assume-yes
 
@@ -343,27 +343,27 @@ echo "   ✅ Verifier config initialized"
 echo ""
 
 # Cleanup temp profile (but keep the key info for reference)
-echo "🧹 Cleaning up..."
+echo " Cleaning up..."
 rm -rf "$TEMP_DIR"
 
 echo ""
-echo "🎉 Deployment Complete!"
+echo " Deployment Complete!"
 echo "======================"
 echo ""
-echo "📝 NEW Module Address: $DEPLOY_ADDRESS_FULL"
+echo " NEW Module Address: $DEPLOY_ADDR_FULL"
 echo ""
-echo "⚠️  IMPORTANT: Update these files with the new module address:"
+echo "️  IMPORTANT: Update these files with the new module address:"
 echo ""
 echo "   1. trusted-verifier/config/verifier_testnet.toml:"
-echo "      intent_module_addr = \"$DEPLOY_ADDRESS_FULL\""
+echo "      intent_module_addr = \"$DEPLOY_ADDR_FULL\""
 echo ""
 echo "   2. solver/config/solver_testnet.toml:"
-echo "      module_addr = \"$DEPLOY_ADDRESS_FULL\""
+echo "      module_addr = \"$DEPLOY_ADDR_FULL\""
 echo ""
 echo "   3. frontend/src/config/chains.ts:"
-echo "      intentContractAddress: '$DEPLOY_ADDRESS_FULL' (in Movement chain config)"
+echo "      intentContractAddress: '$DEPLOY_ADDR_FULL' (in Movement chain config)"
 echo ""
-echo "💡 Next steps:"
+echo " Next steps:"
 echo "   1. Update the config files above with the new module address"
 echo "   2. Proceed to deploy EVM IntentEscrow to Base Sepolia (if needed)"
 echo ""

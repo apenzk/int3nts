@@ -7,6 +7,11 @@ on:
         required: true
         type: string
         description: "Path to the test script to run"
+      skip_solana:
+        required: false
+        type: boolean
+        default: false
+        description: "Skip Solana CLI installation (set true for EVM/MVM jobs)"
 
 jobs:
   run-e2e:
@@ -26,5 +31,7 @@ jobs:
           sudo chmod +x /usr/local/bin/docker-compose
       
       - name: Run E2E test
+        env:
+          SKIP_SOLANA: ${{ inputs.skip_solana && '1' || '' }}
         run: nix develop --command bash -c '${{ inputs.script }}'
 

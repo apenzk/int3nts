@@ -140,7 +140,11 @@ sequenceDiagram
 
 ## Error Cases
 
-**TODO:** Document error cases specific to router flow.
+- **Source escrow amount mismatch**: Escrow on the source connected chain does not match the offered amount; solver/verifier rejects fulfillment.
+- **Destination transfer mismatch**: Transfer amount, recipient, or token metadata on the destination chain does not match the intent; verifier refuses approval.
+- **Missing intent linkage**: Connected-chain transfer lacks the required intent metadata (memo/calldata); verifier rejects.
+- **Timeouts across legs**: Escrow or intent expires before the remaining leg completes; remaining actions must cancel or wait for expiry refund.
+- **Verifier validation failure**: Any leg fails validation (escrow, transfer, or signature); escrow release and collateral release are blocked.
 
 ## Protocol steps details
 

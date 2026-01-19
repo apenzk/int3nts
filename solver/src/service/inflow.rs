@@ -7,8 +7,8 @@
 //! 2. **Fulfill Intent**: Call hub chain `fulfill_inflow_intent` when escrow is detected
 //! 3. **Release Escrow**: Poll verifier for approval signature, then release escrow on connected chain
 
-use crate::chains::{ConnectedEvmClient, ConnectedMvmClient};
-use crate::config::{ConnectedChainConfig, SolverConfig};
+use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient};
+use crate::config::SolverConfig;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use crate::verifier_client::VerifierClient;
 use anyhow::{Context, Result};
@@ -25,14 +25,12 @@ pub struct InflowService {
     tracker: Arc<IntentTracker>,
     /// Verifier base URL (client created on-demand to avoid blocking client in async context)
     verifier_url: String,
-    /// Connected chain client (MVM or EVM)
-    connected_client: ConnectedChainClient,
-}
-
-/// Enum for connected chain client (MVM or EVM)
-enum ConnectedChainClient {
-    Mvm(ConnectedMvmClient),
-    Evm(ConnectedEvmClient),
+    /// Optional connected MVM chain client
+    mvm_client: Option<ConnectedMvmClient>,
+    /// Optional connected EVM chain client
+    evm_client: Option<ConnectedEvmClient>,
+    /// Optional connected SVM chain client
+    svm_client: Option<ConnectedSvmClient>,
 }
 
 /// Helper struct for matching escrow events to intents
@@ -56,22 +54,60 @@ impl InflowService {
     pub fn new(config: SolverConfig, tracker: Arc<IntentTracker>) -> Result<Self> {
         let verifier_url = config.service.verifier_url.clone();
 
-        // Create connected chain client based on config
-        let connected_client = match &config.connected_chain {
-            ConnectedChainConfig::Mvm(chain_config) => {
-                ConnectedChainClient::Mvm(ConnectedMvmClient::new(chain_config)?)
-            }
-            ConnectedChainConfig::Evm(chain_config) => {
-                ConnectedChainClient::Evm(ConnectedEvmClient::new(chain_config)?)
-            }
-        };
+        // Create connected chain clients for all configured chains
+        let mvm_client = config.get_mvm_config()
+            .map(|cfg| ConnectedMvmClient::new(cfg))
+            .transpose()?;
+        
+        let evm_client = config.get_evm_config()
+            .map(|cfg| ConnectedEvmClient::new(cfg))
+            .transpose()?;
+        
+        let svm_client = config.get_svm_config()
+            .map(|cfg| ConnectedSvmClient::new(cfg))
+            .transpose()?;
 
         Ok(Self {
             config,
             tracker,
             verifier_url,
-            connected_client,
+            mvm_client,
+            evm_client,
+            svm_client,
         })
+    }
+    
+    /// Gets the chain ID for a connected chain type
+    fn get_chain_id(&self, chain_type: &str) -> Option<u64> {
+        match chain_type {
+            "mvm" => self.config.get_mvm_config().map(|c| c.chain_id),
+            "evm" => self.config.get_evm_config().map(|c| c.chain_id),
+            "svm" => self.config.get_svm_config().map(|c| c.chain_id),
+            _ => None,
+        }
+    }
+    
+    /// Determines which connected chain to use for an inflow intent (based on offered_chain_id)
+    /// Returns ("mvm"|"evm"|"svm", chain_id) or None if no matching chain
+    fn get_source_chain_for_intent(&self, intent: &TrackedIntent) -> Option<(&'static str, u64)> {
+        let offered_chain_id = intent.draft_data.offered_chain_id;
+        
+        if let Some(chain_id) = self.get_chain_id("mvm") {
+            if chain_id == offered_chain_id {
+                return Some(("mvm", chain_id));
+            }
+        }
+        if let Some(chain_id) = self.get_chain_id("evm") {
+            if chain_id == offered_chain_id {
+                return Some(("evm", chain_id));
+            }
+        }
+        if let Some(chain_id) = self.get_chain_id("svm") {
+            if chain_id == offered_chain_id {
+                return Some(("svm", chain_id));
+            }
+        }
+        None
     }
 
     /// Polls the connected chain for escrow deposits matching tracked inflow intents
@@ -116,62 +152,79 @@ impl InflowService {
             .filter_map(|intent| intent.requester_addr_connected_chain.clone())
             .collect();
 
-        // Query connected chain for escrow events
-        let escrow_events: Vec<EscrowMatch> = match &self.connected_client {
-            ConnectedChainClient::Mvm(client) => {
-                if connected_chain_requester_addresses.is_empty() {
-                    info!("No connected chain requester addresses found for inflow intents");
-                    Vec::new()
-                } else {
-                    // Convert EscrowEvent to a common format for matching
-                    let events = client.get_escrow_events(&connected_chain_requester_addresses, None).await?;
-                    if !events.is_empty() {
-                        info!("Found {} MVM escrow events", events.len());
-                    }
-                    events
-                        .into_iter()
-                        .map(|e| EscrowMatch {
-                            intent_id: e.intent_id,
-                            escrow_id: e.escrow_id,
-                        })
-                        .collect()
-                }
-            }
-            ConnectedChainClient::Evm(client) => {
-                // EVM client uses from_block/to_block instead of known_accounts
-                // Query recent blocks to avoid exceeding RPC's block range limit
-                let current_block = client.get_block_number().await
-                    .context("Failed to get current block number")?;
-                
-                // Look back 200 blocks (~7 minutes on Base, same as verifier)
-                let from_block = if current_block > 200 {
-                    current_block - 200
-                } else {
-                    0
-                };
-                
-                info!("Querying EVM chain for escrow events (from_block={}, current_block={})", from_block, current_block);
-                let events = match client.get_escrow_events(Some(from_block), None).await {
+        // Query all configured connected chains for escrow events
+        let mut escrow_events: Vec<EscrowMatch> = Vec::new();
+        
+        // Query MVM chain if configured
+        if let Some(client) = &self.mvm_client {
+            if !connected_chain_requester_addresses.is_empty() {
+                match client.get_escrow_events(&connected_chain_requester_addresses, None).await {
                     Ok(events) => {
                         if !events.is_empty() {
-                            info!("Found {} EVM escrow events", events.len());
+                            info!("Found {} MVM escrow events", events.len());
                         }
-                        events
+                        escrow_events.extend(events.into_iter().map(|e| EscrowMatch {
+                            intent_id: e.intent_id,
+                            escrow_id: e.escrow_id,
+                        }));
                     }
                     Err(e) => {
-                        error!("Failed to query EVM escrow events: {}", e);
-                        return Err(e);
+                        error!("Failed to query MVM escrow events: {}", e);
                     }
-                };
-                events
-                    .into_iter()
-                    .map(|e| EscrowMatch {
-                        intent_id: e.intent_id,
-                        escrow_id: e.escrow_addr,
-                    })
-                    .collect()
+                }
             }
-        };
+        }
+        
+        // Query EVM chain if configured
+        if let Some(client) = &self.evm_client {
+            match client.get_block_number().await {
+                Ok(current_block) => {
+                    // Look back 200 blocks (~7 minutes on Base, same as verifier)
+                    let from_block = if current_block > 200 {
+                        current_block - 200
+                    } else {
+                        0
+                    };
+                    
+                    info!("Querying EVM chain for escrow events (from_block={}, current_block={})", from_block, current_block);
+                    match client.get_escrow_events(Some(from_block), None).await {
+                        Ok(events) => {
+                            if !events.is_empty() {
+                                info!("Found {} EVM escrow events", events.len());
+                            }
+                            escrow_events.extend(events.into_iter().map(|e| EscrowMatch {
+                                intent_id: e.intent_id,
+                                escrow_id: e.escrow_addr,
+                            }));
+                        }
+                        Err(e) => {
+                            error!("Failed to query EVM escrow events: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to get EVM block number: {}", e);
+                }
+            }
+        }
+        
+        // Query SVM chain if configured
+        if let Some(client) = &self.svm_client {
+            match client.get_escrow_events().await {
+                Ok(events) => {
+                    if !events.is_empty() {
+                        info!("Found {} SVM escrow events", events.len());
+                    }
+                    escrow_events.extend(events.into_iter().map(|e| EscrowMatch {
+                        intent_id: e.intent_id,
+                        escrow_id: e.escrow_id,
+                    }));
+                }
+                Err(e) => {
+                    error!("Failed to query SVM escrow events: {}", e);
+                }
+            }
+        }
 
         // Only log matching details if there are escrow events to match against
         if !escrow_events.is_empty() {
@@ -295,18 +348,28 @@ impl InflowService {
             .decode(&approval.signature)
             .context("Failed to decode base64 signature")?;
 
-        // Release escrow based on chain type
+        // Release escrow based on intent's source chain (offered_chain_id for inflow)
         // For inflow: payment_amount = 0 (solver already fulfilled on hub chain)
-        match &self.connected_client {
-            ConnectedChainClient::Mvm(client) => {
-                // For MVM, use complete_escrow_from_fa with Ed25519 signature
+        let (chain_type, _) = self.get_source_chain_for_intent(intent)
+            .context("No configured connected chain matches intent's offered_chain_id")?;
+        
+        match chain_type {
+            "mvm" => {
+                let client = self.mvm_client.as_ref()
+                    .context("MVM client not configured")?;
                 client.complete_escrow_from_fa(escrow_id, 0, &signature_bytes)
             }
-            ConnectedChainClient::Evm(client) => {
-                // For EVM, use claim() with ECDSA signature via Hardhat script
-                // The Hardhat script handles signing using Hardhat's signer configuration
+            "evm" => {
+                let client = self.evm_client.as_ref()
+                    .context("EVM client not configured")?;
                 client.claim_escrow(escrow_id, &intent.intent_id, &signature_bytes).await
             }
+            "svm" => {
+                let client = self.svm_client.as_ref()
+                    .context("SVM client not configured")?;
+                client.claim_escrow(escrow_id, &intent.intent_id, &signature_bytes).await
+            }
+            _ => anyhow::bail!("Unknown chain type: {}", chain_type),
         }
     }
 

@@ -8,19 +8,19 @@ const hre = require("hardhat");
 /// Mints tokens to a recipient address
 ///
 /// # Environment Variables
-/// - `TOKEN_ADDRESS`: MockERC20 token contract address
+/// - `TOKEN_ADDR`: MockERC20 token contract address
 /// - `RECIPIENT`: Address to receive minted tokens
 /// - `AMOUNT`: Amount to mint in base units (wei for 18 decimals)
 ///
 /// # Returns
 /// Outputs success message with minted amount and recipient on success.
 async function main() {
-  const tokenAddress = process.env.TOKEN_ADDRESS;
+  const tokenAddress = process.env.TOKEN_ADDR;
   const recipient = process.env.RECIPIENT;
   const amount = process.env.AMOUNT;
 
   if (!tokenAddress || !recipient || !amount) {
-    const error = new Error("Missing required environment variables: TOKEN_ADDRESS, RECIPIENT, AMOUNT");
+    const error = new Error("Missing required environment variables: TOKEN_ADDR, RECIPIENT, AMOUNT");
     console.error("Error:", error.message);
     if (require.main === module) {
       process.exit(1);

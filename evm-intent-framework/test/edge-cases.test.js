@@ -20,7 +20,11 @@ describe("IntentEscrow - Edge Cases", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Maximum uint256 Values
+  // ============================================================================
+  // EDGE CASE TESTS
+  // ============================================================================
+
+  /// 1. Test: Maximum Values
   /// Verifies that createEscrow handles maximum uint256 values for both amounts and intent IDs.
   /// Why: Edge case testing ensures the contract handles boundary values without overflow or underflow.
   it("Should handle maximum uint256 values for amounts and intent IDs", async function () {
@@ -40,7 +44,7 @@ describe("IntentEscrow - Edge Cases", function () {
     expect(escrowData.requester).to.equal(requester.address);
   });
 
-  /// Test: Empty Deposit Scenarios
+  /// 2. Test: Empty Deposit Scenarios
   /// Verifies edge cases around minimum deposit amounts (1 wei).
   /// Why: Ensures the contract accepts the minimum valid amount (1 wei) without rejecting it as zero.
   it("Should handle minimum deposit amount (1 wei)", async function () {
@@ -57,7 +61,7 @@ describe("IntentEscrow - Edge Cases", function () {
     expect(escrowData.amount).to.equal(minAmount);
   });
 
-  /// Test: Multiple Escrows Per Requester
+  /// 3. Test: Multiple Escrows Per Requester
   /// Verifies that a requester can create multiple escrows with different intent IDs.
   /// Why: Requesters may need multiple concurrent escrows for different intents. State isolation must be maintained.
   it("Should allow requester to create multiple escrows", async function () {
@@ -80,7 +84,7 @@ describe("IntentEscrow - Edge Cases", function () {
     }
   });
 
-  /// Test: Gas Limit Scenarios
+  /// 4. Test: Gas Limit Scenarios
   /// Verifies gas consumption for large operations (multiple escrows, large amounts).
   /// Why: Gas efficiency is critical for user experience. Operations must stay within reasonable gas limits.
   it("Should handle gas consumption for large operations", async function () {
@@ -108,7 +112,7 @@ describe("IntentEscrow - Edge Cases", function () {
     });
   });
 
-  /// Test: Concurrent Operations
+  /// 5. Test: Concurrent Operations
   /// Verifies that multiple simultaneous escrow operations can be handled correctly.
   /// Why: Real-world usage involves concurrent operations. The contract must handle them without state corruption.
   it("Should handle concurrent escrow operations", async function () {

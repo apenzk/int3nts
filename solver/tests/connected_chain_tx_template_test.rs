@@ -9,8 +9,8 @@ mod test_helpers;
 #[cfg(test)]
 mod tests {
     use super::test_helpers::{
-        DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM, DUMMY_REQUESTER_ADDR_MVM_CON,
-        DUMMY_TOKEN_ADDR_MVM_HUB, DUMMY_TOKEN_ADDR_MVM_CON,
+        DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM, DUMMY_REQUESTER_ADDR_MVMCON,
+        DUMMY_TOKEN_ADDR_HUB, DUMMY_TOKEN_ADDR_MVMCON,
     };
     use ethereum_types::U256;
 
@@ -99,7 +99,7 @@ mod tests {
     fn test_normalize_address_mvm_format() {
         // What is tested: Full 64-character Move VM address format is normalized correctly
         // Why: Move VM addresses are 64 hex chars; we must handle full-length addresses
-        let addr = DUMMY_TOKEN_ADDR_MVM_HUB;
+        let addr = DUMMY_TOKEN_ADDR_HUB;
         let result = normalize_address(addr).unwrap();
         assert_eq!(result, addr.to_lowercase());
     }
@@ -173,8 +173,8 @@ mod tests {
         // Why: Solvers need a ready-to-use command; format must match Aptos CLI expectations
         // Use constants for addresses (64 hex chars = 32 bytes for Move)
         let result = generate_mvm_command(
-            DUMMY_TOKEN_ADDR_MVM_HUB,
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_TOKEN_ADDR_HUB,
+            DUMMY_TOKEN_ADDR_MVMCON,
             25000000u64, // Test-specific amount
             DUMMY_INTENT_ID,
         ).unwrap();
@@ -183,8 +183,8 @@ mod tests {
         assert!(result.contains("utils::transfer_with_intent_id"));
 
         // Should contain all addresses in correct format
-        assert!(result.contains(&format!("address:{}", DUMMY_TOKEN_ADDR_MVM_HUB)));
-        assert!(result.contains(&format!("address:{}", DUMMY_TOKEN_ADDR_MVM_CON)));
+        assert!(result.contains(&format!("address:{}", DUMMY_TOKEN_ADDR_HUB)));
+        assert!(result.contains(&format!("address:{}", DUMMY_TOKEN_ADDR_MVMCON)));
         assert!(result.contains(&format!("address:{}", DUMMY_INTENT_ID)));
 
         // Should contain amount as u64
@@ -213,8 +213,8 @@ mod tests {
         // What is tested: Zero amount is handled correctly in command generation
         // Why: Edge case that should work (though not practical for transfers)
         let result = generate_mvm_command(
-            DUMMY_REQUESTER_ADDR_MVM_CON,
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_REQUESTER_ADDR_MVMCON,
+            DUMMY_TOKEN_ADDR_MVMCON,
             0u64, // Zero amount edge case
             DUMMY_INTENT_ID,
         ).unwrap();
@@ -228,8 +228,8 @@ mod tests {
         // What is tested: Maximum u64 value is handled correctly
         // Why: Ensures large token amounts don't cause overflow or formatting issues
         let result = generate_mvm_command(
-            DUMMY_REQUESTER_ADDR_MVM_CON,
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_REQUESTER_ADDR_MVMCON,
+            DUMMY_TOKEN_ADDR_MVMCON,
             u64::MAX, // Maximum u64 value to test overflow handling
             DUMMY_INTENT_ID,
         ).unwrap();
@@ -244,7 +244,7 @@ mod tests {
         // Why: Invalid addresses should fail early before command generation
         let result = generate_mvm_command(
             "0xinvalid", // Invalid hex characters to test error handling
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_TOKEN_ADDR_MVMCON,
             1000u64,
             DUMMY_INTENT_ID,
         );
@@ -257,7 +257,7 @@ mod tests {
         // What is tested: Invalid metadata address is rejected with error
         // Why: Metadata is required for Move VM; invalid format should be caught
         let result = generate_mvm_command(
-            DUMMY_REQUESTER_ADDR_MVM_CON,
+            DUMMY_REQUESTER_ADDR_MVMCON,
             "0xinvalid", // Invalid hex characters to test error handling
             1000u64,
             DUMMY_INTENT_ID,
@@ -271,8 +271,8 @@ mod tests {
         // What is tested: Invalid intent_id address is rejected with error
         // Why: Intent ID must be valid hex address for verifier tracking
         let result = generate_mvm_command(
-            DUMMY_REQUESTER_ADDR_MVM_CON,
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_REQUESTER_ADDR_MVMCON,
+            DUMMY_TOKEN_ADDR_MVMCON,
             1000u64,
             "0xinvalid", // Invalid hex characters to test error handling
         );
@@ -305,8 +305,8 @@ mod tests {
         }
 
         let result = generate_mvm_command_with_string_amount(
-            DUMMY_REQUESTER_ADDR_MVM_CON,
-            DUMMY_TOKEN_ADDR_MVM_CON,
+            DUMMY_REQUESTER_ADDR_MVMCON,
+            DUMMY_TOKEN_ADDR_MVMCON,
             "not_a_number", // Invalid amount to test error handling
             DUMMY_INTENT_ID,
         );

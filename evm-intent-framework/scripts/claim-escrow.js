@@ -8,19 +8,19 @@ const hre = require("hardhat");
 /// Claims an escrow with verifier signature
 ///
 /// # Environment Variables
-/// - `ESCROW_ADDRESS`: IntentEscrow contract address
+/// - `ESCROW_ADDR`: IntentEscrow contract address
 /// - `INTENT_ID_EVM`: Intent ID in EVM format (uint256, hex with 0x prefix)
 /// - `SIGNATURE_HEX`: Verifier ECDSA signature (hex string without 0x prefix)
 ///
 /// # Returns
 /// Outputs transaction hash and success message on success.
 async function main() {
-  const escrowAddress = process.env.ESCROW_ADDRESS;
+  const escrowAddress = process.env.ESCROW_ADDR;
   const intentIdHex = process.env.INTENT_ID_EVM;
   const signatureHex = process.env.SIGNATURE_HEX;
 
   if (!escrowAddress || !intentIdHex || !signatureHex) {
-    throw new Error("Missing required environment variables: ESCROW_ADDRESS, INTENT_ID_EVM, SIGNATURE_HEX");
+    throw new Error("Missing required environment variables: ESCROW_ADDR, INTENT_ID_EVM, SIGNATURE_HEX");
   }
 
   // Get solver signer

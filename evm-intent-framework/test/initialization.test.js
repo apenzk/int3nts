@@ -20,14 +20,14 @@ describe("IntentEscrow - Initialization", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Verifier Address Initialization
+  /// 1. Test: Verifier Address Initialization
   /// Verifies that the escrow is deployed with the correct verifier address.
   /// Why: The verifier address is critical for signature validation. Incorrect initialization would break security.
   it("Should initialize escrow with verifier address", async function () {
     expect(await escrow.verifier()).to.equal(verifier.address);
   });
 
-  /// Test: Escrow Creation
+  /// 2. Test: Escrow Creation
   /// Verifies that requesters can create a new escrow with funds atomically and expiry is set correctly.
   /// Why: Escrow creation must be atomic and set expiry correctly to enable time-based cancellation.
   it("Should allow requester to create an escrow", async function () {
@@ -53,7 +53,7 @@ describe("IntentEscrow - Initialization", function () {
     expect(escrowData.expiry).to.equal(expectedExpiry);
   });
 
-  /// Test: Duplicate Creation Prevention
+  /// 3. Test: Duplicate Creation Prevention
   /// Verifies that attempting to create an escrow with an existing intent ID reverts.
   /// Why: Each intent ID must map to a single escrow to maintain state consistency.
   it("Should revert if escrow already exists", async function () {
@@ -65,6 +65,17 @@ describe("IntentEscrow - Initialization", function () {
     await expect(
       escrow.connect(requester).createEscrow(intentId, token.target, amount, solver.address)
     ).to.be.revertedWith("Escrow already exists");
+  });
+
+  /// 4. Test: Zero Amount Prevention
+  /// Verifies that escrows cannot be created with zero amount.
+  /// Why: Zero-amount escrows are invalid.
+  it("Should revert if amount is zero", async function () {
+    const amount = 0n;
+    
+    await expect(
+      escrow.connect(requester).createEscrow(intentId, token.target, amount, solver.address)
+    ).to.be.revertedWith("Amount must be greater than 0");
   });
 });
 

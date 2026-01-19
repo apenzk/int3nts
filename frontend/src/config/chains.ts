@@ -1,3 +1,7 @@
+// ============================================================================
+// Types
+// ============================================================================
+
 // Chain configurations for supported networks
 
 export interface ChainConfig {
@@ -5,24 +9,42 @@ export interface ChainConfig {
   chainId: number; // Network chain ID
   rpcUrl: string; // RPC endpoint URL
   name: string; // Display name
+  chainType: 'mvm' | 'evm' | 'svm'; // VM type for chain-specific logic
+  isHub?: boolean; // True when this chain is the hub
   intentContractAddress?: string; // Intent contract address (for Movement hub chain)
   escrowContractAddress?: string; // Escrow contract address (for EVM chains)
+  svmProgramId?: string; // Escrow program ID (for SVM chains)
 }
 
 // Chain configurations
+// ============================================================================
+// Config Definitions
+// ============================================================================
+
 export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
   'movement': {
     id: 'movement',
     chainId: 250,
     rpcUrl: 'https://testnet.movementnetwork.xyz/v1',
     name: 'Movement Bardock Testnet',
-    intentContractAddress: '0x8f8826082111c27daaa92724c855fb68a1d98ad979386f4ef421b1ccfed8ad47',
+    chainType: 'mvm',
+    isHub: true,
+    intentContractAddress: '0xff9ee5d1a0fa9d4bdd4471f08cb794424c6ec6ca136fea727059951dc65631e5',
+  },
+  'svm-devnet': {
+    id: 'svm-devnet',
+    chainId: 901,
+    rpcUrl: process.env.NEXT_PUBLIC_SVM_RPC_URL || 'https://api.devnet.solana.com',
+    name: 'Solana Devnet',
+    chainType: 'svm',
+    svmProgramId: process.env.NEXT_PUBLIC_SVM_PROGRAM_ID || '4CSPxZQ3QJszv3R6EKmDj2ndzp7pKZbatggds8Ct4B22',
   },
   'base-sepolia': {
     id: 'base-sepolia',
     chainId: 84532,
     rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
     name: 'Base Sepolia',
+    chainType: 'evm',
     escrowContractAddress: '0x90Fb7731edE86f4B2DB37afd132732979cA90015',
   },
   'ethereum-sepolia': {
@@ -30,34 +52,83 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     chainId: 11155111,
     rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
     name: 'Ethereum Sepolia',
+    chainType: 'evm',
   },
 };
 
-// Helper to get chain config by ID
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Get chain config by ID key.
+ */
 export function getChainConfig(chainId: string): ChainConfig | undefined {
   return CHAIN_CONFIGS[chainId];
 }
 
-// Helper to get RPC URL for a chain
+/**
+ * Get the VM type for a chain.
+ */
+export function getChainType(chainId: string): ChainConfig['chainType'] | undefined {
+  return CHAIN_CONFIGS[chainId]?.chainType;
+}
+
+/**
+ * Check if a chain is the hub chain.
+ */
+export function isHubChain(chainId: string): boolean {
+  return !!CHAIN_CONFIGS[chainId]?.isHub;
+}
+
+/**
+ * Get the hub chain config.
+ */
+export function getHubChainConfig(): ChainConfig {
+  const entry = Object.values(CHAIN_CONFIGS).find((config) => config.isHub);
+  if (!entry) {
+    throw new Error('Hub chain not configured');
+  }
+  return entry;
+}
+
+/**
+ * Get the configured RPC URL for a chain.
+ */
 export function getRpcUrl(chainId: string): string {
   return CHAIN_CONFIGS[chainId]?.rpcUrl || '';
 }
 
-// Helper to get intent contract address for Movement hub chain
+/**
+ * Get the Movement intent module address.
+ */
 export function getIntentContractAddress(): string {
-  const movementConfig = CHAIN_CONFIGS['movement'];
-  if (!movementConfig?.intentContractAddress) {
-    throw new Error('Intent contract address not configured for Movement chain');
+  const hubConfig = getHubChainConfig();
+  if (!hubConfig.intentContractAddress) {
+    throw new Error('Intent contract address not configured for hub chain');
   }
-  return movementConfig.intentContractAddress;
+  return hubConfig.intentContractAddress;
 }
 
-// Helper to get escrow contract address for an EVM chain
+/**
+ * Get the EVM escrow contract address for a chain.
+ */
 export function getEscrowContractAddress(chainId: string): string {
   const chainConfig = CHAIN_CONFIGS[chainId];
   if (!chainConfig?.escrowContractAddress) {
     throw new Error(`Escrow contract address not configured for chain: ${chainId}`);
   }
   return chainConfig.escrowContractAddress;
+}
+
+/**
+ * Get the SVM escrow program ID for a Solana chain.
+ */
+export function getSvmProgramId(chainId: string): string {
+  const chainConfig = CHAIN_CONFIGS[chainId];
+  if (!chainConfig?.svmProgramId) {
+    throw new Error(`SVM program ID not configured for chain: ${chainId}`);
+  }
+  return chainConfig.svmProgramId;
 }
 

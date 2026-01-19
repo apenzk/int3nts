@@ -2,7 +2,7 @@
 
 Browser UI for the cross-chain intent protocol.
 
-📚 **Full documentation: [docs/frontend/](../docs/frontend/README.md)**
+ **Full documentation: [docs/frontend/](../docs/frontend/README.md)**
 
 ## Quick Start
 
@@ -24,6 +24,7 @@ npm start
 
 - Connect Nightly wallet (MVM chains)
 - Connect MetaMask (EVM chains)
+- Connect Phantom (SVM chains)
 - Create inflow/outflow intents
 - Track intent lifecycle
 - Submit transactions to hub and connected chains
@@ -34,8 +35,10 @@ Create a `.env.local` file:
 
 ```
 NEXT_PUBLIC_VERIFIER_URL=http://localhost:3333
-NEXT_PUBLIC_MVM_HUB_RPC=https://testnet.movementnetwork.xyz
+NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz
 NEXT_PUBLIC_EVM_RPC=https://...
+NEXT_PUBLIC_SVM_RPC_URL=https://api.devnet.solana.com
+NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
 ```
 
 Note: Chain-specific addresses (intent module address, escrow contract addresses) are configured in `src/config/chains.ts`.
@@ -47,3 +50,4 @@ Note: Chain-specific addresses (intent module address, escrow contract addresses
 - Tailwind CSS
 - Nightly wallet adapter
 - wagmi + viem (EVM)
+- Phantom wallet adapter (Solana)

@@ -9,12 +9,12 @@ setup_project_root
 setup_logging "stop-chain"
 cd "$PROJECT_ROOT"
 
-log "🛑 EVM CHAIN CLEANUP"
+log " EVM CHAIN CLEANUP"
 log "===================="
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 
 log ""
-log "🧹 Stopping Hardhat node..."
+log " Stopping Hardhat node..."
 
 # Kill by PID if exists
 if [ -f "$PROJECT_ROOT/.tmp/hardhat-node.pid" ]; then
@@ -47,7 +47,7 @@ sleep 1
 
 # Verify port 8545 is free
 if lsof -i :8545 >/dev/null 2>&1; then
-    log "   ⚠️  Warning: Port 8545 is still in use"
+    log "   ️  Warning: Port 8545 is still in use"
     log "   - Attempting to kill process on port 8545..."
     lsof -ti :8545 | xargs kill -9 2>/dev/null || true
     sleep 1

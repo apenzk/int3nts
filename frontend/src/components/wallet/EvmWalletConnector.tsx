@@ -3,7 +3,10 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { useEffect, useState } from 'react';
 
-export function WalletConnector() {
+/**
+ * Connect/disconnect EVM wallet (MetaMask).
+ */
+export function EvmWalletConnector() {
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -58,4 +61,3 @@ export function WalletConnector() {
     </button>
   );
 }
-

@@ -1,7 +1,8 @@
 'use client';
 
-import { WalletConnector } from "@/components/wallet/WalletConnector";
+import { EvmWalletConnector } from "@/components/wallet/EvmWalletConnector";
 import { MvmWalletConnector } from "@/components/wallet/MvmWalletConnector";
+import { SvmWalletConnector } from "@/components/wallet/SvmWalletConnector";
 import { WalletTransactionTest } from "@/components/debug/WalletTransactionTest";
 import { IntentBuilder } from "@/components/intent/IntentBuilder";
 import { Tabs } from "@/components/Tabs";
@@ -18,7 +19,8 @@ export default function Home() {
           {/* Wallet connectors in top right */}
           <div className="flex gap-2">
             <MvmWalletConnector />
-            <WalletConnector />
+            <EvmWalletConnector />
+            <SvmWalletConnector />
           </div>
         </div>
         

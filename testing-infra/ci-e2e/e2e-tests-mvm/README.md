@@ -1,6 +1,6 @@
 # Move VM E2E Tests
 
-Tests Move VM-only cross-chain intent framework: intents on Chain 1 (hub) and escrows on Chain 2 (connected).
+Tests Move VM-only cross-chain intent framework: intents on Hub and escrows on Chain 2 (connected).
 
 ## Quick Start
 
@@ -17,9 +17,9 @@ Tests Move VM-only cross-chain intent framework: intents on Chain 1 (hub) and es
 ## What's Tested
 
 1. **Verifier-Based Negotiation**: Draft submission, solver polling, and signature retrieval
-2. **Intent Creation**: Creates intent on Chain 1 with solver signature from verifier
+2. **Intent Creation**: Creates intent on Hub with solver signature from verifier
 3. **Escrow Creation**: Creates escrow on Chain 2 with locked tokens
-4. **Intent Fulfillment**: Solver fulfills intent on Chain 1
+4. **Intent Fulfillment**: Solver fulfills intent on Hub
 5. **Verifier Approval**: Verifier monitors and generates Ed25519 approval signature
 6. **Escrow Release**: Escrow released on Chain 2 with verifier signature
 

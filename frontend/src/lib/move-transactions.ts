@@ -1,11 +1,23 @@
+// ============================================================================
+// Move Transaction Utilities
+// ============================================================================
+
 /**
  * Move transaction building utilities for intent creation
  */
 
 import { getIntentContractAddress } from '@/config/chains';
 
+// ============================================================================
+// Constants
+// ============================================================================
+
 // Intent contract address on Movement testnet (re-exported from chains config for backward compatibility)
-export const INTENT_MODULE_ADDRESS = getIntentContractAddress();
+export const INTENT_MODULE_ADDR = getIntentContractAddress();
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 /**
  * Convert a hex string to Uint8Array.

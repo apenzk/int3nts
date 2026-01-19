@@ -4,7 +4,9 @@
 //! Configuration includes verifier connection, chain settings, and acceptance criteria.
 
 use serde::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use crate::acceptance::TokenPair;
 
@@ -17,7 +19,7 @@ use crate::acceptance::TokenPair;
 /// This structure holds configuration for:
 /// - Verifier service connection
 /// - Hub chain connection details
-/// - Connected chain configuration (MVM or EVM)
+/// - Connected chain configurations (one or more, each with a type field)
 /// - Acceptance criteria (token pairs and exchange rates)
 /// - Solver profile and signing settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -26,12 +28,89 @@ pub struct SolverConfig {
     pub service: ServiceConfig,
     /// Hub chain configuration (where intents are created)
     pub hub_chain: ChainConfig,
-    /// Connected chain configuration (where escrows occur)
-    pub connected_chain: ConnectedChainConfig,
+    /// Connected chain configurations (use [[connected_chain]] in TOML for multiple)
+    #[serde(default)]
+    pub connected_chain: Vec<ConnectedChainConfig>,
     /// Acceptance criteria (token pairs and exchange rates)
     pub acceptance: AcceptanceConfig,
     /// Solver signing configuration
     pub solver: SolverSigningConfig,
+}
+
+impl SolverConfig {
+    /// Get connected MVM chain config if configured
+    pub fn get_mvm_config(&self) -> Option<&MvmChainConfig> {
+        self.connected_chain.iter().find_map(|c| {
+            if let ConnectedChainConfig::Mvm(cfg) = c {
+                Some(cfg)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get connected EVM chain config if configured
+    pub fn get_evm_config(&self) -> Option<&EvmChainConfig> {
+        self.connected_chain.iter().find_map(|c| {
+            if let ConnectedChainConfig::Evm(cfg) = c {
+                Some(cfg)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get connected SVM chain config if configured
+    pub fn get_svm_config(&self) -> Option<&SvmChainConfig> {
+        self.connected_chain.iter().find_map(|c| {
+            if let ConnectedChainConfig::Svm(cfg) = c {
+                Some(cfg)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Get connected chain config by chain ID
+    pub fn get_connected_chain_by_id(&self, chain_id: u64) -> Option<&ConnectedChainConfig> {
+        self.connected_chain.iter().find(|c| c.chain_id() == chain_id)
+    }
+}
+
+/// Configuration for a connected chain (can be MVM, EVM, or SVM).
+/// Use the `type` field to specify which type.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ConnectedChainConfig {
+    /// Move VM chain configuration
+    #[serde(rename = "mvm")]
+    Mvm(MvmChainConfig),
+    /// EVM chain configuration
+    #[serde(rename = "evm")]
+    Evm(EvmChainConfig),
+    /// SVM chain configuration
+    #[serde(rename = "svm")]
+    Svm(SvmChainConfig),
+}
+
+impl ConnectedChainConfig {
+    /// Get the chain ID for this connected chain
+    pub fn chain_id(&self) -> u64 {
+        match self {
+            ConnectedChainConfig::Mvm(cfg) => cfg.chain_id,
+            ConnectedChainConfig::Evm(cfg) => cfg.chain_id,
+            ConnectedChainConfig::Svm(cfg) => cfg.chain_id,
+        }
+    }
+
+    /// Get the chain type as a string
+    pub fn chain_type(&self) -> &'static str {
+        match self {
+            ConnectedChainConfig::Mvm(_) => "mvm",
+            ConnectedChainConfig::Evm(_) => "evm",
+            ConnectedChainConfig::Svm(_) => "svm",
+        }
+    }
 }
 
 /// Service-level configuration for the solver.
@@ -44,6 +123,12 @@ pub struct ServiceConfig {
     /// E2E testing mode: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
     #[serde(default)]
     pub e2e_mode: bool,
+    /// Solver acceptance API host (used by verifier to fetch ratios)
+    #[serde(default = "default_acceptance_api_host")]
+    pub acceptance_api_host: String,
+    /// Solver acceptance API port
+    #[serde(default = "default_acceptance_api_port")]
+    pub acceptance_api_port: u16,
 }
 
 /// Configuration for a blockchain connection.
@@ -64,16 +149,22 @@ pub struct ChainConfig {
     pub e2e_mode: bool,
 }
 
-/// Configuration for the connected chain (can be MVM or EVM).
+/// Configuration for a connected Move VM chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum ConnectedChainConfig {
-    /// Move VM chain configuration
-    #[serde(rename = "mvm")]
-    Mvm(ChainConfig),
-    /// EVM chain configuration
-    #[serde(rename = "evm")]
-    Evm(EvmChainConfig),
+pub struct MvmChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for blockchain communication
+    pub rpc_url: String,
+    /// Unique chain identifier
+    pub chain_id: u64,
+    /// Address of the intent framework module
+    pub module_addr: String,
+    /// Aptos/Movement CLI profile name for this chain
+    pub profile: String,
+    /// E2E testing mode: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
+    #[serde(default)]
+    pub e2e_mode: bool,
 }
 
 /// Configuration for an EVM-compatible chain.
@@ -94,8 +185,31 @@ pub struct EvmChainConfig {
     pub network_name: String,
 }
 
+/// Configuration for a Solana chain (SVM).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SvmChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for Solana chain communication
+    pub rpc_url: String,
+    /// Chain ID (arbitrary unique ID used for routing)
+    pub chain_id: u64,
+    /// Program ID of the intent escrow program
+    pub escrow_program_id: String,
+    /// Environment variable name containing the solver private key (base58)
+    pub private_key_env: String,
+}
+
 fn default_network_name() -> String {
     "localhost".to_string()
+}
+
+fn default_acceptance_api_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_acceptance_api_port() -> u16 {
+    4444
 }
 
 /// Acceptance criteria configuration.
@@ -103,11 +217,24 @@ fn default_network_name() -> String {
 /// Defines which token pairs are supported and their exchange rates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcceptanceConfig {
-    /// Supported token pairs with exchange rates
-    /// Key format: "offered_chain_id:offered_token:desired_chain_id:desired_token"
-    /// Value: Exchange rate (how many offered tokens per 1 desired token)
-    #[serde(flatten)]
-    pub token_pairs: HashMap<String, f64>,
+    /// Supported token pairs with exchange rates.
+    #[serde(rename = "tokenpair", default)]
+    pub token_pairs: Vec<TokenPairConfig>,
+}
+
+/// Acceptance token pair configuration (single entry).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenPairConfig {
+    /// Source chain ID
+    pub source_chain_id: u64,
+    /// Source token address or mint
+    pub source_token: String,
+    /// Target chain ID
+    pub target_chain_id: u64,
+    /// Target token address or mint
+    pub target_token: String,
+    /// Exchange rate (how many source tokens per 1 target token)
+    pub ratio: f64,
 }
 
 /// Solver signing configuration.
@@ -126,7 +253,7 @@ impl SolverConfig {
     /// 1. Checks if config/solver.toml exists (or uses SOLVER_CONFIG_PATH env var or provided path)
     /// 2. If it exists, loads and parses the configuration
     /// 3. Validates the configuration
-    /// 4. Converts token pair strings to TokenPair structs
+    /// 4. Converts token pair configs to TokenPair structs
     /// 5. If it doesn't exist, returns an error asking user to copy template
     ///
     /// # Arguments
@@ -169,11 +296,26 @@ impl SolverConfig {
         Self::load_from_path(None)
     }
 
+    /// Resolve chain type for a chain ID based on hub/connected configs.
+    fn chain_type_for_id(&self, chain_id: u64) -> Option<&'static str> {
+        if self.hub_chain.chain_id == chain_id {
+            return Some("mvm");
+        }
+        for chain in &self.connected_chain {
+            if chain.chain_id() == chain_id {
+                return Some(chain.chain_type());
+            }
+        }
+        None
+    }
+
     /// Validates the configuration for consistency and correctness.
     ///
     /// Checks:
+    /// - At least one connected chain is configured
     /// - Hub and connected chains have different chain IDs
-    /// - Token pair strings are in correct format
+    /// - All connected chains have unique chain IDs
+    /// - Token pairs reference known chains and valid token formats
     /// - Exchange rates are positive
     ///
     /// # Returns
@@ -181,42 +323,69 @@ impl SolverConfig {
     /// * `Ok(())` - Configuration is valid
     /// * `Err(anyhow::Error)` - Validation failed with error message
     pub fn validate(&self) -> anyhow::Result<()> {
-        // Check hub vs connected chain IDs
-        let hub_chain_id = self.hub_chain.chain_id;
-        let connected_chain_id = match &self.connected_chain {
-            ConnectedChainConfig::Mvm(config) => config.chain_id,
-            ConnectedChainConfig::Evm(config) => config.chain_id,
-        };
-
-        if hub_chain_id == connected_chain_id {
+        // Check at least one connected chain is configured
+        if self.connected_chain.is_empty() {
             return Err(anyhow::anyhow!(
-                "Configuration error: Hub chain and connected chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                hub_chain_id
+                "Configuration error: At least one [[connected_chain]] must be configured"
             ));
         }
 
-        // Validate token pair strings and exchange rates
-        for (pair_str, rate) in &self.acceptance.token_pairs {
-            // Parse token pair string: "offered_chain_id:offered_token:desired_chain_id:desired_token"
-            let parts: Vec<&str> = pair_str.split(':').collect();
-            if parts.len() != 4 {
+        // Collect all chain IDs and check for duplicates with hub
+        let hub_chain_id = self.hub_chain.chain_id;
+
+        for chain in &self.connected_chain {
+            if chain.chain_id() == hub_chain_id {
                 return Err(anyhow::anyhow!(
-                    "Invalid token pair format '{}': expected 'offered_chain_id:offered_token:desired_chain_id:desired_token'",
-                    pair_str
+                    "Configuration error: Connected {} chain has same chain ID ({}) as hub chain",
+                    chain.chain_type(),
+                    hub_chain_id
                 ));
             }
+        }
 
-            // Validate chain IDs are numeric
-            parts[0].parse::<u64>()
-                .map_err(|_| anyhow::anyhow!("Invalid offered_chain_id in token pair '{}': must be a number", pair_str))?;
-            parts[2].parse::<u64>()
-                .map_err(|_| anyhow::anyhow!("Invalid desired_chain_id in token pair '{}': must be a number", pair_str))?;
+        // Check for duplicate chain IDs among connected chains
+        for i in 0..self.connected_chain.len() {
+            for j in (i + 1)..self.connected_chain.len() {
+                if self.connected_chain[i].chain_id() == self.connected_chain[j].chain_id() {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected chains {} and {} have the same chain ID {}",
+                        self.connected_chain[i].chain_type(),
+                        self.connected_chain[j].chain_type(),
+                        self.connected_chain[i].chain_id()
+                    ));
+                }
+            }
+        }
+
+        // Validate token pairs and exchange rates
+        for pair in &self.acceptance.token_pairs {
+            // Validate chain IDs exist
+            let source_chain_type = self.chain_type_for_id(pair.source_chain_id)
+                .ok_or_else(|| anyhow::anyhow!(
+                    "Unknown source_chain_id {} in token pair",
+                    pair.source_chain_id
+                ))?;
+            let target_chain_type = self.chain_type_for_id(pair.target_chain_id)
+                .ok_or_else(|| anyhow::anyhow!(
+                    "Unknown target_chain_id {} in token pair",
+                    pair.target_chain_id
+                ))?;
+
+            // Validate token formats by chain type
+            validate_token_format(pair.source_token.as_str(), source_chain_type)
+                .map_err(|e| anyhow::anyhow!("Invalid source_token for chain {}: {}", source_chain_type, e))?;
+            validate_token_format(pair.target_token.as_str(), target_chain_type)
+                .map_err(|e| anyhow::anyhow!("Invalid target_token for chain {}: {}", target_chain_type, e))?;
 
             // Validate exchange rate is positive
-            if *rate <= 0.0 {
+            if pair.ratio <= 0.0 {
                 return Err(anyhow::anyhow!(
-                    "Invalid exchange rate {} for token pair '{}': must be positive",
-                    rate, pair_str
+                    "Invalid exchange rate {} for token pair {}:{} -> {}:{}: must be positive",
+                    pair.ratio,
+                    pair.source_chain_id,
+                    pair.source_token,
+                    pair.target_chain_id,
+                    pair.target_token
                 ));
             }
         }
@@ -224,7 +393,7 @@ impl SolverConfig {
         Ok(())
     }
 
-    /// Converts token pair string keys to TokenPair structs.
+    /// Converts token pair configs to TokenPair structs.
     ///
     /// This is a helper method for the acceptance module to use.
     ///
@@ -234,27 +403,83 @@ impl SolverConfig {
     pub fn get_token_pairs(&self) -> anyhow::Result<HashMap<TokenPair, f64>> {
         let mut pairs = HashMap::new();
 
-        for (pair_str, rate) in &self.acceptance.token_pairs {
-            // Parse token pair string: "offered_chain_id:offered_token:desired_chain_id:desired_token"
-            let parts: Vec<&str> = pair_str.split(':').collect();
-            if parts.len() != 4 {
-                return Err(anyhow::anyhow!(
-                    "Invalid token pair format '{}': expected 'offered_chain_id:offered_token:desired_chain_id:desired_token'",
-                    pair_str
-                ));
-            }
-
-            let pair = TokenPair {
-                offered_chain_id: parts[0].parse()?,
-                offered_token: parts[1].to_string(),
-                desired_chain_id: parts[2].parse()?,
-                desired_token: parts[3].to_string(),
+        for pair in &self.acceptance.token_pairs {
+            let token_pair = TokenPair {
+                offered_chain_id: pair.source_chain_id,
+                offered_token: pair.source_token.clone(),
+                desired_chain_id: pair.target_chain_id,
+                desired_token: pair.target_token.clone(),
             };
 
-            pairs.insert(pair, *rate);
+            pairs.insert(token_pair, pair.ratio);
         }
 
         Ok(pairs)
     }
+}
+
+/// Validates token address format for a chain type.
+///
+/// - MVM/EVM: `0x`-prefixed hex with expected byte length.
+/// - SVM: base58-encoded mint (no `0x` prefix).
+///
+/// # Arguments
+///
+/// * `token` - Token address or mint string
+/// * `chain_type` - Chain type label ("mvm", "evm", "svm")
+///
+/// # Returns
+///
+/// - `Ok(())` - Token format is valid for the chain type
+/// - `Err(anyhow::Error)` - Token format is invalid
+fn validate_token_format(token: &str, chain_type: &str) -> anyhow::Result<()> {
+    match chain_type {
+        "svm" => {
+            // SVM tokens can be base58 (native) or 32-byte hex (when stored on Move hub chain)
+            if token.starts_with("0x") {
+                // Hex format - must be 32 bytes (same as Move)
+                validate_hex_token(token, 32)?;
+            } else {
+                // Base58 format - validate as Solana pubkey
+                Pubkey::from_str(token)
+                    .map_err(|_| anyhow::anyhow!("Invalid base58 SVM mint"))?;
+            }
+        }
+        "evm" => {
+            // EVM tokens can be 20 bytes (native) or 32 bytes (padded for Move compatibility)
+            let stripped = token.strip_prefix("0x").ok_or_else(|| {
+                anyhow::anyhow!("EVM token must be 0x-prefixed hex string")
+            })?;
+            let bytes = hex::decode(stripped).map_err(|_| anyhow::anyhow!("Invalid hex EVM token"))?;
+            if bytes.len() != 20 && bytes.len() != 32 {
+                anyhow::bail!("Invalid EVM token length: expected 20 or 32 bytes, got {}", bytes.len());
+            }
+        }
+        "mvm" => validate_hex_token(token, 32)?,
+        _ => anyhow::bail!("Unknown chain type {}", chain_type),
+    }
+    Ok(())
+}
+
+/// Validates a `0x`-prefixed hex token with expected byte length.
+///
+/// # Arguments
+///
+/// * `token` - `0x`-prefixed hex string
+/// * `expected_len` - Expected byte length for the chain type
+///
+/// # Returns
+///
+/// - `Ok(())` - Token format matches expected length
+/// - `Err(anyhow::Error)` - Token format is invalid
+fn validate_hex_token(token: &str, expected_len: usize) -> anyhow::Result<()> {
+    let stripped = token.strip_prefix("0x").ok_or_else(|| {
+        anyhow::anyhow!("Token must be 0x-prefixed hex string")
+    })?;
+    let bytes = hex::decode(stripped).map_err(|_| anyhow::anyhow!("Invalid hex token"))?;
+    if bytes.len() != expected_len {
+        anyhow::bail!("Invalid token length: expected {} bytes", expected_len);
+    }
+    Ok(())
 }
 

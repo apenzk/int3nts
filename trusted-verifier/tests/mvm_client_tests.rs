@@ -12,7 +12,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 mod test_helpers;
 use test_helpers::{
     DUMMY_PUBLIC_KEY, DUMMY_REGISTERED_AT, DUMMY_SOLVER_ADDR_EVM,
-    DUMMY_SOLVER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_CON, DUMMY_SOLVER_REGISTRY_ADDR,
+    DUMMY_SOLVER_ADDR_HUB, DUMMY_SOLVER_ADDR_MVMCON, DUMMY_SOLVER_REGISTRY_ADDR,
 };
 
 // ============================================================================
@@ -94,9 +94,9 @@ async fn setup_mock_server_with_registry(
 #[tokio::test]
 async fn test_get_solver_connected_chain_mvm_addr_success() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_connected_chain_mvm_addr =
-        DUMMY_SOLVER_ADDR_MVM_CON;
+        DUMMY_SOLVER_ADDR_MVMCON;
 
     let (_mock_server, client) = setup_mock_server_with_registry(
         solver_registry_addr,
@@ -123,7 +123,7 @@ async fn test_get_solver_connected_chain_mvm_addr_success() {
 #[tokio::test]
 async fn test_get_solver_connected_chain_mvm_addr_none() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let (_mock_server, client) = setup_mock_server_with_registry(
         solver_registry_addr,
@@ -149,13 +149,13 @@ async fn test_get_solver_connected_chain_mvm_addr_none() {
 #[tokio::test]
 async fn test_get_solver_connected_chain_mvm_addr_solver_not_found() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let registered_solver = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let registered_solver = DUMMY_SOLVER_ADDR_HUB;
     let unregistered_solver = "0xunregistered_solver_addr"; // Unregistered solver address for testing
 
     let (_mock_server, client) = setup_mock_server_with_registry(
         solver_registry_addr,
         registered_solver, // Only this solver is registered
-        Some(DUMMY_SOLVER_ADDR_MVM_CON),
+        Some(DUMMY_SOLVER_ADDR_MVMCON),
     )
     .await;
 
@@ -180,7 +180,7 @@ async fn test_get_solver_connected_chain_mvm_addr_solver_not_found() {
 async fn test_get_solver_connected_chain_mvm_addr_registry_not_found() {
     let mock_server = MockServer::start().await;
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     // Mock empty resources (no SolverRegistry)
     Mock::given(method("GET"))
@@ -208,10 +208,10 @@ async fn test_get_solver_connected_chain_mvm_addr_registry_not_found() {
 #[tokio::test]
 async fn test_get_solver_connected_chain_mvm_addr_address_normalization() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr_with_prefix = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_addr_without_prefix = &DUMMY_SOLVER_ADDR_MVM_HUB[2..]; // Remove 0x prefix
+    let solver_addr_with_prefix = DUMMY_SOLVER_ADDR_HUB;
+    let solver_addr_without_prefix = &DUMMY_SOLVER_ADDR_HUB[2..]; // Remove 0x prefix
     let solver_connected_chain_mvm_addr =
-        DUMMY_SOLVER_ADDR_MVM_CON;
+        DUMMY_SOLVER_ADDR_MVMCON;
 
     let (_mock_server, client) = setup_mock_server_with_registry(
         solver_registry_addr,
@@ -331,7 +331,7 @@ fn create_solver_registry_resource_with_evm_address_array(
 async fn test_get_solver_evm_address_array_format() {
     let mock_server = MockServer::start().await;
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_connected_chain_evm_addr = DUMMY_SOLVER_ADDR_EVM; // Solver's EVM address on connected chain
 
     let resources_response = create_solver_registry_resource_with_evm_address_array(
@@ -368,7 +368,7 @@ async fn test_get_solver_evm_address_array_format() {
 async fn test_get_solver_evm_address_hex_string_format() {
     let mock_server = MockServer::start().await;
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_connected_chain_evm_addr = DUMMY_SOLVER_ADDR_EVM; // Solver's EVM address on connected chain
 
     let resources_response = create_solver_registry_resource_with_evm_address_hex_string(
@@ -453,9 +453,9 @@ async fn test_get_solver_mvm_address_leading_zero_mismatch() {
     let solver_registry_addr_full = "0x0123456789012345678901234567890123456789012345678901234567890123";
     // Same address but Move strips the leading zero in type names
     let solver_registry_addr_stripped = "0x123456789012345678901234567890123456789012345678901234567890123";
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_connected_chain_mvm_addr =
-        DUMMY_SOLVER_ADDR_MVM_CON;
+        DUMMY_SOLVER_ADDR_MVMCON;
 
     // Mock response has the type with stripped leading zero (like Move does)
     let resources_response = create_solver_registry_resource_with_stripped_zeros(
@@ -503,7 +503,7 @@ async fn test_get_solver_evm_address_leading_zero_mismatch() {
     let solver_registry_addr_full = "0x0123456789012345678901234567890123456789012345678901234567890123";
     // Move strips the leading zero in type names
     let solver_registry_addr_stripped = "0x123456789012345678901234567890123456789012345678901234567890123";
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_connected_chain_evm_addr = DUMMY_SOLVER_ADDR_EVM;
 
     // Create mock response with stripped leading zero in type name
@@ -594,7 +594,7 @@ async fn setup_mock_server_with_public_key(
 #[tokio::test]
 async fn test_get_solver_public_key_success() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let public_key = vec![1u8, 2u8, 3u8, 4u8, 5u8]; // Test public key
 
     let (_mock_server, client) = setup_mock_server_with_public_key(
@@ -619,7 +619,7 @@ async fn test_get_solver_public_key_success() {
 #[tokio::test]
 async fn test_get_solver_public_key_not_registered() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let (_mock_server, client) = setup_mock_server_with_public_key(
         solver_registry_addr,
@@ -643,7 +643,7 @@ async fn test_get_solver_public_key_not_registered() {
 #[tokio::test]
 async fn test_get_solver_public_key_empty_hex_string() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     // Empty hex string response (Aptos API format for empty vector<u8>)
     let mock_server = MockServer::start().await;
@@ -672,7 +672,7 @@ async fn test_get_solver_public_key_empty_hex_string() {
 #[tokio::test]
 async fn test_get_solver_public_key_errors_on_unexpected_format() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let mock_server = MockServer::start().await;
     // Return an object instead of array - this is unexpected
@@ -705,7 +705,7 @@ async fn test_get_solver_public_key_errors_on_unexpected_format() {
 #[tokio::test]
 async fn test_get_solver_public_key_ed25519_format() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     // 32-byte Ed25519 public key
     let public_key: Vec<u8> = (0..32).collect();
 
@@ -732,7 +732,7 @@ async fn test_get_solver_public_key_ed25519_format() {
 #[tokio::test]
 async fn test_get_solver_public_key_errors_on_empty_array() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let mock_server = MockServer::start().await;
     let view_response = json!([]);
@@ -764,7 +764,7 @@ async fn test_get_solver_public_key_errors_on_empty_array() {
 #[tokio::test]
 async fn test_get_solver_public_key_errors_on_non_string_element() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let mock_server = MockServer::start().await;
     // Return number instead of hex string
@@ -797,7 +797,7 @@ async fn test_get_solver_public_key_errors_on_non_string_element() {
 #[tokio::test]
 async fn test_get_solver_public_key_errors_on_invalid_hex() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let mock_server = MockServer::start().await;
     // Return invalid hex string (contains 'Z' which is not hex)
@@ -830,7 +830,7 @@ async fn test_get_solver_public_key_errors_on_invalid_hex() {
 #[tokio::test]
 async fn test_get_solver_public_key_errors_on_http_error() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
 
     let mock_server = MockServer::start().await;
 
@@ -862,7 +862,7 @@ async fn test_get_solver_public_key_errors_on_http_error() {
 async fn test_get_solver_public_key_rejects_address_without_prefix() {
     let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
     // Address WITHOUT 0x prefix - this should be rejected
-    let solver_addr_no_prefix = &DUMMY_SOLVER_ADDR_MVM_HUB[2..]; // Remove 0x prefix
+    let solver_addr_no_prefix = &DUMMY_SOLVER_ADDR_HUB[2..]; // Remove 0x prefix
 
     let mock_server = MockServer::start().await;
     let client = MvmClient::new(&mock_server.uri()).expect("Failed to create MvmClient");

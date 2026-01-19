@@ -87,6 +87,26 @@ The script will:
 4. For inflow: create escrow on Base Sepolia
 5. Wait for solver fulfillment and show final balance changes
 
+#### Optional: Frontend UI (Testnet)
+
+Use the frontend to test wallet connections and the UI flow against the same local verifier/solver:
+
+```bash
+cd frontend
+npm install --legacy-peer-deps
+npm run dev
+```
+
+Create `frontend/.env.local` with testnet values:
+
+```
+NEXT_PUBLIC_VERIFIER_URL=http://localhost:3333
+```
+
+This single variable is sufficient to run and test the frontend flows.
+
+Note: chain-specific addresses and optional RPC/program overrides are configured in `frontend/src/config/chains.ts`.
+
 #### Quick Health Check
 
 ```bash
@@ -99,7 +119,7 @@ curl -s http://localhost:3333/health | jq
 - Verifier and solver config files populated with deployed addresses:
   - `trusted-verifier/config/verifier_testnet.toml`
   - `solver/config/solver_testnet.toml`
-- `.testnet-keys.env` with all required keys
+- `.env.testnet` in this directory with all required keys
 - Movement CLI profile configured (solver only)
 - Verifier running and healthy (for solver and create-intent scripts)
 
@@ -107,7 +127,7 @@ curl -s http://localhost:3333/health | jq
 
 All scripts read from:
 
-- `.testnet-keys.env` - Private keys and addresses (gitignored)
+- `.env.testnet` - Private keys and addresses in this directory (gitignored)
 - `trusted-verifier/config/verifier_testnet.toml` - Verifier service config (gitignored)
 - `solver/config/solver_testnet.toml` - Solver service config (gitignored)
 - `config/testnet-assets.toml` - Public asset addresses and decimals

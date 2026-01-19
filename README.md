@@ -1,9 +1,13 @@
 # int3nts
 
+> **⚠️ EXPERIMENTAL - NOT PRODUCTION READY**  
+> This framework is currently in active development and is **not ready for production use**. Use at your own risk. APIs, interfaces, and implementations may change without notice.
+
 A framework for creating cross-chain intents with the following components
 
 - [move-intent-framework](docs/move-intent-framework/README.md)
 - [evm-intent-framework](docs/evm-intent-framework/README.md)
+- [svm-intent-framework](docs/svm-intent-framework/README.md)
 - [trusted verifier](docs/trusted-verifier/README.md)
 - [frontend](docs/frontend/README.md)
 - [solver tools](docs/solver/README.md)
@@ -30,6 +34,7 @@ Run from project root:
 ```bash
 nix develop -c bash -c "cd move-intent-framework && movement move test --dev --named-addresses mvmt_intent=0x123"
 nix develop -c bash -c "cd evm-intent-framework && npm test"
+nix develop -c bash -c "cd svm-intent-framework && ./scripts/test.sh"
 RUST_LOG=off nix develop -c bash -c "cd trusted-verifier && cargo test --quiet"
 RUST_LOG=off nix develop -c bash -c "cd solver && cargo test --quiet"
 nix develop -c bash -c "cd frontend && npm test"
@@ -44,6 +49,8 @@ nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-inflow.sh
 nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-outflow.sh"
 nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-evm/run-tests-inflow.sh"
 nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-evm/run-tests-outflow.sh"
+nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-svm/run-tests-inflow.sh"
+nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-svm/run-tests-outflow.sh"
 nix develop -c bash -c "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-rust-integration.sh"
 ```
 

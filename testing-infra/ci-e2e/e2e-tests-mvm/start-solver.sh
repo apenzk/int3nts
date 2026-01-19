@@ -7,9 +7,9 @@
 #
 # Optional environment variables:
 # - CHAIN1_URL: Hub chain RPC URL (default: http://127.0.0.1:8080/v1)
-# - CHAIN2_URL: Connected chain RPC URL (default: http://127.0.0.1:8082/v1)
-# - CHAIN1_ID: Hub chain ID (default: 1)
-# - CHAIN2_ID: Connected chain ID (default: 2)
+# - MVMCON_URL: Connected chain RPC URL (default: http://127.0.0.1:8082/v1)
+# - HUB_CHAIN_ID: Hub chain ID (default: 1)
+# - MVMCON_CHAIN_ID: Connected chain ID (default: 2)
 # - VERIFIER_URL: Verifier URL (default: http://127.0.0.1:3333)
 
 set -e
@@ -25,9 +25,9 @@ setup_logging "solver-start"
 cd "$PROJECT_ROOT"
 
 log ""
-log "🚀 Starting Solver Service..."
+log " Starting Solver Service..."
 log "========================================"
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 log ""
 
 # Generate solver config for MVM E2E tests
@@ -36,23 +36,23 @@ generate_solver_config_mvm() {
     
     # Get addresses from aptos CLI profiles (same as other test scripts)
     local chain1_addr=$(get_profile_address "intent-account-chain1")
-    local chain2_addr=$(get_profile_address "intent-account-chain2")
+    local mvmcon_module_addr=$(get_profile_address "intent-account-chain2")
     local solver_chain1_addr=$(get_profile_address "solver-chain1")
     local test_tokens_chain1=$(get_profile_address "test-tokens-chain1")
-    local test_tokens_chain2=$(get_profile_address "test-tokens-chain2")
+    local test_tokens_mvm_con=$(get_profile_address "test-tokens-chain2")
     
     # Get USDhub/USDcon metadata addresses (for acceptance config)
-    local usdhub_metadata_chain1=$(get_usdxyz_metadata "0x${test_tokens_chain1}" "1")
-    local usdcon_metadata_chain2=$(get_usdxyz_metadata "0x${test_tokens_chain2}" "2")
+    local usdhub_metadata_chain1=$(get_usdxyz_metadata_addr "0x${test_tokens_chain1}" "1")
+    local usd_con_mvm_con_address=$(get_usdxyz_metadata_addr "0x${test_tokens_mvm_con}" "2")
     
     # Use environment variables or defaults for URLs
     local verifier_url="${VERIFIER_URL:-http://127.0.0.1:3333}"
     local hub_rpc="${CHAIN1_URL:-http://127.0.0.1:8080/v1}"
-    local connected_rpc="${CHAIN2_URL:-http://127.0.0.1:8082/v1}"
-    local hub_chain_id="${CHAIN1_ID:-1}"
-    local connected_chain_id="${CHAIN2_ID:-2}"
+    local connected_rpc="${MVMCON_URL:-http://127.0.0.1:8082/v1}"
+    local hub_chain_id="${HUB_CHAIN_ID:-1}"
+    local connected_chain_id="${MVMCON_CHAIN_ID:-2}"
     local hub_module_addr="0x${chain1_addr}"
-    local connected_module_addr="0x${chain2_addr}"
+    local connected_module_addr="0x${mvmcon_module_addr}"
     local solver_addr="0x${solver_chain1_addr}"
     
     log "   Generating solver config:"
@@ -63,7 +63,7 @@ generate_solver_config_mvm() {
     log "   - Connected module address: $connected_module_addr"
     log "   - Solver address: $solver_addr"
     log "   - USDhub metadata chain 1: $usdhub_metadata_chain1"
-    log "   - USDcon metadata chain 2: $usdcon_metadata_chain2"
+    log "   - USDcon metadata chain 2: $usd_con_mvm_con_address"
     
     cat > "$config_file" << EOF
 # Auto-generated solver config for MVM E2E tests
@@ -82,7 +82,7 @@ module_addr = "$hub_module_addr"
 profile = "solver-chain1"
 e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
-[connected_chain]
+[[connected_chain]]
 type = "mvm"
 name = "Connected Chain (E2E Test)"
 rpc_url = "$connected_rpc"
@@ -94,9 +94,20 @@ e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 [acceptance]
 # Accept USDhub/USDcon swaps at 1:1 rate for E2E testing
 # Inflow: offered on connected chain (2), desired on hub chain (1)
-"$connected_chain_id:$usdcon_metadata_chain2:$hub_chain_id:$usdhub_metadata_chain1" = 1.0
+[[acceptance.tokenpair]]
+source_chain_id = $connected_chain_id
+source_token = "$usd_con_mvm_con_address"
+target_chain_id = $hub_chain_id
+target_token = "$usdhub_metadata_chain1"
+ratio = 1.0
+
 # Outflow: offered on hub chain (1), desired on connected chain (2)
-"$hub_chain_id:$usdhub_metadata_chain1:$connected_chain_id:$usdcon_metadata_chain2" = 1.0
+[[acceptance.tokenpair]]
+source_chain_id = $hub_chain_id
+source_token = "$usdhub_metadata_chain1"
+target_chain_id = $connected_chain_id
+target_token = "$usd_con_mvm_con_address"
+ratio = 1.0
 
 [solver]
 profile = "solver-chain1"
@@ -112,14 +123,14 @@ mkdir -p "$(dirname "$SOLVER_CONFIG")"
 generate_solver_config_mvm "$SOLVER_CONFIG"
 
 # Export solver's connected chain address for auto-registration
-SOLVER_CHAIN2_ADDRESS=$(get_profile_address "solver-chain2")
-if [ -z "$SOLVER_CHAIN2_ADDRESS" ]; then
+SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain2")
+if [ -z "$SOLVER_MVMCON_ADDR" ]; then
     log_and_echo "❌ ERROR: Failed to get solver Chain 2 address"
     log_and_echo "   Make sure solver-chain2 profile exists"
     exit 1
 fi
-export SOLVER_CONNECTED_MVM_ADDRESS="0x${SOLVER_CHAIN2_ADDRESS}"
-log "   Exported SOLVER_CONNECTED_MVM_ADDRESS=$SOLVER_CONNECTED_MVM_ADDRESS"
+export SOLVER_MVMCON_ADDR="0x${SOLVER_MVMCON_ADDR}"
+log "   Exported SOLVER_MVMCON_ADDR=$SOLVER_MVMCON_ADDR"
 
 # Unset testnet keys to prevent accidental use (E2E tests use profiles only)
 unset MOVEMENT_SOLVER_PRIVATE_KEY
@@ -134,26 +145,6 @@ if start_solver "$LOG_DIR/solver.log" "info" "$SOLVER_CONFIG"; then
     log_and_echo "   Logs: $LOG_DIR/solver.log"
 else
     log ""
-    log_and_echo "⚠️  Solver failed to start"
-    log_and_echo "   Checking if binary needs to be built..."
-    
-    # Try building the solver
-    log "   Building solver..."
-    pushd "$PROJECT_ROOT/solver" > /dev/null
-    if cargo build --bin solver 2>> "$LOG_FILE"; then
-        log "   ✅ Solver built successfully"
-        popd > /dev/null
-        
-        # Try starting again
-        if start_solver "$LOG_DIR/solver.log" "info" "$SOLVER_CONFIG"; then
-            log_and_echo "✅ Solver started successfully after build"
-        else
-            log_and_echo "❌ Solver still failed to start after build"
-            exit 1
-        fi
-    else
-        log_and_echo "❌ Failed to build solver"
-        popd > /dev/null
-        exit 1
-    fi
+    log_and_echo "❌ PANIC: Solver failed to start. Step 1 (build binaries) failed."
+    exit 1
 fi

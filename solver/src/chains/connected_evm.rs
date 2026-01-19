@@ -340,7 +340,7 @@ impl ConnectedEvmClient {
                 "bash",
                 "-c",
                 &format!(
-                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' TOKEN_ADDRESS='{}' RECIPIENT='{}' AMOUNT='{}' INTENT_ID='{}' npx hardhat run scripts/transfer-with-intent-id.js --network {}",
+                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' TOKEN_ADDR='{}' RECIPIENT='{}' AMOUNT='{}' INTENT_ID='{}' npx hardhat run scripts/transfer-with-intent-id.js --network {}",
                     evm_framework_dir.display(),
                     self.base_url,
                     solver_private_key,
@@ -451,7 +451,7 @@ impl ConnectedEvmClient {
                 "bash",
                 "-c",
                 &format!(
-                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' ESCROW_ADDRESS='{}' INTENT_ID_EVM='{}' SIGNATURE_HEX='{}' npx hardhat run scripts/claim-escrow.js --network {}",
+                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' ESCROW_ADDR='{}' INTENT_ID_EVM='{}' SIGNATURE_HEX='{}' npx hardhat run scripts/claim-escrow.js --network {}",
                     evm_framework_dir.display(),
                     self.base_url,
                     solver_private_key,

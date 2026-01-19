@@ -8,10 +8,10 @@
 # Required environment variables (set by run-tests-*.sh):
 # - CHAIN1_URL: Hub chain RPC URL (Move VM)
 # - EVM_RPC_URL: Connected chain RPC URL (EVM)
-# - CHAIN1_ID: Hub chain ID
+# - HUB_CHAIN_ID: Hub chain ID
 # - EVM_CHAIN_ID: Connected EVM chain ID
-# - ACCOUNT_ADDRESS: Hub chain module address
-# - ESCROW_CONTRACT_ADDRESS: EVM escrow contract address
+# - ACCOUNT_ADDR: Hub chain module address
+# - ESCROW_CONTRACT_ADDR: EVM escrow contract address
 # - EVM_PRIVATE_KEY_ENV: Environment variable name for EVM private key
 
 set -e
@@ -29,9 +29,9 @@ setup_logging "solver-start-evm"
 cd "$PROJECT_ROOT"
 
 log ""
-log "🚀 Starting Solver Service (EVM Connected Chain)..."
+log " Starting Solver Service (EVM Connected Chain)..."
 log "========================================"
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 log ""
 
 # Generate solver config for EVM E2E tests
@@ -44,23 +44,23 @@ generate_solver_config_evm() {
     local chain1_addr=$(get_profile_address "intent-account-chain1")
     
     # Get USDhub metadata on hub chain (32-byte Move address)
-    local usdhub_metadata_chain1=$(get_usdxyz_metadata "0x${test_tokens_chain1}" "1")
+    local usdhub_metadata_chain1=$(get_usdxyz_metadata_addr "0x${test_tokens_chain1}" "1")
     
     # Get EVM USDcon address from chain-info.env and pad to 32 bytes
     if [ -f "$PROJECT_ROOT/.tmp/chain-info.env" ]; then
         source "$PROJECT_ROOT/.tmp/chain-info.env"
     fi
-    local evm_token_addr="${USDCON_EVM_ADDRESS:-}"
+    local evm_token_addr="${USD_EVM_ADDR:-}"
     if [ -z "$evm_token_addr" ]; then
-        log_and_echo "❌ ERROR: USDCON_EVM_ADDRESS not found in chain-info.env"
+        log_and_echo "❌ ERROR: USD_EVM_ADDR not found in chain-info.env"
         exit 1
     fi
-    local escrow_addr="${ESCROW_CONTRACT_ADDRESS:-}"
+    local escrow_addr="${ESCROW_CONTRACT_ADDR:-}"
     if [ -z "$escrow_addr" ]; then
-        log_and_echo "❌ ERROR: ESCROW_CONTRACT_ADDRESS not found in chain-info.env"
+        log_and_echo "❌ ERROR: ESCROW_CONTRACT_ADDR not found in chain-info.env"
         exit 1
     fi
-    # Lowercase and pad to 32 bytes for Move compatibility
+    # Lowercase and pad to 32 bytes for Move compatibility (hub chain uses 32-byte addresses)
     local evm_token_no_prefix="${evm_token_addr#0x}"
     local evm_token_lower=$(echo "$evm_token_no_prefix" | tr '[:upper:]' '[:lower:]')
     local usdcon_metadata_evm="0x000000000000000000000000${evm_token_lower}"
@@ -69,8 +69,8 @@ generate_solver_config_evm() {
     local verifier_url="${VERIFIER_URL:-http://127.0.0.1:3333}"
     local hub_rpc="${CHAIN1_URL:-http://127.0.0.1:8080/v1}"
     local evm_rpc="${EVM_RPC_URL:-http://127.0.0.1:8545}"
-    local hub_chain_id="${CHAIN1_ID:-1}"
-    local evm_chain_id="${EVM_CHAIN_ID:-31337}"
+    local hub_chain_id="${HUB_CHAIN_ID:-1}"
+    local evm_chain_id="${EVM_CHAIN_ID:-3}"
     local module_addr="0x${chain1_addr}"
     local escrow_contract="${escrow_addr}"
     local solver_addr="0x${solver_chain1_addr}"
@@ -103,7 +103,7 @@ module_addr = "$module_addr"
 profile = "solver-chain1"
 e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 
-[connected_chain]
+[[connected_chain]]
 type = "evm"
 name = "EVM Connected Chain (E2E Test)"
 rpc_url = "$evm_rpc"
@@ -114,9 +114,20 @@ private_key_env = "$evm_private_key_env"
 [acceptance]
 # Accept USDhub/USDcon swaps at 1:1 rate for E2E testing
 # Inflow: offered on EVM (connected), desired on hub
-"$evm_chain_id:$usdcon_metadata_evm:$hub_chain_id:$usdhub_metadata_chain1" = 1.0
+[[acceptance.tokenpair]]
+source_chain_id = $evm_chain_id
+source_token = "$usdcon_metadata_evm"
+target_chain_id = $hub_chain_id
+target_token = "$usdhub_metadata_chain1"
+ratio = 1.0
+
 # Outflow: offered on hub, desired on EVM (connected)
-"$hub_chain_id:$usdhub_metadata_chain1:$evm_chain_id:$usdcon_metadata_evm" = 1.0
+[[acceptance.tokenpair]]
+source_chain_id = $hub_chain_id
+source_token = "$usdhub_metadata_chain1"
+target_chain_id = $evm_chain_id
+target_token = "$usdcon_metadata_evm"
+ratio = 1.0
 
 [solver]
 profile = "solver-chain1"
@@ -133,13 +144,13 @@ generate_solver_config_evm "$SOLVER_CONFIG"
 
 # Export solver's EVM address for auto-registration
 # Hardhat account #2 is used for solver
-export SOLVER_EVM_ADDRESS=$(get_hardhat_account_address "2")
-if [ -z "$SOLVER_EVM_ADDRESS" ]; then
+export SOLVER_EVM_ADDR=$(get_hardhat_account_address "2")
+if [ -z "$SOLVER_EVM_ADDR" ]; then
     log_and_echo "❌ ERROR: Failed to get solver EVM address"
     log_and_echo "   Make sure Hardhat is running and get_hardhat_account_address is available"
     exit 1
 fi
-log "   Exported SOLVER_EVM_ADDRESS=$SOLVER_EVM_ADDRESS"
+log "   Exported SOLVER_EVM_ADDR=$SOLVER_EVM_ADDR"
 
 # Unset testnet keys to prevent accidental use (E2E tests use profiles only)
 unset MOVEMENT_SOLVER_PRIVATE_KEY
@@ -154,26 +165,6 @@ if start_solver "$LOG_DIR/solver.log" "info" "$SOLVER_CONFIG"; then
     log_and_echo "   Logs: $LOG_DIR/solver.log"
 else
     log ""
-    log_and_echo "⚠️  Solver failed to start"
-    log_and_echo "   Checking if binary needs to be built..."
-    
-    # Try building the solver
-    log "   Building solver..."
-    pushd "$PROJECT_ROOT/solver" > /dev/null
-    if cargo build --bin solver 2>> "$LOG_FILE"; then
-        log "   ✅ Solver built successfully"
-        popd > /dev/null
-        
-        # Try starting again
-        if start_solver "$LOG_DIR/solver.log" "info" "$SOLVER_CONFIG"; then
-            log_and_echo "✅ Solver started successfully after build"
-        else
-            log_and_echo "❌ Solver still failed to start after build"
-            exit 1
-        fi
-    else
-        log_and_echo "❌ Failed to build solver"
-        popd > /dev/null
-        exit 1
-    fi
+    log_and_echo "❌ PANIC: Solver failed to start. Step 1 (build binaries) failed."
+    exit 1
 fi

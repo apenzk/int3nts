@@ -17,15 +17,15 @@ setup_logging "verifier-start"
 cd "$PROJECT_ROOT"
 
 log ""
-log "🚀 Starting Trusted Verifier Service..."
+log " Starting Trusted Verifier Service..."
 log "========================================"
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 log ""
 
 # ============================================================================
 # SECTION 1: CONFIGURE VERIFIER
 # ============================================================================
-log "🔧 Configuring verifier..."
+log " Configuring verifier..."
 
 # Configure hub chain section (use source to preserve env vars like E2E_VERIFIER_PRIVATE_KEY)
 source "$PROJECT_ROOT/testing-infra/ci-e2e/chain-hub/configure-verifier.sh"

@@ -12,7 +12,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 mod test_helpers;
 use test_helpers::{
     DUMMY_DRAFT_ID, DUMMY_ESCROW_ID_EVM, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM,
-    DUMMY_SOLVER_ADDR_EVM, DUMMY_TX_HASH,
+    DUMMY_SOLVER_ADDR_HUB, DUMMY_TX_HASH,
 };
 
 // ============================================================================
@@ -96,7 +96,7 @@ fn test_api_error_response_parsing() {
 #[test]
 fn test_signature_submission_serialization() {
     let submission = SignatureSubmission {
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         signature: "0x".to_string() + &"a".repeat(128), // 128 hex chars = 64 bytes signature (ECDSA format)
         public_key: "0x".to_string() + &"b".repeat(64), // 64 hex chars = 32 bytes public key (Ed25519 format)
     };
@@ -104,7 +104,7 @@ fn test_signature_submission_serialization() {
     let json = serde_json::to_string(&submission).unwrap();
     let parsed: SignatureSubmission = serde_json::from_str(&json).unwrap();
 
-    assert_eq!(parsed.solver_addr, submission.solver_addr);
+    assert_eq!(parsed.solver_hub_addr, submission.solver_hub_addr);
     assert_eq!(parsed.signature, submission.signature);
     assert_eq!(parsed.public_key, submission.public_key);
 }
@@ -299,7 +299,7 @@ fn test_submit_signature_success() {
 
     let client = VerifierClient::new(base_url);
     let submission = SignatureSubmission {
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         signature: "0x".to_string() + &"a".repeat(128), // 128 hex chars = 64 bytes signature (ECDSA format)
         public_key: "0x".to_string() + &"b".repeat(64), // 64 hex chars = 32 bytes public key (Ed25519 format)
     };
@@ -314,6 +314,7 @@ fn test_submit_signature_success() {
 
 /// What is tested: submit_signature() handles FCFS conflict (409 Conflict)
 /// Why: Ensure FCFS logic is properly detected and returns appropriate error
+/// FCFS = First-Come, First-Served; only the first solver signature is accepted.
 #[test]
 fn test_submit_signature_conflict() {
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -338,7 +339,7 @@ fn test_submit_signature_conflict() {
 
     let client = VerifierClient::new(base_url);
     let submission = SignatureSubmission {
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         signature: "0x".to_string() + &"a".repeat(128), // 128 hex chars = 64 bytes signature (ECDSA format)
         public_key: "0x".to_string() + &"b".repeat(64), // 64 hex chars = 32 bytes public key (Ed25519 format)
     };
@@ -378,7 +379,7 @@ fn test_submit_signature_other_error() {
 
     let client = VerifierClient::new(base_url);
     let submission = SignatureSubmission {
-        solver_addr: DUMMY_SOLVER_ADDR_EVM.to_string(),
+        solver_hub_addr: DUMMY_SOLVER_ADDR_HUB.to_string(),
         signature: "0x".to_string() + &"a".repeat(128), // 128 hex chars = 64 bytes signature (ECDSA format)
         public_key: "0x".to_string() + &"b".repeat(64), // 64 hex chars = 32 bytes public key (Ed25519 format)
     };

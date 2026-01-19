@@ -10,7 +10,7 @@
 #
 # Prerequisites:
 #   - trusted-verifier/config/verifier_testnet.toml configured with actual deployed addresses
-#   - .testnet-keys.env with VERIFIER_PRIVATE_KEY and VERIFIER_PUBLIC_KEY
+#   - .env.testnet with VERIFIER_PRIVATE_KEY and VERIFIER_PUBLIC_KEY
 #   - Rust toolchain installed
 #
 # Usage:
@@ -23,7 +23,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
-echo "🔍 Running Verifier Locally (Testnet Mode)"
+echo " Running Verifier Locally (Testnet Mode)"
 echo "==========================================="
 echo ""
 
@@ -43,14 +43,14 @@ if [ ! -f "$VERIFIER_CONFIG" ]; then
     exit 1
 fi
 
-# Load .testnet-keys.env for environment variables
-TESTNET_KEYS_FILE="$PROJECT_ROOT/.testnet-keys.env"
+# Load .env.testnet for environment variables
+TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
-    echo "❌ ERROR: .testnet-keys.env not found at $TESTNET_KEYS_FILE"
+    echo "❌ ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
     echo ""
-    echo "   Create it from the template:"
-    echo "   cp env.testnet.example .testnet-keys.env"
+    echo "   Create it from the template in this directory:"
+    echo "   cp env.testnet.example .env.testnet"
     echo ""
     echo "   Then populate with your testnet keys."
     exit 1
@@ -73,7 +73,7 @@ for var in "${REQUIRED_VARS[@]}"; do
 done
 
 if [ ${#MISSING_VARS[@]} -ne 0 ]; then
-    echo "❌ ERROR: Missing required environment variables in .testnet-keys.env:"
+    echo "❌ ERROR: Missing required environment variables in .env.testnet:"
     for var in "${MISSING_VARS[@]}"; do
         echo "   - $var"
     done
@@ -105,13 +105,13 @@ ESCROW_CONTRACT=$(grep -A5 "\[connected_chain_evm\]" "$VERIFIER_CONFIG" | grep "
 
 # Check for API key placeholders in RPC URLs
 if [[ "$HUB_RPC" == *"ALCHEMY_API_KEY"* ]] || [[ "$EVM_RPC" == *"ALCHEMY_API_KEY"* ]]; then
-    echo "⚠️  WARNING: RPC URLs contain API key placeholders (ALCHEMY_API_KEY)"
+    echo "️  WARNING: RPC URLs contain API key placeholders (ALCHEMY_API_KEY)"
     echo "   The verifier service does not substitute placeholders - use full URLs in config"
     echo "   Or use the public RPC URLs from testnet-assets.toml"
     echo ""
 fi
 
-echo "📋 Configuration:"
+echo " Configuration:"
 echo "   Config file: $VERIFIER_CONFIG"
 echo "   Keys file:   $TESTNET_KEYS_FILE"
 echo ""
@@ -135,15 +135,15 @@ export VERIFIER_PUBLIC_KEY
 
 # Check if --release flag is passed
 if [ "$1" = "--release" ]; then
-    echo "🔨 Building release binary..."
+    echo " Building release binary..."
     nix develop --command bash -c "cd '$PROJECT_ROOT/trusted-verifier' && cargo build --release"
     echo ""
-    echo "🚀 Starting verifier (release mode)..."
+    echo " Starting verifier (release mode)..."
     echo "   Press Ctrl+C to stop"
     echo ""
     RUST_LOG=info ./target/release/trusted-verifier --testnet
 else
-    echo "🚀 Starting verifier (debug mode)..."
+    echo " Starting verifier (debug mode)..."
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""

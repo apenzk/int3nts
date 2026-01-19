@@ -7,7 +7,7 @@
 mod test_helpers;
 use test_helpers::{
     create_default_solver_config, DUMMY_EXPIRY, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM,
-    DUMMY_TOKEN_ADDR_MVM_CON, DUMMY_TOKEN_ADDR_MVM_HUB,
+    DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
 };
 
 use serde_json::json;
@@ -22,10 +22,10 @@ use std::sync::Arc;
 fn create_default_draft_data() -> serde_json::Value {
     json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "1000",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
         "expiry_time": DUMMY_EXPIRY.to_string(),
@@ -35,18 +35,17 @@ fn create_default_draft_data() -> serde_json::Value {
 /// Create a minimal SolverConfig for testing
 /// Configures token pairs to match the default draft data so drafts would be accepted if not expired
 fn create_test_solver_config() -> solver::config::SolverConfig {
-    use solver::config::{AcceptanceConfig, SolverConfig};
-    use std::collections::HashMap;
-
-    let mut token_pairs = HashMap::new();
-    token_pairs.insert(
-        format!("1:{}:2:{}", DUMMY_TOKEN_ADDR_MVM_HUB, DUMMY_TOKEN_ADDR_MVM_CON),
-        0.5,
-    );
+    use solver::config::{AcceptanceConfig, SolverConfig, TokenPairConfig};
 
     SolverConfig {
         acceptance: AcceptanceConfig {
-            token_pairs,
+            token_pairs: vec![TokenPairConfig {
+                source_chain_id: 1,
+                source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+                target_chain_id: 2,
+                target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+                ratio: 0.5,
+            }],
         },
         ..create_default_solver_config()
     }
@@ -74,10 +73,10 @@ fn test_parse_draft_data_success() {
     let draft_data = create_default_draft_data();
     let result = parse_draft_data(&draft_data).unwrap();
 
-    assert_eq!(result.offered_token, DUMMY_TOKEN_ADDR_MVM_HUB);
+    assert_eq!(result.offered_token, DUMMY_TOKEN_ADDR_HUB);
     assert_eq!(result.offered_amount, 1000);
     assert_eq!(result.offered_chain_id, 1);
-    assert_eq!(result.desired_token, DUMMY_TOKEN_ADDR_MVM_CON);
+    assert_eq!(result.desired_token, DUMMY_TOKEN_ADDR_MVMCON);
     assert_eq!(result.desired_amount, 2000);
     assert_eq!(result.desired_chain_id, 2);
 }
@@ -90,7 +89,7 @@ fn test_parse_draft_data_missing_offered_metadata() {
         "intent_id": DUMMY_INTENT_ID,
         "offered_amount": "1000",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
     });
@@ -109,7 +108,7 @@ fn test_parse_draft_data_invalid_offered_metadata_type() {
         "offered_metadata": 12345, // Test-specific: invalid type (number instead of string) to test validation
         "offered_amount": "1000",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
     });
@@ -125,9 +124,9 @@ fn test_parse_draft_data_invalid_offered_metadata_type() {
 fn test_parse_draft_data_missing_offered_amount() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
     });
@@ -143,10 +142,10 @@ fn test_parse_draft_data_missing_offered_amount() {
 fn test_parse_draft_data_invalid_offered_amount() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "not_a_number", // Test-specific: invalid number string to test validation
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
     });
@@ -162,9 +161,9 @@ fn test_parse_draft_data_invalid_offered_amount() {
 fn test_parse_draft_data_missing_offered_chain_id() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "1000",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
         "desired_chain_id": "2",
     });
@@ -180,7 +179,7 @@ fn test_parse_draft_data_missing_offered_chain_id() {
 fn test_parse_draft_data_missing_desired_metadata() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "1000",
         "offered_chain_id": "1",
         "desired_amount": "2000",
@@ -198,10 +197,10 @@ fn test_parse_draft_data_missing_desired_metadata() {
 fn test_parse_draft_data_missing_desired_amount() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "1000",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_chain_id": "2",
     });
 
@@ -216,10 +215,10 @@ fn test_parse_draft_data_missing_desired_amount() {
 fn test_parse_draft_data_missing_desired_chain_id() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "1000",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "2000",
     });
 
@@ -244,10 +243,10 @@ fn test_parse_draft_data_empty_json() {
 fn test_parse_draft_data_zero_amounts() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": "0",
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "0",
         "desired_chain_id": "2",
     });
@@ -263,10 +262,10 @@ fn test_parse_draft_data_zero_amounts() {
 fn test_parse_draft_data_max_amounts() {
     let draft_data = json!({
         "intent_id": DUMMY_INTENT_ID,
-        "offered_metadata": DUMMY_TOKEN_ADDR_MVM_HUB,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
         "offered_amount": u64::MAX.to_string(),
         "offered_chain_id": "1",
-        "desired_metadata": DUMMY_TOKEN_ADDR_MVM_CON,
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": u64::MAX.to_string(),
         "desired_chain_id": "2",
     });

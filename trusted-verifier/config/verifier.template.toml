@@ -34,6 +34,15 @@ escrow_module_addr = "0x123"                      # Address of escrow module (re
 # chain_id = 31337
 # verifier_evm_pubkey_hash = "0x123"  # keccak256 hash of ECDSA public key (last 20 bytes)
 
+# Connected SVM Chain Configuration
+# The connected SVM chain is where Solana escrow events occur and are monitored
+# This section is optional - uncomment and configure if you have a connected SVM chain
+# [connected_chain_svm]
+# name = "Connected SVM Chain"
+# rpc_url = "http://127.0.0.1:8899"
+# chain_id = 1001
+# escrow_program_id = "<your-svm-program-id>"
+
 # Verifier Configuration
 # Cryptographic keys and timing parameters for the verifier
 # Keys are loaded from environment variables at runtime for security

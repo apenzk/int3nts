@@ -24,9 +24,10 @@ use tracing::info;
 mod api;
 mod config;
 mod crypto;
-mod evm_client;
-mod monitor;
 mod mvm_client;
+mod evm_client;
+mod svm_client;
+mod monitor;
 mod storage;
 mod validator;
 

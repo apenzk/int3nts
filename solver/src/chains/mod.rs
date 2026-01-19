@@ -6,9 +6,11 @@
 pub mod hub;
 pub mod connected_mvm;
 pub mod connected_evm;
+pub mod connected_svm;
 
 // Re-export for convenience
 pub use hub::{HubChainClient, IntentCreatedEvent};
 pub use connected_mvm::{ConnectedMvmClient, EscrowEvent};
 pub use connected_evm::{ConnectedEvmClient, EscrowInitializedEvent};
+pub use connected_svm::{ConnectedSvmClient, EscrowEvent as SvmEscrowEvent};
 

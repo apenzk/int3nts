@@ -8,7 +8,7 @@ const hre = require("hardhat");
 /// Creates an ETH escrow for an intent
 ///
 /// # Environment Variables
-/// - `ESCROW_ADDRESS`: IntentEscrow contract address
+/// - `ESCROW_ADDR`: IntentEscrow contract address
 /// - `INTENT_ID_EVM`: Intent ID in EVM format (uint256, hex with 0x prefix)
 /// - `ETH_AMOUNT_WEI`: Amount of ETH to lock in escrow (wei, decimal string)
 /// - `RESERVED_SOLVER`: Optional solver address (defaults to zero address)
@@ -16,13 +16,13 @@ const hre = require("hardhat");
 /// # Returns
 /// Outputs success message with intent ID on success.
 async function main() {
-  const escrowAddress = process.env.ESCROW_ADDRESS;
+  const escrowAddress = process.env.ESCROW_ADDR;
   const intentIdHex = process.env.INTENT_ID_EVM;
   const amountWei = process.env.ETH_AMOUNT_WEI;
   const reservedSolver = process.env.RESERVED_SOLVER || "0x0000000000000000000000000000000000000000";
 
   if (!escrowAddress || !intentIdHex || !amountWei) {
-    throw new Error("Missing required environment variables: ESCROW_ADDRESS, INTENT_ID_EVM, ETH_AMOUNT_WEI");
+    throw new Error("Missing required environment variables: ESCROW_ADDR, INTENT_ID_EVM, ETH_AMOUNT_WEI");
   }
 
   const signers = await hre.ethers.getSigners();

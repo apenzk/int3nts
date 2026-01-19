@@ -144,7 +144,7 @@ Validates a connected chain transaction for an outflow intent and returns an app
 ```json
 {
   "transaction_hash": "0x...",
-  "chain_type": "mvm" | "evm",
+  "chain_type": "mvm" | "evm" | "svm",
   "intent_id": "0x..." (optional)
 }
 ```
@@ -170,7 +170,7 @@ Validates a connected chain transaction for an outflow intent and returns an app
 
 **Usage in Outflow Fulfillment**
 
-1) Solver transfers tokens on connected chain (includes `intent_id` in transaction)
+1) Solver transfers tokens on connected chain (includes `intent_id` in transaction; memo for SVM)
 2) Solver calls `/validate-outflow-fulfillment` with transaction hash
 3) If validation passes, convert base64 signature to hex and submit hub chain entry: `fulfill_outflow_intent(intent, signature_hex)`
 
@@ -217,7 +217,7 @@ The verifier provides negotiation routing capabilities for off-chain communicati
 
 ### POST /draftintent
 
-Submit a draft intent for negotiation. Drafts are open to any solver (no `solver_addr` required).
+Submit a draft intent for negotiation. Drafts are open to any solver (no `solver_hub_addr` required).
 
 **Request**
 
@@ -323,7 +323,7 @@ Submit a signature for a draft intent. Implements FCFS logic: first signature wi
 
 ```json
 {
-  "solver_addr": "0xabc...",
+  "solver_hub_addr": "0xabc...",
   "signature": "0x" + "a".repeat(128),
   "public_key": "0x" + "b".repeat(64)
 }
@@ -364,7 +364,7 @@ Submit a signature for a draft intent. Implements FCFS logic: first signature wi
 curl -X POST http://127.0.0.1:3333/draftintent/11111111-1111-1111-1111-111111111111/signature \
   -H "Content-Type: application/json" \
   -d '{
-    "solver_addr": "0xabc...",
+    "solver_hub_addr": "0xabc...",
     "signature": "0x'$(python3 -c "print('a'*128)")'",
     "public_key": "0x'$(python3 -c "print('b'*64)")'"
   }'
@@ -381,7 +381,7 @@ Poll for the signature of a draft intent. Returns the first signature received (
   "success": true,
   "data": {
     "signature": "0x" + "a".repeat(128),
-    "solver_addr": "0xabc...",
+    "solver_hub_addr": "0xabc...",
     "timestamp": 1000000
   },
   "error": null

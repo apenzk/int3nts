@@ -3,6 +3,10 @@
 # Common utilities for testing infrastructure scripts
 # Source this file in other scripts with: source "$(dirname "$0")/util.sh" or similar
 
+# Pinned Aptos Docker image for reproducible builds
+export APTOS_DOCKER_IMAGE="aptoslabs/tools@sha256:b6d7fc304963929ad89ef74da020ed995da22dc11fd6cb68cf5f17b6bfff0ccf"
+
+
 # Get project root - can be called from any script location
 # Usage: Call this function to set PROJECT_ROOT and optionally change to it
 # Note: If SCRIPT_DIR is already set by the calling script, use that; otherwise derive from BASH_SOURCE
@@ -49,6 +53,8 @@ setup_logging() {
     LOG_DIR="$PROJECT_ROOT/.tmp/e2e-tests"
     mkdir -p "$LOG_DIR"
     LOG_FILE="$LOG_DIR/${script_name}.log"
+    # Truncate log file for a clean run
+    : > "$LOG_FILE"
     
     export LOG_DIR LOG_FILE
 }
@@ -94,8 +100,13 @@ generate_verifier_keys() {
     log_and_echo "   Generating ephemeral test keys..."
     cd "$PROJECT_ROOT/trusted-verifier"
     
-    # Build and run generate_keys, capture output
-    KEYS_OUTPUT=$(cargo run --bin generate_keys 2>/dev/null)
+    # Use pre-built binary (must be built in Step 1)
+    local generate_keys_bin="$PROJECT_ROOT/trusted-verifier/target/debug/generate_keys"
+    if [ ! -x "$generate_keys_bin" ]; then
+        log_and_echo "❌ PANIC: generate_keys not built. Step 1 (build binaries) failed."
+        exit 1
+    fi
+    KEYS_OUTPUT=$("$generate_keys_bin" 2>/dev/null)
     
     # Extract keys from output
     PRIVATE_KEY=$(echo "$KEYS_OUTPUT" | grep "Private Key (base64):" | sed 's/.*: //')
@@ -203,7 +214,7 @@ setup_solver_config() {
 
 # Save intent information to file
 # Usage: save_intent_info [intent_id] [hub_intent_addr]
-# If arguments are provided, uses them; otherwise uses INTENT_ID and HUB_INTENT_ADDRESS env vars
+# If arguments are provided, uses them; otherwise uses INTENT_ID and HUB_INTENT_ADDR env vars
 # Saves to ${PROJECT_ROOT}/.tmp/intent-info.env
 save_intent_info() {
     if [ -z "$PROJECT_ROOT" ]; then
@@ -211,7 +222,7 @@ save_intent_info() {
     fi
 
     local intent_id="${1:-$INTENT_ID}"
-    local hub_intent_addr="${2:-$HUB_INTENT_ADDRESS}"
+    local hub_intent_addr="${2:-$HUB_INTENT_ADDR}"
 
     if [ -z "$intent_id" ]; then
         log_and_echo "❌ ERROR: save_intent_info() requires INTENT_ID"
@@ -224,23 +235,23 @@ save_intent_info() {
     echo "INTENT_ID=$intent_id" > "$INTENT_INFO_FILE"
     
     if [ -n "$hub_intent_addr" ] && [ "$hub_intent_addr" != "null" ]; then
-        echo "HUB_INTENT_ADDRESS=$hub_intent_addr" >> "$INTENT_INFO_FILE"
+        echo "HUB_INTENT_ADDR=$hub_intent_addr" >> "$INTENT_INFO_FILE"
     fi
     
-    # Save SOLVER_EVM_ADDRESS if set (for EVM inflow escrow creation)
-    if [ -n "$SOLVER_EVM_ADDRESS" ] && [ "$SOLVER_EVM_ADDRESS" != "null" ]; then
-        echo "SOLVER_EVM_ADDRESS=$SOLVER_EVM_ADDRESS" >> "$INTENT_INFO_FILE"
-        log "   Saved SOLVER_EVM_ADDRESS to intent info file"
+    # Save SOLVER_EVM_ADDR if set (for EVM inflow escrow creation)
+    if [ -n "$SOLVER_EVM_ADDR" ] && [ "$SOLVER_EVM_ADDR" != "null" ]; then
+        echo "SOLVER_EVM_ADDR=$SOLVER_EVM_ADDR" >> "$INTENT_INFO_FILE"
+        log "   Saved SOLVER_EVM_ADDR to intent info file"
     else
-        log "   SOLVER_EVM_ADDRESS not set or null, skipping save"
+        log "   SOLVER_EVM_ADDR not set or null, skipping save"
     fi
     
-    log "   📝 Intent info saved to: $INTENT_INFO_FILE"
+    log "    Intent info saved to: $INTENT_INFO_FILE"
 }
 
 # Load intent information from file
 # Usage: load_intent_info [required_vars]
-#   required_vars: comma-separated list of required variables (e.g., "INTENT_ID,HUB_INTENT_ADDRESS")
+#   required_vars: comma-separated list of required variables (e.g., "INTENT_ID,HUB_INTENT_ADDR")
 #   If not provided, only INTENT_ID is required
 #   If INTENT_ID is already set, skips loading (allows override via env var)
 # Loads from ${PROJECT_ROOT}/.tmp/intent-info.env
@@ -260,8 +271,8 @@ load_intent_info() {
 
     if [ ! -f "$INTENT_INFO_FILE" ]; then
         log_and_echo "❌ ERROR: intent-info.env not found at $INTENT_INFO_FILE"
-        if [ "$required_vars" = "INTENT_ID,HUB_INTENT_ADDRESS" ]; then
-            log_and_echo "   Run inflow-submit-hub-intent.sh first, or provide INTENT_ID=<id> and HUB_INTENT_ADDRESS=<address>"
+        if [ "$required_vars" = "INTENT_ID,HUB_INTENT_ADDR" ]; then
+            log_and_echo "   Run inflow-submit-hub-intent.sh first, or provide INTENT_ID=<id> and HUB_INTENT_ADDR=<address>"
         else
             log_and_echo "   Run inflow-submit-hub-intent.sh first, or provide INTENT_ID=<id>"
         fi
@@ -278,7 +289,7 @@ load_intent_info() {
         local value="${!var}"
         if [ -z "$value" ]; then
             log_and_echo "❌ ERROR: $var not found in intent-info.env"
-            if [ "$required_vars" = "INTENT_ID,HUB_INTENT_ADDRESS" ]; then
+            if [ "$required_vars" = "INTENT_ID,HUB_INTENT_ADDR" ]; then
                 log_and_echo "   Run inflow-submit-hub-intent.sh first"
             fi
             exit 1
@@ -295,7 +306,7 @@ stop_verifier() {
     log "   Checking for existing verifiers..."
     
     if pgrep -f "cargo.*trusted-verifier" > /dev/null || pgrep -f "target/debug/trusted-verifier" > /dev/null; then
-        log "   ⚠️  Found existing verifier processes, stopping them..."
+        log "   ️  Found existing verifier processes, stopping them..."
         pkill -f "cargo.*trusted-verifier" || true
         pkill -f "target/debug/trusted-verifier" || true
         sleep 2
@@ -353,7 +364,7 @@ verify_verifier_running() {
     fi
     
     log ""
-    log "🔍 Verifying verifier is running..."
+    log " Verifying verifier is running..."
     
     # Try to load VERIFIER_PID from file if not set
     if [ -z "$VERIFIER_PID" ] && [ -n "$LOG_DIR" ] && [ -f "$LOG_DIR/verifier.pid" ]; then
@@ -401,7 +412,7 @@ verify_solver_running() {
     fi
     
     log ""
-    log "🔍 Verifying solver is running..."
+    log " Verifying solver is running..."
     
     # Try to load SOLVER_PID from file if not set
     if [ -z "$SOLVER_PID" ] && [ -n "$LOG_DIR" ] && [ -f "$LOG_DIR/solver.pid" ]; then
@@ -440,29 +451,29 @@ display_service_logs() {
     local error_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
     
     log_and_echo ""
-    log_and_echo "📋 Service Logs ($context)"
+    log_and_echo " Service Logs ($context)"
     log_and_echo "=========================================="
     log_and_echo "⏰ Error occurred at: $error_timestamp"
     log_and_echo ""
     
     if [ -f "$verifier_log" ]; then
         log_and_echo ""
-        log_and_echo "🔍 Verifier logs (last 100 lines):"
+        log_and_echo " Verifier logs:"
         log_and_echo "-----------------------------------"
-        tail -100 "$verifier_log" | sed 's/^/   /'
+        cat "$verifier_log" | sed 's/^/   /'
     else
         log_and_echo ""
-        log_and_echo "⚠️  Verifier log not found: $verifier_log"
+        log_and_echo "️  Verifier log not found: $verifier_log"
     fi
     
     if [ -f "$solver_log" ]; then
         log_and_echo ""
-        log_and_echo "🔍 Solver logs (last 100 lines):"
+        log_and_echo " Solver logs:"
         log_and_echo "-----------------------------------"
-        tail -100 "$solver_log" | sed 's/^/   /'
+        cat "$solver_log" | sed 's/^/   /'
     else
         log_and_echo ""
-        log_and_echo "⚠️  Solver log not found: $solver_log"
+        log_and_echo "️  Solver log not found: $solver_log"
     fi
     
     log_and_echo ""
@@ -503,11 +514,10 @@ start_verifier() {
     log "   Using config: $VERIFIER_CONFIG_PATH"
     log "   Log file: $log_file"
     
-    # Use pre-built binary (must be built first via Step 0)
+    # Use pre-built binary (must be built in Step 1)
     local verifier_binary="$PROJECT_ROOT/trusted-verifier/target/debug/trusted-verifier"
     if [ ! -f "$verifier_binary" ]; then
-        log_and_echo "   ❌ PANIC: Verifier binary not found: $verifier_binary"
-        log_and_echo "   Please build first: cd trusted-verifier && cargo build --bin trusted-verifier"
+        log_and_echo "   ❌ PANIC: trusted-verifier not built. Step 1 (build binaries) failed."
         exit 1
     fi
     
@@ -582,7 +592,7 @@ stop_solver() {
     log "   Checking for existing solvers..."
     
     if pgrep -f "cargo.*solver" > /dev/null || pgrep -f "target/debug/solver" > /dev/null; then
-        log "   ⚠️  Found existing solver processes, stopping them..."
+        log "   ️  Found existing solver processes, stopping them..."
         pkill -f "cargo.*solver" || true
         pkill -f "target/debug/solver" || true
         sleep 2
@@ -643,11 +653,10 @@ start_solver() {
     log "   Using config: $config_path"
     log "   Log file: $log_file"
     
-    # Use pre-built binary (must be built first via Step 0)
+    # Use pre-built binary (must be built in Step 1)
     local solver_binary="$PROJECT_ROOT/solver/target/debug/solver"
     if [ ! -f "$solver_binary" ]; then
-        log_and_echo "   ❌ PANIC: Solver binary not found: $solver_binary"
-        log_and_echo "   Please build first: cd solver && cargo build --bin solver"
+        log_and_echo "   ❌ PANIC: solver not built. Step 1 (build binaries) failed."
         exit 1
     fi
     
@@ -912,7 +921,7 @@ submit_signature_to_verifier() {
     response=$(curl -s -X POST "${verifier_url}/draftintent/${draft_id}/signature" \
         -H "Content-Type: application/json" \
         -d "{
-            \"solver_addr\": \"$normalized_solver_addr\",
+            \"solver_hub_addr\": \"$normalized_solver_addr\",
             \"signature\": \"$signature_hex\",
             \"public_key\": \"$public_key_hex\"
         }" 2>&1)
@@ -928,7 +937,7 @@ submit_signature_to_verifier() {
         local error=$(echo "$response" | jq -r '.error // "Unknown error"')
         # Check if it's a 409 Conflict (already signed)
         if echo "$error" | grep -qi "already signed\|conflict"; then
-            log "     ⚠️  Draft already signed by another solver (FCFS)"
+            log "     ️  Draft already signed by another solver (FCFS)"
             return 1
         fi
         log_and_echo "❌ ERROR: Failed to submit signature"
@@ -986,7 +995,7 @@ poll_for_signature() {
         local success=$(echo "$response" | jq -r '.success // false' 2>/dev/null)
         if [ "$success" = "true" ]; then
             local signature=$(echo "$response" | jq -r '.data.signature // empty' 2>/dev/null)
-            local solver=$(echo "$response" | jq -r '.data.solver_addr // empty' 2>/dev/null)
+            local solver=$(echo "$response" | jq -r '.data.solver_hub_addr // empty' 2>/dev/null)
             
             if [ -n "$signature" ] && [ "$signature" != "null" ]; then
                 echo "     ✅ Signature received from solver: $solver" >&2
@@ -1138,7 +1147,7 @@ wait_for_solver_fulfillment() {
     log ""
     log_and_echo "⏰ Timeout waiting for solver fulfillment after ${timeout_seconds}s"
     log ""
-    log "🔍 Diagnostic Information:"
+    log " Diagnostic Information:"
     log "========================================"
     
     # Show solver logs (solver_log_file already declared above)

@@ -10,7 +10,7 @@ const hre = require("hardhat");
 /// Executes ERC20 transfer with intent_id in calldata
 ///
 /// # Environment Variables
-/// - `TOKEN_ADDRESS`: ERC20 token contract address
+/// - `TOKEN_ADDR`: ERC20 token contract address
 /// - `RECIPIENT`: Recipient address (20 bytes, EVM format)
 /// - `AMOUNT`: Transfer amount in base units (wei for 18 decimals)
 /// - `INTENT_ID`: Intent ID to append in calldata (32 bytes, hex format with 0x prefix)
@@ -18,13 +18,13 @@ const hre = require("hardhat");
 /// # Returns
 /// Outputs transaction hash, recipient, amount, and intent_id on success.
 async function main() {
-  const tokenAddress = process.env.TOKEN_ADDRESS;
+  const tokenAddress = process.env.TOKEN_ADDR;
   const recipient = process.env.RECIPIENT;
   const amount = process.env.AMOUNT;
   const intentId = process.env.INTENT_ID;
 
   if (!tokenAddress || !recipient || !amount || !intentId) {
-    const error = new Error("Missing required environment variables: TOKEN_ADDRESS, RECIPIENT, AMOUNT, INTENT_ID");
+    const error = new Error("Missing required environment variables: TOKEN_ADDR, RECIPIENT, AMOUNT, INTENT_ID");
     console.error("Error:", error.message);
     if (require.main === module) {
       process.exit(1);

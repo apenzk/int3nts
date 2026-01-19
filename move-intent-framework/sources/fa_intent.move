@@ -19,7 +19,7 @@ module mvmt_intent::fa_intent {
     /// The solver signature is invalid and cannot be verified.
     const EINVALID_SIGNATURE: u64 = 2;
     /// The offered metadata address is invalid or missing for cross-chain intents.
-    const EINVALID_METADATA_ADDRESS: u64 = 5;
+    const EINVALID_METADATA_ADDR: u64 = 5;
     /// Chain info has not been initialized.
     const ECHAIN_INFO_NOT_INITIALIZED: u64 = 3;
     /// Chain info has already been initialized.
@@ -182,7 +182,7 @@ module mvmt_intent::fa_intent {
             );
             assert!(
                 option::is_some(&offered_metadata_addr_override),
-                error::invalid_argument(EINVALID_METADATA_ADDRESS)
+                error::invalid_argument(EINVALID_METADATA_ADDR)
             );
             (*option::borrow(&offered_amount_override), offered_metadata_addr_override)
         };

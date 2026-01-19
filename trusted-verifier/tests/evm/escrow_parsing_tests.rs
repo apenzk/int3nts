@@ -10,7 +10,7 @@ use trusted_verifier::monitor::{ChainType, EscrowEvent, EventMonitor, IntentEven
 mod test_helpers;
 use test_helpers::{
     build_test_config_with_evm, DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_ESCROW_ID_MVM, DUMMY_EXPIRY, DUMMY_INTENT_ID,
-    DUMMY_REQUESTER_ADDR_EVM, DUMMY_REQUESTER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_EVM,
+    DUMMY_REQUESTER_ADDR_EVM, DUMMY_REQUESTER_ADDR_HUB, DUMMY_SOLVER_ADDR_EVM,
     DUMMY_TOKEN_ADDR_EVM, DUMMY_TX_HASH,
 };
 
@@ -108,7 +108,7 @@ async fn test_zero_amount_escrow_fails_validation() {
             desired_metadata: "{}".to_string(),
             desired_amount: 1000, // Requires 1000 tokens
             revocable: false,
-            requester_addr: DUMMY_REQUESTER_ADDR_MVM_HUB.to_string(),
+            requester_addr: DUMMY_REQUESTER_ADDR_HUB.to_string(),
             requester_addr_connected_chain: None,
             reserved_solver_addr: None, // None to avoid triggering EVM RPC validation in unit tests
             connected_chain_id: Some(84532), // Base Sepolia
@@ -169,7 +169,7 @@ async fn test_correct_amount_escrow_passes_validation() {
             desired_metadata: "{}".to_string(),
             desired_amount: 1000,
             revocable: false,
-            requester_addr: DUMMY_REQUESTER_ADDR_MVM_HUB.to_string(),
+            requester_addr: DUMMY_REQUESTER_ADDR_HUB.to_string(),
             requester_addr_connected_chain: None,
             reserved_solver_addr: None, // None to avoid triggering EVM RPC validation in unit tests
             connected_chain_id: Some(84532),

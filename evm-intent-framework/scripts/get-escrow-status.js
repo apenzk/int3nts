@@ -7,17 +7,17 @@ const hre = require("hardhat");
 /// Gets escrow claim status
 ///
 /// # Environment Variables
-/// - `ESCROW_ADDRESS`: IntentEscrow contract address
+/// - `ESCROW_ADDR`: IntentEscrow contract address
 /// - `INTENT_ID_EVM`: Intent ID in EVM format (uint256, hex with 0x prefix)
 ///
 /// # Returns
 /// Outputs "isClaimed: true" or "isClaimed: false" on success.
 async function main() {
-  const escrowAddress = process.env.ESCROW_ADDRESS;
+  const escrowAddress = process.env.ESCROW_ADDR;
   const intentIdHex = process.env.INTENT_ID_EVM;
 
   if (!escrowAddress || !intentIdHex) {
-    const error = new Error("Missing required environment variables: ESCROW_ADDRESS, INTENT_ID_EVM");
+    const error = new Error("Missing required environment variables: ESCROW_ADDR, INTENT_ID_EVM");
     console.error("Error:", error.message);
     if (require.main === module) {
       process.exit(1);

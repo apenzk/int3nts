@@ -4,7 +4,8 @@
 //! Configuration includes chain endpoints, verifier keys, API settings, and validation parameters.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use solana_program::pubkey::Pubkey;
+use std::str::FromStr;
 
 // ============================================================================
 // CONFIGURATION STRUCTURES
@@ -28,6 +29,9 @@ pub struct Config {
     /// Connected EVM chain configuration (optional, for escrow on EVM)
     #[serde(default)]
     pub connected_chain_evm: Option<EvmChainConfig>,
+    /// Connected Solana chain configuration (optional, for escrow on SVM)
+    #[serde(default)]
+    pub connected_chain_svm: Option<SvmChainConfig>,
     /// Verifier-specific configuration (keys, timeouts, etc.)
     pub verifier: VerifierConfig,
     /// API server configuration (host, port, CORS settings)
@@ -73,6 +77,19 @@ pub struct EvmChainConfig {
     /// This is the Ethereum address derived from the verifier's ECDSA public key
     #[serde(rename = "verifier_evm_pubkey_hash", alias = "verifier_addr")]
     pub verifier_evm_pubkey_hash: String,
+}
+
+/// Configuration for a Solana chain (SVM).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SvmChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for Solana chain communication
+    pub rpc_url: String,
+    /// Chain ID (arbitrary unique ID used for routing)
+    pub chain_id: u64,
+    /// Program ID of the intent escrow program
+    pub escrow_program_id: String,
 }
 
 /// Verifier-specific configuration including cryptographic keys and timing parameters.
@@ -152,14 +169,28 @@ pub struct ApiConfig {
 
 /// Acceptance criteria configuration for default solver.
 ///
-/// Defines which token pairs are supported and their exchange rates.
-/// Key format: "offered_chain_id:offered_token:desired_chain_id:desired_token"
-/// Value: Exchange rate (how many offered tokens per 1 desired token)
+/// Defines which token pairs are supported. Exchange rates are fetched live
+/// from the solver per request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcceptanceConfig {
-    /// Supported token pairs with exchange rates
-    #[serde(flatten)]
-    pub token_pairs: HashMap<String, f64>,
+    /// Solver URL for live ratio lookup
+    pub solver_url: String,
+    /// Supported token pairs (no ratios)
+    #[serde(default)]
+    pub pairs: Vec<TokenPairConfig>,
+}
+
+/// Acceptance token pair configuration (single entry).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenPairConfig {
+    /// Source chain ID
+    pub source_chain_id: u64,
+    /// Source token address or mint
+    pub source_token: String,
+    /// Target chain ID
+    pub target_chain_id: u64,
+    /// Target token address or mint
+    pub target_token: String,
 }
 
 // ============================================================================
@@ -201,6 +232,16 @@ impl Config {
             }
         }
 
+        // Check hub vs connected_chain_svm
+        if let Some(ref svm_config) = self.connected_chain_svm {
+            if hub_chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Hub chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    hub_chain_id
+                ));
+            }
+        }
+
         // Check connected_chain_mvm vs connected_chain_evm
         if let (Some(ref mvm_config), Some(ref evm_config)) = (&self.connected_chain_mvm, &self.connected_chain_evm) {
             if mvm_config.chain_id == evm_config.chain_id {
@@ -211,7 +252,79 @@ impl Config {
             }
         }
 
+        // Check connected_chain_mvm vs connected_chain_svm
+        if let (Some(ref mvm_config), Some(ref svm_config)) = (&self.connected_chain_mvm, &self.connected_chain_svm) {
+            if mvm_config.chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Connected MVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    mvm_config.chain_id
+                ));
+            }
+        }
+
+        // Check connected_chain_evm vs connected_chain_svm
+        if let (Some(ref evm_config), Some(ref svm_config)) = (&self.connected_chain_evm, &self.connected_chain_svm) {
+            if evm_config.chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Connected EVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    evm_config.chain_id
+                ));
+            }
+        }
+
+        if let Some(acceptance) = &self.acceptance {
+            for pair in &acceptance.pairs {
+                let source_chain_type = self.chain_type_for_id(pair.source_chain_id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Unknown source_chain_id {} in acceptance pair",
+                        pair.source_chain_id
+                    ))?;
+                let target_chain_type = self.chain_type_for_id(pair.target_chain_id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Unknown target_chain_id {} in acceptance pair",
+                        pair.target_chain_id
+                    ))?;
+
+                validate_token_format(pair.source_token.as_str(), source_chain_type)
+                    .map_err(|e| anyhow::anyhow!("Invalid source_token for chain {}: {}", source_chain_type, e))?;
+                validate_token_format(pair.target_token.as_str(), target_chain_type)
+                    .map_err(|e| anyhow::anyhow!("Invalid target_token for chain {}: {}", target_chain_type, e))?;
+            }
+        }
+
         Ok(())
+    }
+
+    /// Resolves chain type for a chain ID based on configured chains.
+    ///
+    /// # Arguments
+    ///
+    /// * `chain_id` - Chain ID to resolve
+    ///
+    /// # Returns
+    ///
+    /// - `Some(&'static str)` - Chain type ("mvm", "evm", "svm") if found
+    /// - `None` - Chain ID is not configured
+    fn chain_type_for_id(&self, chain_id: u64) -> Option<&'static str> {
+        if self.hub_chain.chain_id == chain_id {
+            return Some("mvm");
+        }
+        if let Some(ref mvm_config) = self.connected_chain_mvm {
+            if mvm_config.chain_id == chain_id {
+                return Some("mvm");
+            }
+        }
+        if let Some(ref evm_config) = self.connected_chain_evm {
+            if evm_config.chain_id == chain_id {
+                return Some("evm");
+            }
+        }
+        if let Some(ref svm_config) = self.connected_chain_svm {
+            if svm_config.chain_id == chain_id {
+                return Some("svm");
+            }
+        }
+        None
     }
 
     /// Loads configuration from the TOML file.
@@ -277,7 +390,60 @@ impl Config {
                 cors_origins: vec!["http://localhost:3333".to_string()],
             },
             connected_chain_evm: None, // Optional connected EVM chain configuration
+            connected_chain_svm: None, // Optional connected SVM chain configuration
             acceptance: None, // Optional acceptance criteria
         }
     }
+}
+
+/// Validates token address format for a chain type.
+///
+/// - MVM/EVM: `0x`-prefixed hex with expected byte length.
+/// - SVM: base58-encoded mint (no `0x` prefix).
+///
+/// # Arguments
+///
+/// * `token` - Token address or mint string
+/// * `chain_type` - Chain type label ("mvm", "evm", "svm")
+///
+/// # Returns
+///
+/// - `Ok(())` - Token format is valid for the chain type
+/// - `Err(anyhow::Error)` - Token format is invalid
+fn validate_token_format(token: &str, chain_type: &str) -> anyhow::Result<()> {
+    match chain_type {
+        "svm" => {
+            if token.starts_with("0x") {
+                anyhow::bail!("SVM tokens must be base58 (got 0x-prefixed value)");
+            }
+            Pubkey::from_str(token)
+                .map_err(|_| anyhow::anyhow!("Invalid base58 SVM mint"))?;
+        }
+        "evm" => validate_hex_token(token, 20)?,
+        "mvm" => validate_hex_token(token, 32)?,
+        _ => anyhow::bail!("Unknown chain type {}", chain_type),
+    }
+    Ok(())
+}
+
+/// Validates a `0x`-prefixed hex token with expected byte length.
+///
+/// # Arguments
+///
+/// * `token` - `0x`-prefixed hex string
+/// * `expected_len` - Expected byte length for the chain type
+///
+/// # Returns
+///
+/// - `Ok(())` - Token format matches expected length
+/// - `Err(anyhow::Error)` - Token format is invalid
+fn validate_hex_token(token: &str, expected_len: usize) -> anyhow::Result<()> {
+    let stripped = token.strip_prefix("0x").ok_or_else(|| {
+        anyhow::anyhow!("Token must be 0x-prefixed hex string")
+    })?;
+    let bytes = hex::decode(stripped).map_err(|_| anyhow::anyhow!("Invalid hex token"))?;
+    if bytes.len() != expected_len {
+        anyhow::bail!("Invalid token length: expected {} bytes", expected_len);
+    }
+    Ok(())
 }

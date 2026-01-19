@@ -22,7 +22,7 @@ Refactor test files in the `trusted-verifier` project to improve code quality by
 
 **Use descriptive names that clearly indicate purpose and format:**
 
-- `DUMMY_*_ADDR_*` for addresses (e.g., `DUMMY_SOLVER_ADDR_EVM`, `DUMMY_REQUESTER_ADDR_MVM_HUB`)
+- `DUMMY_*_ADDR_*` for addresses (e.g., `DUMMY_SOLVER_ADDR_EVM`, `DUMMY_REQUESTER_ADDR_HUB`)
 - `DUMMY_*_ID_*` for IDs (e.g., `DUMMY_INTENT_ID`, `DUMMY_ESCROW_ID_MVM`)
 - `DUMMY_TX_HASH` for transaction hashes
 - `DUMMY_EXPIRY` for timestamps

@@ -113,6 +113,53 @@ pub fn create_solver_registry_resource_with_evm_address(
     }])
 }
 
+/// Helper to create a mock SolverRegistry resource response with SVM address
+/// SimpleMap<address, SolverInfo> is serialized as {"data": [{"key": address, "value": SolverInfo}, ...]}
+#[allow(dead_code)]
+pub fn create_solver_registry_resource_with_svm_address(
+    solver_registry_addr: &str,
+    solver_addr: &str,
+    solver_connected_chain_svm_addr: Option<&str>,
+) -> serde_json::Value {
+    let solver_entry = if let Some(svm_addr) = solver_connected_chain_svm_addr {
+        let addr_clean = svm_addr.strip_prefix("0x").unwrap_or(svm_addr);
+        let bytes: Vec<u64> = (0..addr_clean.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&addr_clean[i..i + 2], 16).unwrap() as u64)
+            .collect();
+        json!({
+            "key": solver_addr,
+            "value": {
+                "public_key": DUMMY_PUBLIC_KEY,
+                "connected_chain_mvm_addr": {"vec": []},
+                "connected_chain_evm_addr": {"vec": []},
+                "connected_chain_svm_addr": {"vec": [bytes]},
+                "registered_at": DUMMY_REGISTERED_AT
+            }
+        })
+    } else {
+        json!({
+            "key": solver_addr,
+            "value": {
+                "public_key": DUMMY_PUBLIC_KEY,
+                "connected_chain_mvm_addr": {"vec": []},
+                "connected_chain_evm_addr": {"vec": []},
+                "connected_chain_svm_addr": {"vec": []},
+                "registered_at": DUMMY_REGISTERED_AT
+            }
+        })
+    };
+
+    json!([{
+        "type": format!("{}::solver_registry::SolverRegistry", solver_registry_addr),
+        "data": {
+            "solvers": {
+                "data": [solver_entry]
+            }
+        }
+    }])
+}
+
 // ============================================================================
 // MOCK SERVER SETUP HELPERS
 // ============================================================================
@@ -289,6 +336,35 @@ pub async fn setup_mock_server_with_evm_address_response(
         solver_registry_addr,
         solver_addr,
         solver_connected_chain_evm_addr,
+    );
+
+    Mock::given(method("GET"))
+        .and(path(format!("/v1/accounts/{}/resources", solver_registry_addr)))
+        .respond_with(ResponseTemplate::new(200).set_body_json(resources_response))
+        .mount(&mock_server)
+        .await;
+
+    let config = build_test_config_with_mock_server(&mock_server.uri());
+    let validator = CrossChainValidator::new(&config)
+        .await
+        .expect("Failed to create validator");
+
+    (mock_server, config, validator)
+}
+
+/// Setup a mock server with SolverRegistry response containing SVM address
+#[allow(dead_code)]
+pub async fn setup_mock_server_with_svm_address_response(
+    solver_addr: &str,
+    solver_connected_chain_svm_addr: Option<&str>,
+) -> (MockServer, Config, CrossChainValidator) {
+    let mock_server = MockServer::start().await;
+    let solver_registry_addr = DUMMY_SOLVER_REGISTRY_ADDR;
+
+    let resources_response = create_solver_registry_resource_with_svm_address(
+        solver_registry_addr,
+        solver_addr,
+        solver_connected_chain_svm_addr,
     );
 
     Mock::given(method("GET"))

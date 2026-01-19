@@ -10,7 +10,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 #[path = "../mod.rs"]
 mod test_helpers;
 use test_helpers::{
-    build_test_config_with_mvm, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_CON, DUMMY_SOLVER_ADDR_MVM_HUB,
+    build_test_config_with_mvm, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_HUB, DUMMY_SOLVER_ADDR_MVMCON, DUMMY_SOLVER_ADDR_HUB,
 };
 
 // ============================================================================
@@ -35,7 +35,7 @@ fn create_mock_oracle_limit_order_event(
     json!({
         "type": "0x1::fa_intent_with_oracle::OracleLimitOrderEvent",
         "data": {
-            "intent_addr": DUMMY_SOLVER_ADDR_MVM_CON,
+            "intent_addr": DUMMY_SOLVER_ADDR_MVMCON,
             "intent_id": intent_id,
             "offered_metadata": {"inner": "0xoffered_meta"},
             "offered_amount": "1000",
@@ -44,12 +44,12 @@ fn create_mock_oracle_limit_order_event(
             "desired_metadata_addr": {"vec": []}, // None for same-chain (test uses same chain IDs)
             "desired_amount": "500",
             "desired_chain_id": "2",
-            "requester_addr": DUMMY_REQUESTER_ADDR_MVM_HUB,
+            "requester_addr": DUMMY_REQUESTER_ADDR_HUB,
             "expiry_time": "1000000",
             "min_reported_value": "0",
             "revocable": false,
             "reserved_solver": {
-                "vec": [DUMMY_SOLVER_ADDR_MVM_HUB]
+                "vec": [DUMMY_SOLVER_ADDR_HUB]
             },
             "requester_addr_connected_chain": requester_addr_opt
         }
@@ -141,7 +141,7 @@ async fn test_poll_hub_events_populates_requester_addr_connected_chain() {
     // Use address without 0x prefix since the code strips it
     let account_addr = "1";
     let requester_addr_connected_chain =
-        DUMMY_REQUESTER_ADDR_MVM_HUB;
+        DUMMY_REQUESTER_ADDR_HUB;
 
     let (_mock_server, monitor) = setup_mock_server_with_oracle_event(
         account_addr,
@@ -179,7 +179,7 @@ async fn test_poll_hub_events_populates_requester_addr_connected_chain() {
     );
     assert_eq!(
         event.reserved_solver_addr,
-        Some(DUMMY_SOLVER_ADDR_MVM_HUB.to_string())
+        Some(DUMMY_SOLVER_ADDR_HUB.to_string())
     );
     assert_eq!(event.offered_amount, 1000);
     assert_eq!(event.desired_amount, 500);

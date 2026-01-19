@@ -11,24 +11,39 @@ jobs:
     uses: ./.github/workflows/e2e-reusable.yml
     with:
       script: "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-inflow.sh"
+      skip_solana: true
 
   mvm-chain-outflow:
     uses: ./.github/workflows/e2e-reusable.yml
     with:
       script: "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-outflow.sh"
+      skip_solana: true
 
   evm-chain-inflow:
     uses: ./.github/workflows/e2e-reusable.yml
     with:
       script: "./testing-infra/ci-e2e/e2e-tests-evm/run-tests-inflow.sh"
+      skip_solana: true
 
   evm-chain-outflow:
     uses: ./.github/workflows/e2e-reusable.yml
     with:
       script: "./testing-infra/ci-e2e/e2e-tests-evm/run-tests-outflow.sh"
+      skip_solana: true
+
+  svm-chain-inflow:
+    uses: ./.github/workflows/e2e-reusable.yml
+    with:
+      script: "./testing-infra/ci-e2e/e2e-tests-svm/run-tests-inflow.sh"
+
+  svm-chain-outflow:
+    uses: ./.github/workflows/e2e-reusable.yml
+    with:
+      script: "./testing-infra/ci-e2e/e2e-tests-svm/run-tests-outflow.sh"
 
   rust-integration:
     uses: ./.github/workflows/e2e-reusable.yml
     with:
       script: "./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-rust-integration.sh"
+      skip_solana: true
 

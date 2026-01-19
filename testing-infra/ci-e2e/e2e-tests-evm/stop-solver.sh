@@ -16,7 +16,7 @@ setup_logging "solver-stop-evm"
 cd "$PROJECT_ROOT"
 
 log ""
-log "🛑 Stopping Solver Service..."
+log " Stopping Solver Service..."
 log "========================================"
 
 stop_solver

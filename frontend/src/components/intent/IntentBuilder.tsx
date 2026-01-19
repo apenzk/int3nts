@@ -1,50 +1,58 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
-import { useWallet } from '@aptos-labs/wallet-adapter-react';
+import { useWallet as useMvmWallet } from '@aptos-labs/wallet-adapter-react';
+import { useWallet as useSvmWallet } from '@solana/wallet-adapter-react';
 import { verifierClient } from '@/lib/verifier';
 import type { DraftIntentRequest, DraftIntentSignature } from '@/lib/types';
 import { generateIntentId } from '@/lib/types';
 import { SUPPORTED_TOKENS, type TokenConfig, toSmallestUnits } from '@/config/tokens';
-import { CHAIN_CONFIGS } from '@/config/chains';
+import { CHAIN_CONFIGS, getChainType, getHubChainConfig, isHubChain } from '@/config/chains';
 import { fetchTokenBalance, type TokenBalance } from '@/lib/balances';
 import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
-import { INTENT_MODULE_ADDRESS, hexToBytes, padEvmAddressToMove } from '@/lib/move-transactions';
+import { PublicKey } from '@solana/web3.js';
+import { INTENT_MODULE_ADDR, hexToBytes, padEvmAddressToMove } from '@/lib/move-transactions';
 import { INTENT_ESCROW_ABI, ERC20_ABI, intentIdToEvmFormat, getEscrowContractAddress } from '@/lib/escrow';
+import {
+  buildCreateEscrowInstruction,
+  getSvmTokenAccount,
+  svmHexToPubkey,
+  svmPubkeyToHex,
+} from '@/lib/svm-escrow';
+import { fetchSolverSvmAddress, getSvmConnection, sendSvmTransaction } from '@/lib/svm-transactions';
+
+// ============================================================================
+// Types
+// ============================================================================
 
 type FlowType = 'inflow' | 'outflow';
 
-export function IntentBuilder() {
-  const { address: evmAddress } = useAccount();
-  const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
-  const { account: mvmAccount, signAndSubmitTransaction } = useWallet();
-  const [directNightlyAddress, setDirectNightlyAddress] = useState<string | null>(null);
-  const [offeredBalance, setOfferedBalance] = useState<TokenBalance | null>(null);
-  const [desiredBalance, setDesiredBalance] = useState<TokenBalance | null>(null);
-  const [loadingOfferedBalance, setLoadingOfferedBalance] = useState(false);
-  const [loadingDesiredBalance, setLoadingDesiredBalance] = useState(false);
+// ============================================================================
+// Hooks
+// ============================================================================
 
-  // Check for direct Nightly connection from localStorage
-  // Trust MvmWalletConnector to handle connection - just read the saved address
+/**
+ * Track Nightly wallet connection from local storage and custom events.
+ */
+function useNightlyAddress(): string | null {
+  const [directNightlyAddress, setDirectNightlyAddress] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedAddress = localStorage.getItem('nightly_connected_address');
       setDirectNightlyAddress(savedAddress);
-      
-      // Listen for storage changes (from other tabs)
+
       const handleStorageChange = () => {
         const address = localStorage.getItem('nightly_connected_address');
         setDirectNightlyAddress(address);
       };
-      
-      // Listen for custom event (from same tab when MvmWalletConnector changes connection)
+
       const handleNightlyChange = (e: Event) => {
         const customEvent = e as CustomEvent<{ address: string | null }>;
         setDirectNightlyAddress(customEvent.detail.address);
       };
-      
+
       window.addEventListener('storage', handleStorageChange);
       window.addEventListener('nightly_wallet_changed', handleNightlyChange);
       return () => {
@@ -53,6 +61,119 @@ export function IntentBuilder() {
       };
     }
   }, []);
+
+  return directNightlyAddress;
+}
+
+/**
+ * Fetch balances for offered/desired tokens with refresh on fulfillment.
+ */
+function useTokenBalances(params: {
+  offeredToken: TokenConfig | null;
+  desiredToken: TokenConfig | null;
+  resolveAddress: (chain: TokenConfig['chain']) => string;
+  intentStatus: 'pending' | 'created' | 'fulfilled';
+}) {
+  const { offeredToken, desiredToken, resolveAddress, intentStatus } = params;
+  const [offeredBalance, setOfferedBalance] = useState<TokenBalance | null>(null);
+  const [desiredBalance, setDesiredBalance] = useState<TokenBalance | null>(null);
+  const [loadingOfferedBalance, setLoadingOfferedBalance] = useState(false);
+  const [loadingDesiredBalance, setLoadingDesiredBalance] = useState(false);
+
+  useEffect(() => {
+    if (!offeredToken) {
+      setOfferedBalance(null);
+      return;
+    }
+    const address = resolveAddress(offeredToken.chain);
+    if (!address) {
+      setOfferedBalance(null);
+      return;
+    }
+    setLoadingOfferedBalance(true);
+    console.log('Fetching offered balance:', { address, token: offeredToken.symbol, chain: offeredToken.chain });
+    fetchTokenBalance(address, offeredToken)
+      .then((balance) => {
+        console.log('Offered balance result:', balance);
+        setOfferedBalance(balance);
+      })
+      .catch(() => setOfferedBalance(null))
+      .finally(() => setLoadingOfferedBalance(false));
+  }, [offeredToken, resolveAddress]);
+
+  useEffect(() => {
+    if (!desiredToken) {
+      setDesiredBalance(null);
+      return;
+    }
+    const address = resolveAddress(desiredToken.chain);
+    if (!address) {
+      setDesiredBalance(null);
+      return;
+    }
+    setLoadingDesiredBalance(true);
+    console.log('Fetching desired balance:', { address, token: desiredToken.symbol, chain: desiredToken.chain });
+    fetchTokenBalance(address, desiredToken)
+      .then((balance) => {
+        console.log('Desired balance result:', balance);
+        setDesiredBalance(balance);
+      })
+      .catch(() => setDesiredBalance(null))
+      .finally(() => setLoadingDesiredBalance(false));
+  }, [desiredToken, resolveAddress]);
+
+  useEffect(() => {
+    if (intentStatus !== 'fulfilled') {
+      return;
+    }
+    if (offeredToken) {
+      const offeredAddress = resolveAddress(offeredToken.chain);
+      if (offeredAddress) {
+        setLoadingOfferedBalance(true);
+        fetchTokenBalance(offeredAddress, offeredToken)
+          .then(setOfferedBalance)
+          .catch(() => setOfferedBalance(null))
+          .finally(() => setLoadingOfferedBalance(false));
+      }
+    }
+    if (desiredToken) {
+      const desiredAddress = resolveAddress(desiredToken.chain);
+      if (desiredAddress) {
+        setLoadingDesiredBalance(true);
+        fetchTokenBalance(desiredAddress, desiredToken)
+          .then(setDesiredBalance)
+          .catch(() => setDesiredBalance(null))
+          .finally(() => setLoadingDesiredBalance(false));
+      }
+    }
+  }, [intentStatus, offeredToken, desiredToken, resolveAddress]);
+
+  return {
+    offeredBalance,
+    desiredBalance,
+    loadingOfferedBalance,
+    loadingDesiredBalance,
+  };
+}
+
+// ============================================================================
+// Intent Builder Component
+// ============================================================================
+
+/**
+ * Intent creation flow across hub and connected chains.
+ */
+export function IntentBuilder() {
+  const { address: evmAddress } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const { account: mvmAccount } = useMvmWallet();
+  const svmWallet = useSvmWallet();
+  const svmPublicKey = svmWallet.publicKey;
+  const svmAddress = svmPublicKey?.toBase58() || '';
+  const directNightlyAddress = useNightlyAddress();
+  const requesterAddr = directNightlyAddress || mvmAccount?.address || '';
+  const mvmAddress = directNightlyAddress || mvmAccount?.address || '';
   const [offeredToken, setOfferedToken] = useState<TokenConfig | null>(null);
   const [offeredAmount, setOfferedAmount] = useState('');
   const [desiredToken, setDesiredToken] = useState<TokenConfig | null>(null);
@@ -61,8 +182,34 @@ export function IntentBuilder() {
   // If offered token is on Movement (hub), it's outflow; otherwise it's inflow
   const flowType: FlowType | null = useMemo(() => {
     if (!offeredToken) return null;
-    return offeredToken.chain === 'movement' ? 'outflow' : 'inflow';
+    return isHubChain(offeredToken.chain) ? 'outflow' : 'inflow';
   }, [offeredToken]);
+  const hubChainId = getHubChainConfig().chainId;
+  const hubChainIdString = hubChainId.toString();
+
+  const isHubChainId = (chainIdValue?: string | null) => chainIdValue === hubChainIdString;
+  const isSvmChain = (chain: TokenConfig['chain']) => getChainType(chain) === 'svm';
+  const isEvmChain = (chain: TokenConfig['chain']) => getChainType(chain) === 'evm';
+
+  const getConnectedChain = (offered: TokenConfig, desired: TokenConfig) =>
+    isHubChain(offered.chain) ? desired.chain : offered.chain;
+
+  const getAddressForChain = useCallback((chain: TokenConfig['chain']) => {
+    if (isHubChain(chain)) {
+      return mvmAddress;
+    }
+    if (getChainType(chain) === 'svm') {
+      return svmAddress;
+    }
+    return evmAddress || '';
+  }, [mvmAddress, svmAddress, evmAddress]);
+
+  const getChainKeyFromId = (chainIdValue: string): TokenConfig['chain'] | null => {
+    const entry = Object.entries(CHAIN_CONFIGS).find(
+      ([, config]) => String(config.chainId) === chainIdValue
+    );
+    return entry ? (entry[0] as TokenConfig['chain']) : null;
+  };
   // Desired amount is auto-calculated based on solver's exchange rate
   const [desiredAmount, setDesiredAmount] = useState('');
   const [loading, setLoading] = useState(false);
@@ -179,9 +326,17 @@ export function IntentBuilder() {
     // Find token by matching chain ID and metadata
     return SUPPORTED_TOKENS.find(t => {
       const chainConfig = CHAIN_CONFIGS[t.chain];
-      return chainConfig && 
-             String(chainConfig.chainId) === savedDraftData.offeredChainId &&
-             t.metadata.toLowerCase().includes(savedDraftData.offeredMetadata.replace(/^0x0*/, '').toLowerCase());
+      if (!chainConfig || String(chainConfig.chainId) !== savedDraftData.offeredChainId) {
+        return false;
+      }
+      if (getChainType(t.chain) === 'svm') {
+        // Deviation from EVM flow: SVM mint addresses are base58 strings,
+        // so we compare directly instead of hex-padding.
+        return t.metadata.toLowerCase() === savedDraftData.offeredMetadata.toLowerCase();
+      }
+      return t.metadata
+        .toLowerCase()
+        .includes(savedDraftData.offeredMetadata.replace(/^0x0*/, '').toLowerCase());
     }) || null;
   };
 
@@ -196,6 +351,28 @@ export function IntentBuilder() {
     desiredChainId: string;
     expiryTime: number;
   } | null>(null);
+
+  const connectedChainKey =
+    offeredToken && desiredToken ? getConnectedChain(offeredToken, desiredToken) : null;
+  const requiresEvmWallet = connectedChainKey ? isEvmChain(connectedChainKey) : false;
+  const requiresSvmWallet = connectedChainKey ? getChainType(connectedChainKey) === 'svm' : false;
+  const connectedWalletReady =
+    (!requiresEvmWallet || !!evmAddress) && (!requiresSvmWallet || !!svmAddress);
+
+  const escrowChainKey = savedDraftData ? getChainKeyFromId(savedDraftData.offeredChainId) : null;
+  const escrowRequiresSvm = escrowChainKey ? getChainType(escrowChainKey) === 'svm' : false;
+  const escrowWalletReady = escrowRequiresSvm ? !!svmAddress : !!evmAddress;
+  const {
+    offeredBalance,
+    desiredBalance,
+    loadingOfferedBalance,
+    loadingDesiredBalance,
+  } = useTokenBalances({
+    offeredToken,
+    desiredToken,
+    resolveAddress: getAddressForChain,
+    intentStatus,
+  });
 
   // Restore draft ID from localStorage after mount (to avoid hydration mismatch)
   useEffect(() => {
@@ -312,7 +489,7 @@ export function IntentBuilder() {
   // Debug: Log escrow button state for inflow intents
   useEffect(() => {
     if (transactionHash && !escrowHash && savedDraftData) {
-      const isInflowByChain = savedDraftData.offeredChainId !== '250';
+      const isInflowByChain = !isHubChainId(savedDraftData.offeredChainId);
       const derivedToken = getOfferedTokenFromDraft();
       console.log('🔍 Escrow button state check:', {
         isInflowByChain,
@@ -494,13 +671,6 @@ export function IntentBuilder() {
     fetchExchangeRate();
   }, [offeredToken, desiredToken, offeredAmount]);
 
-  // Get requester address based on flow type
-  // For inflow: requester is on connected chain (EVM), but we use MVM address for hub
-  // For outflow: requester is on hub (MVM)
-  // Check both adapter account and direct Nightly connection
-  const requesterAddr = directNightlyAddress || mvmAccount?.address || '';
-  const mvmAddress = directNightlyAddress || mvmAccount?.address || '';
-
   // Keep intent ID ref in sync for use in polling closure
   useEffect(() => {
     currentIntentIdRef.current = savedDraftData?.intentId || null;
@@ -577,7 +747,7 @@ export function IntentBuilder() {
             }
             
             // Query hub chain for fulfillment events
-            const hubRpcUrl = 'https://testnet.movementnetwork.xyz/v1';
+            const hubRpcUrl = getHubChainConfig().rpcUrl;
             const accountAddress = mvmAddress.startsWith('0x') ? mvmAddress.slice(2) : mvmAddress;
             const transactionsUrl = `${hubRpcUrl}/accounts/${accountAddress}/transactions?limit=10`;
             
@@ -618,7 +788,7 @@ export function IntentBuilder() {
                     const currentBalance = parseFloat(refreshedBalance.formatted);
                     if (currentBalance > initialDesiredBalance) {
                       console.log('Desired balance increased - intent fulfilled!');
-                      setDesiredBalance(refreshedBalance);
+                      // Balance will be refreshed by the hook when intentStatus changes to 'fulfilled'
                       foundFulfillment = true;
                     }
                   }
@@ -668,93 +838,6 @@ export function IntentBuilder() {
     // The ref is only reset explicitly in clearDraft or when polling completes
   }, [transactionHash, savedDraftData, flowType, mvmAddress]); // Removed desiredBalance - it's captured at start
 
-  // Fetch balance when offered token is selected
-  useEffect(() => {
-    if (!offeredToken) {
-      setOfferedBalance(null);
-      return;
-    }
-
-    const address = offeredToken.chain === 'movement' ? mvmAddress : evmAddress;
-    if (!address) {
-      setOfferedBalance(null);
-      return;
-    }
-
-    setLoadingOfferedBalance(true);
-    console.log('Fetching offered balance:', { address, token: offeredToken.symbol, chain: offeredToken.chain });
-    fetchTokenBalance(address, offeredToken)
-      .then((balance) => {
-        console.log('Offered balance result:', balance);
-        setOfferedBalance(balance);
-      })
-      .catch((error) => {
-        console.error('Error fetching offered balance:', error);
-        setOfferedBalance(null);
-      })
-      .finally(() => {
-        setLoadingOfferedBalance(false);
-      });
-  }, [offeredToken, mvmAddress, evmAddress]);
-
-  // Fetch balance when desired token is selected
-  useEffect(() => {
-    if (!desiredToken) {
-      setDesiredBalance(null);
-      return;
-    }
-
-    const address = desiredToken.chain === 'movement' ? mvmAddress : evmAddress;
-    if (!address) {
-      setDesiredBalance(null);
-      return;
-    }
-
-    setLoadingDesiredBalance(true);
-    console.log('Fetching desired balance:', { address, token: desiredToken.symbol, chain: desiredToken.chain });
-    fetchTokenBalance(address, desiredToken)
-      .then((balance) => {
-        console.log('Desired balance result:', balance);
-        setDesiredBalance(balance);
-      })
-      .catch((error) => {
-        console.error('Error fetching desired balance:', error);
-        setDesiredBalance(null);
-      })
-      .finally(() => {
-        setLoadingDesiredBalance(false);
-      });
-  }, [desiredToken, mvmAddress, evmAddress]);
-
-  // Refresh balances when intent is fulfilled (funds received)
-  useEffect(() => {
-    if (intentStatus !== 'fulfilled') return;
-    
-    // Refresh offered balance
-    if (offeredToken) {
-      const offeredAddress = offeredToken.chain === 'movement' ? mvmAddress : evmAddress;
-      if (offeredAddress) {
-        setLoadingOfferedBalance(true);
-        fetchTokenBalance(offeredAddress, offeredToken)
-          .then(setOfferedBalance)
-          .catch(() => setOfferedBalance(null))
-          .finally(() => setLoadingOfferedBalance(false));
-      }
-    }
-    
-    // Refresh desired balance
-    if (desiredToken) {
-      const desiredAddress = desiredToken.chain === 'movement' ? mvmAddress : evmAddress;
-      if (desiredAddress) {
-        setLoadingDesiredBalance(true);
-        fetchTokenBalance(desiredAddress, desiredToken)
-          .then(setDesiredBalance)
-          .catch(() => setDesiredBalance(null))
-          .finally(() => setLoadingDesiredBalance(false));
-      }
-    }
-  }, [intentStatus, offeredToken, desiredToken, mvmAddress, evmAddress]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -774,9 +857,13 @@ export function IntentBuilder() {
       return;
     }
 
-    // EVM wallet is always needed
-    if (!evmAddress) {
+    const connectedChain = getConnectedChain(offeredToken, desiredToken);
+    if (isEvmChain(connectedChain) && !evmAddress) {
       setError('Please connect your EVM wallet (MetaMask)');
+      return;
+    }
+    if (isSvmChain(connectedChain) && !svmAddress) {
+      setError('Please connect your SVM wallet (Phantom)');
       return;
     }
 
@@ -909,52 +996,110 @@ export function IntentBuilder() {
       const signatureArray = Array.from(signatureBytes);
       console.log('Signature array length:', signatureArray.length);
 
+      const offeredChainKey = getChainKeyFromId(savedDraftData.offeredChainId);
+      const desiredChainKey = getChainKeyFromId(savedDraftData.desiredChainId);
+      const connectedChainKey =
+        offeredChainKey && isHubChain(offeredChainKey) ? desiredChainKey : offeredChainKey;
+      if (!connectedChainKey) {
+        throw new Error('Unsupported connected chain for this draft');
+      }
+
       if (flowType === 'inflow') {
-        // Inflow: offered on connected chain (EVM), desired on hub (Move)
-        const evmAddressForInflow = evmAddress || '0x' + '0'.repeat(40);
-        const paddedRequesterAddr = padEvmAddressToMove(evmAddressForInflow);
-        // Pad offered metadata (EVM token address) to 32 bytes
-        const paddedOfferedMetadata = padEvmAddressToMove(savedDraftData.offeredMetadata);
-        
-        functionName = `${INTENT_MODULE_ADDRESS}::fa_intent_inflow::create_inflow_intent_entry`;
-        functionArguments = [
-          paddedOfferedMetadata,
-          savedDraftData.offeredAmount,
-          savedDraftData.offeredChainId,
-          savedDraftData.desiredMetadata, // Move token - already 32 bytes
-          savedDraftData.desiredAmount,
-          savedDraftData.desiredChainId,
-          savedDraftData.expiryTime.toString(),
-          savedDraftData.intentId,
-          signature.solver_addr,
-          signatureArray,
-          paddedRequesterAddr,
-        ];
-      } else {
-        // Outflow: offered on hub (Move), desired on connected chain (EVM)
-        if (!evmAddress) {
-          throw new Error('EVM wallet (MetaMask) must be connected for outflow intents');
+        // Inflow: offered on connected chain, desired on hub (Move)
+        if (connectedChainKey && getChainType(connectedChainKey) === 'svm') {
+          if (!svmPublicKey) {
+            throw new Error('SVM wallet (Phantom) must be connected for inflow intents');
+          }
+          // Deviation from EVM flow: SVM addresses are base58 pubkeys,
+          // so we convert to 32-byte hex for Move address fields.
+          const requesterAddrHex = svmPubkeyToHex(svmPublicKey);
+          const offeredMetadataHex = svmPubkeyToHex(savedDraftData.offeredMetadata);
+
+          functionName = `${INTENT_MODULE_ADDR}::fa_intent_inflow::create_inflow_intent_entry`;
+          functionArguments = [
+            offeredMetadataHex,
+            savedDraftData.offeredAmount,
+            savedDraftData.offeredChainId,
+            savedDraftData.desiredMetadata, // Move token - already 32 bytes
+            savedDraftData.desiredAmount,
+            savedDraftData.desiredChainId,
+            savedDraftData.expiryTime.toString(),
+            savedDraftData.intentId,
+            signature.solver_hub_addr,
+            signatureArray,
+            requesterAddrHex,
+          ];
+        } else {
+          const evmAddressForInflow = evmAddress || '0x' + '0'.repeat(40);
+          const paddedRequesterAddr = padEvmAddressToMove(evmAddressForInflow);
+          // Pad offered metadata (EVM token address) to 32 bytes
+          const paddedOfferedMetadata = padEvmAddressToMove(savedDraftData.offeredMetadata);
+
+          functionName = `${INTENT_MODULE_ADDR}::fa_intent_inflow::create_inflow_intent_entry`;
+          functionArguments = [
+            paddedOfferedMetadata,
+            savedDraftData.offeredAmount,
+            savedDraftData.offeredChainId,
+            savedDraftData.desiredMetadata, // Move token - already 32 bytes
+            savedDraftData.desiredAmount,
+            savedDraftData.desiredChainId,
+            savedDraftData.expiryTime.toString(),
+            savedDraftData.intentId,
+            signature.solver_hub_addr,
+            signatureArray,
+            paddedRequesterAddr,
+          ];
         }
-        
-        const paddedRequesterAddr = padEvmAddressToMove(evmAddress);
-        // Pad desired metadata (EVM token address) to 32 bytes
-        const paddedDesiredMetadata = padEvmAddressToMove(savedDraftData.desiredMetadata);
-        console.log('Padded desired metadata:', paddedDesiredMetadata);
-        
-        functionName = `${INTENT_MODULE_ADDRESS}::fa_intent_outflow::create_outflow_intent_entry`;
-        functionArguments = [
-          savedDraftData.offeredMetadata, // Move token - already 32 bytes
-          savedDraftData.offeredAmount,
-          savedDraftData.offeredChainId,
-          paddedDesiredMetadata,
-          savedDraftData.desiredAmount,
-          savedDraftData.desiredChainId,
-          savedDraftData.expiryTime.toString(),
-          savedDraftData.intentId,
-          paddedRequesterAddr,
-          signature.solver_addr,
-          signatureArray,
-        ];
+      } else {
+        // Outflow: offered on hub (Move), desired on connected chain
+        if (connectedChainKey && getChainType(connectedChainKey) === 'svm') {
+          if (!svmPublicKey) {
+            throw new Error('SVM wallet (Phantom) must be connected for outflow intents');
+          }
+          // Deviation from EVM flow: SVM addresses are base58 pubkeys,
+          // so we convert to 32-byte hex for Move address fields.
+          const requesterAddrHex = svmPubkeyToHex(svmPublicKey);
+          const desiredMetadataHex = svmPubkeyToHex(savedDraftData.desiredMetadata);
+
+          functionName = `${INTENT_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry`;
+          functionArguments = [
+            savedDraftData.offeredMetadata, // Move token - already 32 bytes
+            savedDraftData.offeredAmount,
+            savedDraftData.offeredChainId,
+            desiredMetadataHex,
+            savedDraftData.desiredAmount,
+            savedDraftData.desiredChainId,
+            savedDraftData.expiryTime.toString(),
+            savedDraftData.intentId,
+            requesterAddrHex,
+            signature.solver_hub_addr,
+            signatureArray,
+          ];
+        } else {
+          if (!evmAddress) {
+            throw new Error('EVM wallet (MetaMask) must be connected for outflow intents');
+          }
+
+          const paddedRequesterAddr = padEvmAddressToMove(evmAddress);
+          // Pad desired metadata (EVM token address) to 32 bytes
+          const paddedDesiredMetadata = padEvmAddressToMove(savedDraftData.desiredMetadata);
+          console.log('Padded desired metadata:', paddedDesiredMetadata);
+
+          functionName = `${INTENT_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry`;
+          functionArguments = [
+            savedDraftData.offeredMetadata, // Move token - already 32 bytes
+            savedDraftData.offeredAmount,
+            savedDraftData.offeredChainId,
+            paddedDesiredMetadata,
+            savedDraftData.desiredAmount,
+            savedDraftData.desiredChainId,
+            savedDraftData.expiryTime.toString(),
+            savedDraftData.intentId,
+            paddedRequesterAddr,
+            signature.solver_hub_addr,
+            signatureArray,
+          ];
+        }
       }
 
       // Use build-sign-submit pattern to work around Nightly wallet bug
@@ -964,8 +1109,8 @@ export function IntentBuilder() {
       }
 
       // Configure Aptos client for Movement testnet
-      const config = new AptosConfig({
-        fullnode: 'https://testnet.movementnetwork.xyz/v1',
+      const config = new AptosConfig({ 
+        fullnode: getHubChainConfig().rpcUrl,
       });
       const aptos = new Aptos(config);
 
@@ -1057,16 +1202,15 @@ export function IntentBuilder() {
   const handleCreateEscrow = async () => {
     // Use offeredToken if available, otherwise look it up from savedDraftData
     const effectiveOfferedToken = offeredToken || getOfferedTokenFromDraft();
-    const isInflow = savedDraftData && savedDraftData.offeredChainId !== '250';
+    const isInflow = savedDraftData && !isHubChainId(savedDraftData.offeredChainId);
     
-    console.log('handleCreateEscrow called', { savedDraftData, offeredToken, effectiveOfferedToken, isInflow, evmAddress, signature: !!signature, chainId });
-    
-    if (!savedDraftData || !effectiveOfferedToken || !isInflow || !evmAddress || !signature) {
+    console.log('handleCreateEscrow called', { savedDraftData, offeredToken, effectiveOfferedToken, isInflow, evmAddress, svmAddress, signature: !!signature, chainId });
+
+    if (!savedDraftData || !effectiveOfferedToken || !isInflow || !signature) {
       const missing = [];
       if (!savedDraftData) missing.push('savedDraftData');
       if (!effectiveOfferedToken) missing.push('offeredToken (could not resolve from draft)');
       if (!isInflow) missing.push(`not inflow (offeredChainId=${savedDraftData?.offeredChainId})`);
-      if (!evmAddress) missing.push('evmAddress');
       if (!signature) missing.push('signature');
       setError(`Missing required data for escrow creation: ${missing.join(', ')}`);
       return;
@@ -1074,6 +1218,48 @@ export function IntentBuilder() {
 
     try {
       setError(null);
+
+      if (getChainType(effectiveOfferedToken.chain) === 'svm') {
+        if (!svmPublicKey) {
+          setError('SVM wallet (Phantom) must be connected for escrow creation');
+          return;
+        }
+
+        setCreatingEscrow(true);
+
+        // Deviation from EVM flow: SVM uses a single on-chain instruction for escrow creation
+        // because the escrow program transfers SPL tokens directly (no ERC20 approval step).
+        console.log('SVM Escrow: Fetching solver SVM address for hub addr:', signature.solver_hub_addr);
+        const solverSvmHex = await fetchSolverSvmAddress(signature.solver_hub_addr);
+        console.log('SVM Escrow: Solver SVM hex:', solverSvmHex);
+        if (!solverSvmHex) {
+          throw new Error('Solver has no SVM address registered. The solver must register with an SVM address to fulfill SVM inflow intents.');
+        }
+
+        const tokenMint = new PublicKey(effectiveOfferedToken.metadata);
+        const requesterToken = getSvmTokenAccount(tokenMint, svmPublicKey);
+        const reservedSolver = svmHexToPubkey(solverSvmHex);
+        console.log('SVM Escrow: Reserved solver pubkey:', reservedSolver.toBase58());
+        const amount = BigInt(savedDraftData.offeredAmount);
+        const createIx = buildCreateEscrowInstruction({
+          intentId: savedDraftData.intentId,
+          amount,
+          requester: svmPublicKey,
+          requesterToken,
+          tokenMint,
+          reservedSolver,
+        });
+
+        const connection = getSvmConnection();
+        const signatureHash = await sendSvmTransaction({
+          wallet: svmWallet,
+          connection,
+          instructions: [createIx],
+        });
+        setEscrowHash(signatureHash);
+        setCreatingEscrow(false);
+        return;
+      }
       
       // Check if we're on the right chain
       const chainConfig = CHAIN_CONFIGS[effectiveOfferedToken.chain];
@@ -1094,6 +1280,11 @@ export function IntentBuilder() {
         }
       }
       
+      if (!evmAddress) {
+        setError('EVM wallet (MetaMask) must be connected for escrow creation');
+        return;
+      }
+
       setApprovingToken(true);
 
       const escrowAddress = getEscrowContractAddress(effectiveOfferedToken.chain);
@@ -1140,6 +1331,10 @@ export function IntentBuilder() {
     
     if (!savedDraftData || !offeredToken || flowType !== 'inflow' || !evmAddress || !signature) {
       console.error('handleCreateEscrowAfterApproval: missing data');
+      return;
+    }
+    if (getChainType(offeredToken.chain) === 'svm') {
+      // SVM escrows are created directly without an approval step.
       return;
     }
 
@@ -1388,9 +1583,9 @@ export function IntentBuilder() {
           {!draftId && (
             <button
               type="submit"
-              disabled={loading || !requesterAddr || !evmAddress || desiredAmount === 'not available yet'}
+              disabled={loading || !requesterAddr || !connectedWalletReady || desiredAmount === 'not available yet'}
               className={`w-full px-4 py-2 rounded text-sm font-medium transition-colors ${
-                desiredAmount === 'not available yet' || !requesterAddr || !evmAddress
+                desiredAmount === 'not available yet' || !requesterAddr || !connectedWalletReady
                   ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               }`}
@@ -1413,11 +1608,11 @@ export function IntentBuilder() {
             <button
               type="button"
               onClick={handleCreateIntent}
-              disabled={submittingTransaction || !requesterAddr || !evmAddress}
+              disabled={submittingTransaction || !requesterAddr || !connectedWalletReady}
               className="w-full px-4 py-2 rounded text-sm font-medium transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {(() => {
-                const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
+                const isOutflow = flowType === 'outflow' || isHubChainId(savedDraftData?.offeredChainId);
                 if (submittingTransaction) return isOutflow ? 'Committing and Sending...' : 'Committing...';
                 return isOutflow ? 'Commit and Send' : 'Commit';
               })()}
@@ -1430,32 +1625,36 @@ export function IntentBuilder() {
               className="w-full px-4 py-2 rounded text-sm font-medium bg-gray-600 text-gray-400 cursor-not-allowed"
             >
               {(() => {
-                const isOutflow = flowType === 'outflow' || savedDraftData?.offeredChainId === '250';
+                const isOutflow = flowType === 'outflow' || isHubChainId(savedDraftData?.offeredChainId);
                 return isOutflow ? '✓ Committed and Sent' : '✓ Committed';
               })()}
             </button>
           )}
 
           {/* Send Button (for inflow only) - show when committed, stay visible (greyed out) after sent */}
-          {(savedDraftData?.offeredChainId !== '250') && transactionHash && !escrowHash && (
+          {(!isHubChainId(savedDraftData?.offeredChainId)) && transactionHash && !escrowHash && (
             <button
               type="button"
               onClick={handleCreateEscrow}
-              disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !evmAddress}
+              disabled={approvingToken || creatingEscrow || isApproving || isCreatingEscrow || isApprovePending || isEscrowPending || !escrowWalletReady}
               className="w-full px-4 py-2 rounded text-sm font-medium transition-colors bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isApprovePending
-                ? 'Confirm in wallet...'
-                : approvingToken || isApproving
-                  ? 'Approving token...'
-                  : isEscrowPending
-                    ? 'Confirm escrow in wallet...'
-                    : creatingEscrow || isCreatingEscrow
-                      ? 'Sending...'
-                      : 'Send'}
+              {escrowRequiresSvm
+                ? creatingEscrow
+                  ? 'Sending...'
+                  : 'Create Escrow on SVM'
+                : isApprovePending
+                  ? 'Confirm in wallet...'
+                  : approvingToken || isApproving
+                    ? 'Approving token...'
+                    : isEscrowPending
+                      ? 'Confirm escrow in wallet...'
+                      : creatingEscrow || isCreatingEscrow
+                        ? 'Sending...'
+                        : 'Create Escrow on EVM'}
             </button>
           )}
-          {(savedDraftData?.offeredChainId !== '250') && transactionHash && escrowHash && (
+          {(!isHubChainId(savedDraftData?.offeredChainId)) && transactionHash && escrowHash && (
             <button
               type="button"
               disabled
@@ -1471,12 +1670,17 @@ export function IntentBuilder() {
               Connect your MVM wallet (Nightly) to create an intent
             </p>
           )}
-          {requesterAddr && !evmAddress && (
+          {requesterAddr && requiresEvmWallet && !evmAddress && (
             <p className="text-xs text-gray-400 text-center">
               Connect your EVM wallet (MetaMask) to create an intent
             </p>
           )}
-          {requesterAddr && evmAddress && !draftId && (
+          {requesterAddr && requiresSvmWallet && !svmAddress && (
+            <p className="text-xs text-gray-400 text-center">
+              Connect your SVM wallet (Phantom) to create an intent
+            </p>
+          )}
+          {requesterAddr && connectedWalletReady && !draftId && (
             <p className="text-xs text-gray-500 text-center">
               Request intent for solver approval
             </p>
@@ -1499,8 +1703,8 @@ export function IntentBuilder() {
 
         {/* Timer - outside status box */}
         {mounted && draftId && savedDraftData && signature && intentStatus !== 'fulfilled' && timeRemaining !== null && 
-         ((savedDraftData?.offeredChainId === '250' && !transactionHash) || 
-          (savedDraftData?.offeredChainId !== '250' && !escrowHash)) && (
+         ((isHubChainId(savedDraftData?.offeredChainId) && !transactionHash) || 
+          (!isHubChainId(savedDraftData?.offeredChainId) && !escrowHash)) && (
           <p className="text-xs text-gray-400 text-center">
             Time remaining: {Math.floor(timeRemaining / 1000)}s
             {timeRemaining === 0 && ' (Expired)'}
@@ -1516,7 +1720,7 @@ export function IntentBuilder() {
                     - Outflow: immediately after commit (tokens sent on commit)
                     - Inflow: only after escrow is created (escrowHash exists) */}
                 {intentStatus === 'created' && pollingFulfillment && 
-                 (savedDraftData?.offeredChainId === '250' || escrowHash) && (
+                 (isHubChainId(savedDraftData?.offeredChainId) || escrowHash) && (
                   <p className="text-xs text-yellow-400 text-center flex items-center justify-center gap-2">
                     <svg className="animate-spin h-4 w-4 text-yellow-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

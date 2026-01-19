@@ -59,8 +59,8 @@ pub struct DraftintentStatusResponse {
 /// Request structure for submitting a signature for a draft intent.
 #[derive(Debug, Deserialize)]
 pub struct SignatureSubmissionRequest {
-    /// Address of the solver submitting the signature
-    pub solver_addr: String,
+    /// Hub solver address submitting the signature
+    pub solver_hub_addr: String,
     /// Signature in hex format (Ed25519, 64 bytes)
     pub signature: String,
     /// Public key of the solver (hex format)
@@ -81,8 +81,8 @@ pub struct SignatureSubmissionResponse {
 pub struct SignatureResponse {
     /// Signature in hex format
     pub signature: String,
-    /// Address of the solver who signed (first signer) - Movement address
-    pub solver_addr: String,
+    /// Hub solver address of the signer (Movement address)
+    pub solver_hub_addr: String,
     /// Solver's EVM address (for inflow to EVM chains) - None if not available
     pub solver_evm_addr: Option<String>,
     /// Timestamp when signature was received
@@ -259,24 +259,24 @@ pub async fn submit_signature_handler(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     info!(
         "Received signature submission for draft {} from solver {}",
-        draft_id, request.solver_addr
+        draft_id, request.solver_hub_addr
     );
 
     // Validate solver address format: must have 0x prefix
-    if !request.solver_addr.starts_with("0x") {
+    if !request.solver_hub_addr.starts_with("0x") {
         return Ok(warp::reply::with_status(
             warp::reply::json(&ApiResponse::<SignatureSubmissionResponse> {
                 success: false,
                 data: None,
                 error: Some(format!(
                     "Invalid solver address '{}': must start with 0x prefix",
-                    request.solver_addr
+                    request.solver_hub_addr
                 )),
             }),
             StatusCode::BAD_REQUEST,
         ));
     }
-    let solver_addr = request.solver_addr.clone();
+    let solver_hub_addr = request.solver_hub_addr.clone();
 
     // Validate solver is registered on-chain
     let solver_registry_addr = &config.hub_chain.intent_module_addr;
@@ -299,7 +299,7 @@ pub async fn submit_signature_handler(
 
     // Check if solver is registered
     let solver_registered = match mvm_client
-        .get_solver_public_key(&solver_addr, solver_registry_addr)
+        .get_solver_public_key(&solver_hub_addr, solver_registry_addr)
         .await
     {
         Ok(Some(_)) => true,
@@ -324,7 +324,7 @@ pub async fn submit_signature_handler(
                 data: None,
                 error: Some(format!(
                     "Solver {} is not registered on-chain",
-                    solver_addr
+                    solver_hub_addr
                 )),
             }),
             StatusCode::BAD_REQUEST,
@@ -348,7 +348,7 @@ pub async fn submit_signature_handler(
     let result = store_write
         .add_signature(
             &draft_id,
-            solver_addr.clone(),
+            solver_hub_addr.clone(),
             request.signature.clone(),
             request.public_key.clone(),
         )
@@ -444,17 +444,17 @@ pub async fn get_signature_handler(
                 
                 match MvmClient::new(&config.hub_chain.rpc_url) {
                     Ok(mvm_client) => {
-                        match mvm_client.get_solver_evm_address(&sig.solver_addr, solver_registry_addr).await {
+                        match mvm_client.get_solver_evm_address(&sig.solver_hub_addr, solver_registry_addr).await {
                             Ok(Some(addr)) => {
-                                info!("Found solver EVM address for {}: {}", sig.solver_addr, addr);
+                                info!("Found solver EVM address for {}: {}", sig.solver_hub_addr, addr);
                                 Some(addr)
                             }
                             Ok(None) => {
-                                warn!("Solver {} has no registered EVM address", sig.solver_addr);
+                                warn!("Solver {} has no registered EVM address", sig.solver_hub_addr);
                                 None
                             }
                             Err(e) => {
-                                warn!("Failed to look up solver EVM address for {}: {}", sig.solver_addr, e);
+                                warn!("Failed to look up solver EVM address for {}: {}", sig.solver_hub_addr, e);
                                 None
                             }
                         }
@@ -471,7 +471,7 @@ pub async fn get_signature_handler(
                     success: true,
                     data: Some(SignatureResponse {
                         signature: sig.signature,
-                        solver_addr: sig.solver_addr.clone(),
+                        solver_hub_addr: sig.solver_hub_addr.clone(),
                         solver_evm_addr,
                         timestamp: sig.signature_timestamp,
                     }),

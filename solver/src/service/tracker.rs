@@ -50,6 +50,8 @@ pub struct TrackedIntent {
     pub intent_addr: Option<String>,
     /// Requester address on the connected chain (for outflow intents)
     pub requester_addr_connected_chain: Option<String>,
+    /// Whether an outflow transfer has already been attempted
+    pub outflow_attempted: bool,
 }
 
 /// Intent tracker that monitors signed intents and their on-chain creation
@@ -129,6 +131,7 @@ impl IntentTracker {
             expiry_time,
             intent_addr: None,
             requester_addr_connected_chain: None,
+            outflow_attempted: false,
         };
 
         // Track requester address for event querying
@@ -356,6 +359,22 @@ impl IntentTracker {
         } else {
             anyhow::bail!("Intent not found: {}", draft_id)
         }
+    }
+
+    /// Marks an outflow intent as attempted to prevent duplicate transfers
+    ///
+    /// # Arguments
+    ///
+    /// * `intent_id` - On-chain intent ID
+    pub async fn mark_outflow_attempted(&self, intent_id: &str) -> Result<()> {
+        let mut intents = self.intents.write().await;
+        for (_draft_id, intent) in intents.iter_mut() {
+            if intent.intent_id == intent_id {
+                intent.outflow_attempted = true;
+                return Ok(());
+            }
+        }
+        anyhow::bail!("Intent not found: {}", intent_id)
     }
 
     /// Gets a tracked intent by draft ID

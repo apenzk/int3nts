@@ -15,8 +15,8 @@ contract IntentEscrow {
     /// @notice Authorized verifier address that can approve releases
     address public immutable verifier;
 
-    /// @notice Contract-defined expiry duration (1 hour in seconds)
-    uint256 public constant EXPIRY_DURATION = 1 hours;
+    /// @notice Contract-defined expiry duration (2 minutes in seconds)
+    uint256 public constant EXPIRY_DURATION = 2 minutes;
 
     /// @notice Escrow data structure
     struct Escrow {

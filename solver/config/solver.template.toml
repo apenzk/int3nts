@@ -10,6 +10,8 @@
 verifier_url = "http://127.0.0.1:3333"  # Verifier API base URL
 polling_interval_ms = 2000               # Polling interval for checking pending drafts (milliseconds)
 e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
+acceptance_api_host = "127.0.0.1"         # Solver acceptance API host
+acceptance_api_port = 4444                # Solver acceptance API port
 
 # Hub Chain Configuration
 # The hub chain is where intents are created
@@ -21,28 +23,37 @@ module_addr = "0x123"                 # Address of the intent framework module
 profile = "solver-chain1"                 # Aptos/Movement CLI profile name for this chain
 e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 
-# Connected Chain Configuration
-# The connected chain is where escrows occur
-# Choose either "mvm" or "evm" type
+# Connected Chain Configurations
+# Use [[connected_chain]] for each connected chain (supports multiple chains)
+# Each section must have a "type" field: "mvm", "evm", or "svm"
 
-# Option 1: Move VM Chain
-[connected_chain]
-type = "mvm"
-name = "Connected Move VM Chain"          # Human-readable name for the chain
-rpc_url = "http://127.0.0.1:8082/v1"     # RPC endpoint URL for blockchain communication
-chain_id = 2                              # Unique chain identifier
-module_addr = "0x123"                 # Address of the intent framework module
-profile = "solver-chain2"                # Aptos/Movement CLI profile name for this chain
-e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
+# Example: MVM Connected Chain
+# [[connected_chain]]
+# type = "mvm"
+# name = "Connected Move VM Chain"          # Human-readable name for the chain
+# rpc_url = "http://127.0.0.1:8082/v1"     # RPC endpoint URL for blockchain communication
+# chain_id = 2                              # Unique chain identifier
+# module_addr = "0x123"                 # Address of the intent framework module
+# profile = "solver-chain2"                # Aptos/Movement CLI profile name for this chain
+# e2e_mode = false                          # E2E testing mode
 
-# Option 2: EVM Chain (uncomment and use instead of MVM config above)
-# [connected_chain]
+# Example: EVM Connected Chain
+# [[connected_chain]]
 # type = "evm"
 # name = "Connected EVM Chain"            # Human-readable name for the chain
 # rpc_url = "https://sepolia.base.org"     # RPC endpoint URL for EVM chain
 # chain_id = 84532                         # Chain ID (e.g., 84532 for Base Sepolia)
 # escrow_contract_addr = "0x..."         # Address of the IntentEscrow contract
-# private_key_env = "BASE_SOLVER_PRIVATE_KEY"  # Environment variable containing EVM private key
+# private_key_env = "SOLVER_EVM_PRIVATE_KEY"  # Environment variable containing EVM private key
+
+# Example: SVM Connected Chain
+# [[connected_chain]]
+# type = "svm"
+# name = "Connected SVM Chain"            # Human-readable name for the chain
+# rpc_url = "http://127.0.0.1:8899"       # RPC endpoint URL for SVM chain
+# chain_id = 1001                         # Chain ID (arbitrary routing ID)
+# escrow_program_id = "<your-svm-program-id>"
+# private_key_env = "SOLANA_SOLVER_PRIVATE_KEY" # Environment variable containing solver private key (base58)
 
 # Acceptance Criteria
 # Defines which token pairs are supported and their exchange rates
@@ -53,16 +64,30 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 # Example: If rate is 0.5, then 0.5 offered tokens = 1 desired token (offered token is worth more)
 
 # Example: Token A (chain 1) -> Token B (chain 2) at 1:1 rate
-"1:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:2:0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" = 1.0
+[[acceptance.tokenpair]]
+source_chain_id = 1
+source_token = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+target_chain_id = 2
+target_token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+ratio = 1.0
 
 # Example: USDC (Base Sepolia) -> USDC (Ethereum Sepolia) at 1:1 rate
-# "84532:0x036CbD53842c5426634e7929541eC2318f3dCF7e:11155111:0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238" = 1.0
+# [[acceptance.tokenpair]]
+# source_chain_id = 84532
+# source_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+# target_chain_id = 11155111
+# target_token = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+# ratio = 1.0
 
 # Example: Token A (chain 1) -> Token C (chain 2) at 0.5 rate
-# "1:0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:2:0xcccccccccccccccccccccccccccccccccccccccc" = 0.5
+# [[acceptance.tokenpair]]
+# source_chain_id = 1
+# source_token = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# target_chain_id = 2
+# target_token = "0xcccccccccccccccccccccccccccccccccccccccc"
+# ratio = 0.5
 
 # Solver Signing Configuration
 [solver]
 profile = "solver-chain1"                # Aptos/Movement CLI profile name for solver account
 address = "0x..."                        # Solver address (0x-prefixed hex)
-

@@ -217,6 +217,45 @@ impl CryptoService {
         })
     }
 
+    /// Creates an SVM approval signature by signing the intent_id bytes directly.
+    ///
+    /// The verifier signs the raw 32-byte intent_id (no BCS encoding).
+    pub fn create_svm_approval_signature(&self, intent_id: &str) -> Result<ApprovalSignature> {
+        let intent_id_hex = intent_id.strip_prefix("0x").unwrap_or(intent_id);
+        let padded_hex = if intent_id_hex.len() < 64 {
+            format!("{:0>64}", intent_id_hex)
+        } else if intent_id_hex.len() > 64 {
+            return Err(anyhow::anyhow!(
+                "Intent ID hex too long: {} characters (max 64)",
+                intent_id_hex.len()
+            ));
+        } else {
+            intent_id_hex.to_string()
+        };
+
+        let intent_id_bytes = hex::decode(&padded_hex)
+            .map_err(|e| anyhow::anyhow!("Invalid intent_id hex: {}", e))?;
+
+        if intent_id_bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "Intent ID must be 32 bytes after padding, got {} bytes",
+                intent_id_bytes.len()
+            ));
+        }
+
+        let message: [u8; 32] = intent_id_bytes
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("Failed to convert intent_id_bytes to [u8; 32]"))?;
+        let signature = self.signing_key.sign(&message);
+
+        info!("Created SVM approval signature for intent_id: {}", intent_id);
+
+        Ok(ApprovalSignature {
+            signature: general_purpose::STANDARD.encode(signature.to_bytes()),
+            timestamp: chrono::Utc::now().timestamp() as u64,
+        })
+    }
+
     /// Creates an approval signature for escrow completion.
     ///
     /// This function creates a cryptographic signature that approves or rejects

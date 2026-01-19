@@ -14,7 +14,7 @@ module mvmt_intent::fa_intent_outflow {
     /// The solver signature is invalid and cannot be verified.
     const EINVALID_SIGNATURE: u64 = 2;
     /// The requester address on the connected chain is invalid (zero address).
-    const EINVALID_REQUESTER_ADDRESS: u64 = 3;
+    const EINVALID_REQUESTER_ADDR: u64 = 3;
     /// The verifier config has not been initialized.
     const EVERIFIER_NOT_INITIALIZED: u64 = 4;
     /// Only the module publisher can initialize/update the verifier config.
@@ -199,7 +199,7 @@ module mvmt_intent::fa_intent_outflow {
     /// # Aborts
     /// - `ESOLVER_NOT_REGISTERED`: Solver is not registered in the solver registry
     /// - `EINVALID_SIGNATURE`: Signature verification failed
-    /// - `EINVALID_REQUESTER_ADDRESS`: requester_addr_connected_chain is zero address (0x0)
+    /// - `EINVALID_REQUESTER_ADDR`: requester_addr_connected_chain is zero address (0x0)
     public fun create_outflow_intent(
         requester_signer: &signer,
         offered_metadata: Object<Metadata>,
@@ -219,7 +219,7 @@ module mvmt_intent::fa_intent_outflow {
         // Outflow intents require a valid address on the connected chain where the solver should send tokens
         assert!(
             requester_addr_connected_chain != @0x0,
-            error::invalid_argument(EINVALID_REQUESTER_ADDRESS)
+            error::invalid_argument(EINVALID_REQUESTER_ADDR)
         );
 
         // Withdraw actual tokens from requester (locked on hub chain for outflow)
@@ -321,7 +321,7 @@ module mvmt_intent::fa_intent_outflow {
     /// # Aborts
     /// - `EVERIFIER_NOT_INITIALIZED`: Verifier config has not been set
     /// - `EINVALID_SIGNATURE`: Solver signature verification failed
-    /// - `EINVALID_REQUESTER_ADDRESS`: requester_addr_connected_chain is zero address
+    /// - `EINVALID_REQUESTER_ADDR`: requester_addr_connected_chain is zero address
     public entry fun create_outflow_intent_entry(
         requester_signer: &signer,
         offered_metadata: Object<Metadata>,

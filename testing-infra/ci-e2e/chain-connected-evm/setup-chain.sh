@@ -10,17 +10,17 @@ setup_project_root
 setup_logging "setup-chain"
 cd "$PROJECT_ROOT"
 
-log "🔗 EVM CHAIN SETUP"
+log " EVM CHAIN SETUP"
 log "=================="
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 
 # Stop any existing Hardhat node
-log "🧹 Stopping any existing Hardhat node..."
+log " Stopping any existing Hardhat node..."
 pkill -f "hardhat node" || true
 sleep 2
 
 log ""
-log "📦 Installing npm dependencies..."
+log " Installing npm dependencies..."
 cd evm-intent-framework
 
 # Install dependencies if node_modules doesn't exist
@@ -41,7 +41,7 @@ else
 fi
 
 log ""
-log "🚀 Starting Hardhat node on port 8545..."
+log " Starting Hardhat node on port 8545..."
 
 # Start Hardhat node in background (run in nix develop)
 nix develop -c bash -c "npx hardhat node --port 8545" > "$LOG_FILE" 2>&1 &
@@ -133,7 +133,7 @@ cd ..
 log ""
 log "✅ EVM chain (Hardhat) is running!"
 log ""
-log "📋 Hardhat Node Details:"
+log " Hardhat Node Details:"
 log "   RPC URL:    http://127.0.0.1:8545"
 log "   Chain ID:   31337"
 log "   PID:        $HARDHAT_PID"
@@ -142,10 +142,10 @@ log "   ... (20 accounts total)"
 log ""
 log "   Private keys available via: npx hardhat node"
 log ""
-log "📋 Management Commands:"
+log " Management Commands:"
 log "   Stop node:      ./testing-infra/ci-e2e/chain-connected-evm/stop-chain.sh"
 log "   View logs:      tail -f $LOG_FILE"
 log "   Check status:   curl -X POST http://127.0.0.1:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}'"
 log ""
-log "🎉 EVM chain setup complete!"
+log " EVM chain setup complete!"
 

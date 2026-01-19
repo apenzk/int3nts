@@ -20,7 +20,7 @@ describe("IntentEscrow - Error Conditions", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Zero Amount Rejection
+  /// 1. Test: Zero Amount Rejection
   /// Verifies that createEscrow reverts when amount is zero.
   /// Why: Zero-amount escrows are meaningless and could cause accounting issues.
   it("Should revert with zero amount in createEscrow", async function () {
@@ -29,7 +29,7 @@ describe("IntentEscrow - Error Conditions", function () {
     ).to.be.revertedWith("Amount must be greater than 0");
   });
 
-  /// Test: Insufficient Allowance Rejection
+  /// 2. Test: Insufficient Allowance Rejection
   /// Verifies that createEscrow reverts when ERC20 allowance is insufficient.
   /// Why: ERC20 transfers require explicit approval. Insufficient allowance must be rejected to prevent failed transfers.
   /// We mint tokens to ensure the requester has balance, then approve less than needed to test specifically the allowance check, not the balance check.
@@ -47,7 +47,7 @@ describe("IntentEscrow - Error Conditions", function () {
     ).to.be.reverted;
   });
 
-  /// Test: Maximum Value Edge Case
+  /// 3. Test: Maximum Value Edge Case
   /// Verifies that createEscrow handles maximum uint256 values correctly.
   /// Why: Edge case testing ensures the contract doesn't overflow or fail on boundary values.
   it("Should handle maximum uint256 value in createEscrow", async function () {
@@ -65,7 +65,7 @@ describe("IntentEscrow - Error Conditions", function () {
     expect(escrowData.amount).to.equal(maxAmount);
   });
 
-  /// Test: ETH Escrow Creation with address(0)
+  /// 4. Test: ETH Escrow Creation with address(0)
   /// Verifies that createEscrow accepts address(0) for ETH deposits.
   /// Why: ETH deposits use address(0) as a convention to distinguish from ERC20 token deposits.
   it("Should allow ETH escrow creation with address(0)", async function () {
@@ -85,7 +85,7 @@ describe("IntentEscrow - Error Conditions", function () {
     expect(escrowData.amount).to.equal(amount);
   });
 
-  /// Test: ETH Amount Mismatch Rejection
+  /// 5. Test: ETH Amount Mismatch Rejection
   /// Verifies that createEscrow reverts when msg.value doesn't match amount for ETH deposits.
   /// Why: Prevents accidental underpayment or overpayment, ensuring exact amount matching.
   it("Should revert with ETH amount mismatch", async function () {
@@ -97,7 +97,7 @@ describe("IntentEscrow - Error Conditions", function () {
     ).to.be.revertedWith("ETH amount mismatch");
   });
 
-  /// Test: ETH Not Accepted for Token Escrow
+  /// 6. Test: ETH Not Accepted for Token Escrow
   /// Verifies that createEscrow reverts when ETH is sent with a token address.
   /// Why: Prevents confusion between ETH and ERC20 deposits. Token escrows should not accept ETH.
   it("Should revert when ETH sent with token address", async function () {
@@ -110,7 +110,7 @@ describe("IntentEscrow - Error Conditions", function () {
     ).to.be.revertedWith("ETH not accepted for token escrow");
   });
 
-  /// Test: Invalid Signature Length Rejection
+  /// 7. Test: Invalid Signature Length Rejection
   /// Verifies that claim reverts with invalid signature length.
   /// Why: ECDSA signatures must be exactly 65 bytes. Invalid lengths indicate malformed signatures.
   it("Should revert with invalid signature length", async function () {
@@ -126,7 +126,7 @@ describe("IntentEscrow - Error Conditions", function () {
     ).to.be.revertedWith("Invalid signature length");
   });
 
-  /// Test: Non-Existent Escrow Cancellation Rejection
+  /// 8. Test: Non-Existent Escrow Cancellation Rejection
   /// Verifies that cancel reverts with EscrowDoesNotExist for non-existent escrows.
   /// Why: Prevents cancellation of non-existent escrows and ensures proper error handling.
   it("Should revert cancel on non-existent escrow", async function () {
@@ -135,6 +135,49 @@ describe("IntentEscrow - Error Conditions", function () {
     await expect(
       escrow.connect(requester).cancel(nonExistentIntentId)
     ).to.be.revertedWithCustomError(escrow, "EscrowDoesNotExist");
+  });
+
+  /// 9. Test: Zero Solver Address Rejection
+  /// Verifies that escrows cannot be created with zero/default solver address.
+  /// Why: A valid solver must be specified for claims.
+  it("Should revert with zero solver address", async function () {
+    const amount = ethers.parseEther("100");
+    await token.mint(requester.address, amount);
+    await token.connect(requester).approve(escrow.target, amount);
+
+    await expect(
+      escrow.connect(requester).createEscrow(intentId, token.target, amount, ethers.ZeroAddress)
+    ).to.be.revertedWith("Reserved solver must be specified");
+  });
+
+  /// 10. Test: Duplicate Intent ID Rejection
+  /// Verifies that escrows with duplicate intent IDs are rejected.
+  /// Why: Each intent ID must map to exactly one escrow.
+  it("Should revert with duplicate intent ID", async function () {
+    const amount = ethers.parseEther("100");
+    await token.mint(requester.address, amount * 2n);
+    await token.connect(requester).approve(escrow.target, amount * 2n);
+
+    // Create first escrow
+    await escrow.connect(requester).createEscrow(intentId, token.target, amount, solver.address);
+
+    // Try to create second escrow with same intent ID
+    await expect(
+      escrow.connect(requester).createEscrow(intentId, token.target, amount, solver.address)
+    ).to.be.revertedWith("Escrow already exists");
+  });
+
+  /// 11. Test: Insufficient Token Balance Rejection
+  /// Verifies that escrow creation fails if requester has insufficient tokens.
+  /// Why: Cannot deposit more tokens than available.
+  it("Should revert with insufficient token balance", async function () {
+    const amount = ethers.parseEther("100");
+    // Do NOT mint tokens - requester has no balance
+    await token.connect(requester).approve(escrow.target, amount);
+
+    await expect(
+      escrow.connect(requester).createEscrow(intentId, token.target, amount, solver.address)
+    ).to.be.reverted;
   });
 });
 

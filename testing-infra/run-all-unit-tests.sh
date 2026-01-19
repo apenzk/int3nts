@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Generate test summary table for all components
-# Usage: ./scripts/test-summary.sh
+# Usage: ./testing-infra/run-all-unit-tests.sh
 
 # Don't use set -e so we can capture all test results even if some fail
 
@@ -40,6 +40,16 @@ EVM_FAILED=$(echo "$EVM_TEST_OUTPUT" | grep -oE "[0-9]+ failing" | awk '{print $
 EVM_PASSED=${EVM_PASSED:-0}
 EVM_FAILED=${EVM_FAILED:-0}
 
+echo "Running SVM tests..."
+# Build and run tests
+SVM_TEST_OUTPUT=$(cd svm-intent-framework && ./scripts/test.sh 2>&1) || {
+    echo "SVM tests failed:"
+    echo "$SVM_TEST_OUTPUT"
+}
+# Parse cargo test output (e.g., "test result: ok. 3 passed; 0 failed;")
+SVM_PASSED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
+SVM_FAILED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
+
 echo "Running Frontend tests..."
 FRONTEND_TEST_OUTPUT=$(nix develop -c bash -c "cd frontend && npm test" 2>&1) || {
     echo "Frontend tests failed:"
@@ -54,10 +64,11 @@ echo "=== Test Summary Table ==="
 echo ""
 echo "| Tests | Passed | Failed |"
 echo "|-------|--------|--------|"
-echo "| Verifier (Rust) | $VERIFIER_PASSED | $VERIFIER_FAILED |"
-echo "| Solver (Rust) | $SOLVER_PASSED | $SOLVER_FAILED |"
+echo "| Verifier | $VERIFIER_PASSED | $VERIFIER_FAILED |"
+echo "| Solver | $SOLVER_PASSED | $SOLVER_FAILED |"
 echo "| Move | $MOVE_PASSED | $MOVE_FAILED |"
 echo "| EVM | $EVM_PASSED | $EVM_FAILED |"
+echo "| SVM | $SVM_PASSED | $SVM_FAILED |"
 echo "| Frontend | $FRONTEND_PASSED | $FRONTEND_FAILED |"
 echo ""
 

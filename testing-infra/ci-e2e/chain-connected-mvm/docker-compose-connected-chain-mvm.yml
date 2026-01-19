@@ -1,7 +1,8 @@
+# APTOS_DOCKER_IMAGE is defined in util.sh and exported before docker-compose runs
 services:
   # Aptos Localnet Chain 2 - Different ports
   aptos-localnet-chain2:
-    image: aptoslabs/tools:nightly
+    image: ${APTOS_DOCKER_IMAGE}
     container_name: aptos-localnet-chain2
     ports:
       - "8082:8080"  # REST API on port 8082

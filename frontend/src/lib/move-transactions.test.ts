@@ -7,20 +7,20 @@
 
 import { describe, it, expect } from 'vitest';
 import { 
-  INTENT_MODULE_ADDRESS, 
+  INTENT_MODULE_ADDR, 
   hexToBytes, 
   padEvmAddressToMove, 
   stripHexPrefix 
 } from './move-transactions';
 
-describe('INTENT_MODULE_ADDRESS', () => {
+describe('INTENT_MODULE_ADDR', () => {
   /**
    * Test: Module address format validation
    * Why: Move addresses must be exactly 32 bytes (64 hex chars) with 0x prefix.
    *      Invalid addresses cause transaction failures on-chain.
    */
   it('should be a valid Move address', () => {
-    expect(INTENT_MODULE_ADDRESS).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(INTENT_MODULE_ADDR).toMatch(/^0x[a-fA-F0-9]{64}$/);
   });
 });
 

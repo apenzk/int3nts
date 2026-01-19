@@ -9,7 +9,7 @@ use trusted_verifier::validator::CrossChainValidator;
 mod test_helpers;
 use test_helpers::{
     build_test_config_with_mvm, create_default_escrow_event, create_default_intent_mvm,
-    setup_mock_server_with_solver_registry, DUMMY_SOLVER_ADDR_MVM_CON,
+    setup_mock_server_with_solver_registry, DUMMY_SOLVER_ADDR_MVMCON,
 };
 
 // ============================================================================
@@ -22,7 +22,7 @@ use test_helpers::{
 async fn test_escrow_solver_address_matching_success() {
     // Setup mock server with solver registry
     let solver_addr = "0xsolver_mvm";
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -67,7 +67,7 @@ async fn test_escrow_solver_address_matching_success() {
 async fn test_escrow_solver_address_mismatch_rejection() {
     // Setup mock server with solver registry
     let solver_addr = "0xsolver_mvm";
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let different_solver_addr = "0xdifferent_solver_addr_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),

@@ -3,6 +3,7 @@
 module mvmt_intent::intent_reservation_tests {
     use std::signer;
     use std::option;
+    use std::vector;
     use aptos_std::ed25519;
     use aptos_framework::timestamp;
     use mvmt_intent::fa_intent;
@@ -248,7 +249,7 @@ module mvmt_intent::intent_reservation_tests {
         let evm_addr = test_utils::create_test_evm_address(0);
         
         // Register solver in the registry
-        solver_registry::register_solver(solver, solver_public_key_bytes, evm_addr, @0x0);
+        solver_registry::register_solver(solver, solver_public_key_bytes, @0x0, evm_addr, vector::empty<u8>());
         assert!(solver_registry::is_registered(signer::address_of(solver)), 0);
         
         // Step 3: Offerer creates draft intent (without solver)

@@ -19,9 +19,9 @@ setup_project_root
 setup_logging "setup-evm-requester-solver"
 cd "$PROJECT_ROOT"
 
-log "🧪 Requester and Solver Account Testing - EVM CHAIN"
+log " Requester and Solver Account Testing - EVM CHAIN"
 log "=============================================="
-log_and_echo "📝 All output logged to: $LOG_FILE"
+log_and_echo " All output logged to: $LOG_FILE"
 
 log ""
 log "% - - - - - - - - - - - SETUP - - - - - - - - - - - -"
@@ -32,7 +32,7 @@ log "⏳ Waiting for node to be fully ready..."
 sleep 5
 
 # Verify EVM chain is running
-log "🔍 Verifying EVM chain is running..."
+log " Verifying EVM chain is running..."
 if ! check_evm_chain_running; then
     log_and_echo "❌ Error: EVM chain failed to start on port 8545"
     exit 1
@@ -43,20 +43,20 @@ log "% - - - - - - - - - - - ACCOUNTS - - - - - - - - - - - -"
 log "% - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
 log ""
-log "📋 Hardhat Default Accounts:"
+log " Hardhat Default Accounts:"
 log "   Deployer/Verifier = Account 0 (signer index 0)"
 log "   Requester         = Account 1 (signer index 1)"
 log "   Solver            = Account 2 (signer index 2)"
 
 # Get account addresses using Hardhat
 log ""
-log "🔍 Getting Requester and Solver addresses..."
+log " Getting Requester and Solver addresses..."
 
-REQUESTER_ADDRESS=$(get_hardhat_account_address "1")
-SOLVER_ADDRESS=$(get_hardhat_account_address "2")
+REQUESTER_ADDR=$(get_hardhat_account_address "1")
+SOLVER_ADDR=$(get_hardhat_account_address "2")
 
-log "   ✅ Requester (Account 1): $REQUESTER_ADDRESS"
-log "   ✅ Solver (Account 2):   $SOLVER_ADDRESS"
+log "   ✅ Requester (Account 1): $REQUESTER_ADDR"
+log "   ✅ Solver (Account 2):   $SOLVER_ADDR"
 
 log ""
 log "% - - - - - - - - - - - BALANCES - - - - - - - - - - - -"
@@ -64,7 +64,7 @@ log "% - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
 # Check initial balances
 log ""
-log "💰 Checking initial balances..."
+log " Checking initial balances..."
 
 cd evm-intent-framework
 BALANCES_OUTPUT=$(nix develop -c bash -c "npx hardhat run scripts/get-accounts.js" 2>&1)
@@ -90,16 +90,16 @@ log "   Requester balance: $REQUESTER_BALANCE wei (should be 1 ETH = 1_000_000_0
 log "   Solver balance:   $SOLVER_BALANCE wei (should be 1 ETH = 1_000_000_000_000_000_000 wei)"
 
 log ""
-log "🎉 All EVM chain setup and testing complete!"
+log " All EVM chain setup and testing complete!"
 log ""
-log "📋 Summary:"
+log " Summary:"
 log "   EVM Chain:     http://127.0.0.1:8545"
 log "   Chain ID:      31337"
-log "   Requester (Acc 1): $REQUESTER_ADDRESS"
-log "   Solver (Acc 2):   $SOLVER_ADDRESS"
+log "   Requester (Acc 1): $REQUESTER_ADDR"
+log "   Solver (Acc 2):   $SOLVER_ADDR"
 log ""
-log "📋 Useful commands:"
+log " Useful commands:"
 log "   Stop chain:    ./testing-infra/ci-e2e/chain-connected-evm/stop-chain.sh"
 log ""
-log "✨ Script completed!"
+log " Script completed!"
 

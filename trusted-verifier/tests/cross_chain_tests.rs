@@ -8,7 +8,7 @@ use trusted_verifier::monitor::{EscrowEvent, IntentEvent};
 mod test_helpers;
 use test_helpers::{
     create_default_escrow_event, create_default_intent_mvm, setup_mock_server_with_solver_registry,
-    DUMMY_SOLVER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_CON,
+    DUMMY_SOLVER_ADDR_HUB, DUMMY_SOLVER_ADDR_MVMCON,
 };
 
 // ============================================================================
@@ -124,8 +124,8 @@ async fn test_escrow_chain_id_validation() {
 #[tokio::test]
 async fn test_escrow_amount_must_match_hub_intent_offered_amount() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -196,8 +196,8 @@ async fn test_escrow_amount_must_match_hub_intent_offered_amount() {
 #[tokio::test]
 async fn test_escrow_offered_metadata_must_match_hub_intent_offered_metadata_success() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -282,8 +282,8 @@ async fn test_escrow_offered_metadata_must_match_hub_intent_offered_metadata_rej
 #[tokio::test]
 async fn test_escrow_offered_metadata_empty_strings() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -382,8 +382,8 @@ async fn test_escrow_offered_metadata_empty_strings() {
 #[tokio::test]
 async fn test_escrow_offered_metadata_complex_json() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -483,8 +483,8 @@ async fn test_escrow_offered_metadata_complex_json() {
 #[tokio::test]
 async fn test_escrow_offered_metadata_normalizes_leading_zeros() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -530,8 +530,8 @@ async fn test_escrow_offered_metadata_normalizes_leading_zeros() {
 #[tokio::test]
 async fn test_escrow_desired_amount_must_be_zero_success() {
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, validator) = setup_mock_server_with_solver_registry(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),

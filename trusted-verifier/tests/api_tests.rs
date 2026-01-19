@@ -11,7 +11,7 @@ use warp::test::request;
 #[path = "mod.rs"]
 mod test_helpers;
 use test_helpers::{
-    DUMMY_EXPIRY, DUMMY_REQUESTER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_HUB,
+    DUMMY_EXPIRY, DUMMY_REQUESTER_ADDR_HUB, DUMMY_SOLVER_ADDR_HUB,
 };
 
 // ============================================================================
@@ -31,7 +31,7 @@ async fn create_test_api_server() -> ApiServer {
 /// Create a valid draft intent request for testing
 fn valid_draft_request() -> serde_json::Value {
     json!({
-        "requester_addr": DUMMY_REQUESTER_ADDR_MVM_HUB,
+        "requester_addr": DUMMY_REQUESTER_ADDR_HUB,
         "draft_data": { "offered_metadata": "0x1::test::Token", "offered_amount": 100 },
         "expiry_time": DUMMY_EXPIRY
     })
@@ -71,7 +71,7 @@ async fn test_draftintent_missing_fields() {
     let routes = api_server.test_routes();
 
     let invalid_request = json!({
-        "requester_addr": DUMMY_REQUESTER_ADDR_MVM_HUB
+        "requester_addr": DUMMY_REQUESTER_ADDR_HUB
         // Missing draft_data and expiry_time
     });
 
@@ -191,7 +191,7 @@ async fn test_signature_submission_missing_fields() {
 
     // Test missing fields
     let invalid_request = json!({
-        "solver_addr": DUMMY_SOLVER_ADDR_MVM_HUB
+        "solver_hub_addr": DUMMY_SOLVER_ADDR_HUB
         // Missing signature and public_key
     });
 
@@ -232,7 +232,7 @@ async fn test_signature_route_not_confused_with_draft_route() {
     // Submit a valid signature request structure to the signature endpoint
     // This should NOT return "missing requester_addr" error
     let signature_request = json!({
-        "solver_addr": DUMMY_SOLVER_ADDR_MVM_HUB,
+        "solver_hub_addr": DUMMY_SOLVER_ADDR_HUB,
         "signature": format!("0x{}", "a".repeat(128)), // 128 hex chars = 64 bytes (Ed25519 signature)
         "public_key": format!("0x{}", "b".repeat(64)) // 64 hex chars = 32 bytes (Ed25519 public key)
     });

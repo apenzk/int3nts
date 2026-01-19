@@ -121,7 +121,11 @@ sequenceDiagram
 
 ## Error Cases
 
-**TODO:** Document error cases specific to outflow.
+- **Connected-chain transfer failure**: Solver transfer fails or reverts; verifier never signs, hub escrow remains locked until expiry.
+- **Transfer mismatch**: Transfer amount, recipient, or token metadata does not match the intent; verifier rejects the fulfillment proof.
+- **Missing intent linkage**: Connected-chain transfer lacks intent metadata (memo/calldata); verifier rejects.
+- **Invalid approval signature**: Hub escrow release fails when the verifier signature does not match the intent.
+- **Expiry reached**: Hub escrow cannot be released after expiry; requester can cancel instead.
 
 ## Protocol steps details
 

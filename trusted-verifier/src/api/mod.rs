@@ -20,8 +20,10 @@ mod outflow_generic;
 // Flow + chain specific modules
 mod inflow_evm;
 mod inflow_mvm;
+mod inflow_svm;
 mod outflow_evm;
 mod outflow_mvm;
+mod outflow_svm;
 
 // Negotiation routing module
 mod negotiation;

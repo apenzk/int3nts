@@ -25,6 +25,8 @@ use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use tracing::{error, info};
 
+use crate::monitor::ChainType;
+
 use super::generic::{EscrowApproval, EscrowEvent, EventMonitor, FulfillmentEvent};
 use super::inflow_evm;
 use super::inflow_mvm;
@@ -181,6 +183,69 @@ pub async fn monitor_evm_chain(monitor: &EventMonitor) -> Result<()> {
             }
             Err(e) => {
                 error!("Error polling connected EVM events: {:#}", e);
+            }
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(
+            monitor.config.verifier.polling_interval_ms,
+        ))
+        .await;
+    }
+}
+
+/// Monitors the connected SVM chain for escrow accounts.
+///
+/// This function runs in an infinite loop, polling the connected SVM chain
+/// for escrow accounts. When escrows are found, it caches them and validates
+/// that they fulfill the conditions of existing hub intents.
+///
+/// # Behavior
+///
+/// Returns early if no connected SVM chain is configured.
+pub async fn monitor_svm_chain(monitor: &EventMonitor) -> Result<()> {
+    let connected_chain_svm = match &monitor.config.connected_chain_svm {
+        Some(chain) => chain,
+        None => {
+            info!("No connected SVM chain configured, skipping SVM chain monitoring");
+            return Ok(());
+        }
+    };
+
+    info!(
+        "Starting connected SVM chain monitoring for escrow accounts on {}",
+        connected_chain_svm.name
+    );
+
+    loop {
+        match crate::monitor::inflow_svm::poll_svm_escrow_events(&monitor.config).await {
+            Ok(events) => {
+                for event in events {
+                    let is_new_event = {
+                        let escrow_id = event.escrow_id.clone();
+                        let chain_id = event.chain_id;
+                        let mut escrow_cache = monitor.escrow_cache.write().await;
+                        if !escrow_cache.iter().any(|cached| {
+                            cached.escrow_id == escrow_id && cached.chain_id == chain_id
+                        }) {
+                            escrow_cache.push(event.clone());
+                            true
+                        } else {
+                            false
+                        }
+                    };
+
+                    if is_new_event {
+                        info!(
+                            "Received new SVM escrow: escrow_id={}, intent_id={}, amount={}",
+                            event.escrow_id, event.intent_id, event.offered_amount
+                        );
+
+                        try_validate_for_intent(monitor, &event.intent_id).await?;
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Error polling SVM escrow accounts: {}", e);
             }
         }
 
@@ -484,19 +549,13 @@ pub async fn validate_and_approve_fulfillment(
     });
 
     // Find matching escrow in cache
-    let (escrow_id, is_evm_escrow, escrow_clone) = match matching_escrow {
+    let (escrow_id, chain_type, escrow_clone) = match matching_escrow {
         Some(escrow) => {
-            // Determine if this is an EVM escrow by checking if reserved_solver looks like an EVM address
-            let is_evm = escrow
-                .reserved_solver_addr
-                .as_ref()
-                .map(|s| s.starts_with("0x") && s.len() == 42)
-                .unwrap_or(false);
-
             let escrow_id = escrow.escrow_id.clone();
+            let chain_type = escrow.chain_type;
             let escrow_clone = escrow.clone();
             drop(escrow_cache);
-            (escrow_id, is_evm, escrow_clone)
+            (escrow_id, chain_type, escrow_clone)
         }
         None => {
             drop(escrow_cache);
@@ -536,32 +595,42 @@ pub async fn validate_and_approve_fulfillment(
     );
 
     // Generate signature based on escrow chain type
-    let (signature_bytes, timestamp) = if is_evm_escrow {
-        // EVM escrow: Create ECDSA signature
-        info!(
-            "Creating ECDSA signature for EVM escrow (intent_id: {})",
-            fulfillment.intent_id
-        );
-        let intent_id_hex = fulfillment
-            .intent_id
-            .strip_prefix("0x")
-            .unwrap_or(&fulfillment.intent_id);
-        let ecdsa_sig_bytes = monitor
-            .crypto
-            .create_evm_approval_signature(intent_id_hex)?;
-        // Convert bytes to base64 for storage (EscrowApproval expects String)
-        let signature_base64 = general_purpose::STANDARD.encode(&ecdsa_sig_bytes);
-        (signature_base64, chrono::Utc::now().timestamp() as u64)
-    } else {
-        // Move VM escrow: Create Ed25519 signature
-        info!(
-            "Creating Ed25519 signature for Move VM escrow (escrow_id: {}, intent_id: {})",
-            escrow_id, fulfillment.intent_id
-        );
-        let approval_sig = monitor
-            .crypto
-            .create_mvm_approval_signature(&fulfillment.intent_id)?;
-        (approval_sig.signature, approval_sig.timestamp)
+    let (signature_bytes, timestamp) = match chain_type {
+        ChainType::Mvm => {
+            info!(
+                "Creating Ed25519 signature for Move VM escrow (escrow_id: {}, intent_id: {})",
+                escrow_id, fulfillment.intent_id
+            );
+            let approval_sig = monitor
+                .crypto
+                .create_mvm_approval_signature(&fulfillment.intent_id)?;
+            (approval_sig.signature, approval_sig.timestamp)
+        }
+        ChainType::Evm => {
+            info!(
+                "Creating ECDSA signature for EVM escrow (intent_id: {})",
+                fulfillment.intent_id
+            );
+            let intent_id_hex = fulfillment
+                .intent_id
+                .strip_prefix("0x")
+                .unwrap_or(&fulfillment.intent_id);
+            let ecdsa_sig_bytes = monitor
+                .crypto
+                .create_evm_approval_signature(intent_id_hex)?;
+            let signature_base64 = general_purpose::STANDARD.encode(&ecdsa_sig_bytes);
+            (signature_base64, chrono::Utc::now().timestamp() as u64)
+        }
+        ChainType::Svm => {
+            info!(
+                "Creating Ed25519 signature for SVM escrow (escrow_id: {}, intent_id: {})",
+                escrow_id, fulfillment.intent_id
+            );
+            let approval_sig = monitor
+                .crypto
+                .create_svm_approval_signature(&fulfillment.intent_id)?;
+            (approval_sig.signature, approval_sig.timestamp)
+        }
     };
 
     // Store approval signature in cache (deduplicate by escrow_id)
@@ -580,7 +649,7 @@ pub async fn validate_and_approve_fulfillment(
 
             info!(
                 "✅ Generated {} approval signature for escrow: {} (intent_id: {})",
-                if is_evm_escrow { "ECDSA" } else { "Ed25519" },
+                if chain_type == ChainType::Evm { "ECDSA" } else { "Ed25519" },
                 escrow_id,
                 fulfillment.intent_id
             );

@@ -21,18 +21,18 @@ log_and_echo "✅ Configuring verifier for Hub Chain..."
 log_and_echo ""
 
 # Extract deployed address from aptos profile
-CHAIN1_ADDRESS=$(get_profile_address "intent-account-chain1")
+HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
 
-if [ -z "$CHAIN1_ADDRESS" ]; then
-    log_and_echo "❌ ERROR: Could not extract Chain 1 deployed module address"
+if [ -z "$HUB_MODULE_ADDR" ]; then
+    log_and_echo "❌ ERROR: Could not extract Hub module address"
     exit 1
 fi
 
-log_and_echo "   Chain 1 deployer: $CHAIN1_ADDRESS"
+log_and_echo "   Hub module: $HUB_MODULE_ADDR"
 
 # Get Requester and Solver addresses
-REQUESTER_CHAIN1_ADDRESS=$(get_profile_address "requester-chain1")
-SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
+REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
+SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
 
 # Generate fresh ephemeral keys
 load_verifier_keys
@@ -49,7 +49,7 @@ cat > "$VERIFIER_E2E_CI_TESTING_CONFIG" << EOF
 name = "Hub Chain"
 rpc_url = "http://127.0.0.1:8080"
 chain_id = 1
-intent_module_addr = "0x$CHAIN1_ADDRESS"
+intent_module_addr = "0x$HUB_MODULE_ADDR"
 
 [verifier]
 private_key_env = "E2E_VERIFIER_PRIVATE_KEY"

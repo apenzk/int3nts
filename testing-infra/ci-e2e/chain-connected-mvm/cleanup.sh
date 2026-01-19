@@ -17,7 +17,7 @@ setup_project_root
 setup_logging "cleanup"
 cd "$PROJECT_ROOT"
 
-log_and_echo "🧹 Cleaning up chains and processes..."
+log_and_echo " Cleaning up chains and processes..."
 
 # Delete logs folder for fresh start
 rm -rf "$PROJECT_ROOT/.tmp/e2e-tests"

@@ -22,88 +22,88 @@ verify_solver_registered
 INTENT_ID="0x$(openssl rand -hex 32)"
 
 # ============================================================================
-# SECTION 2: GET ADDRESSES AND CONFIGURATION
+# SECTION 2: GET ADDRES AND CONFIGURATION
 # ============================================================================
 CONNECTED_CHAIN_ID=2
-CHAIN1_ADDRESS=$(get_profile_address "intent-account-chain1")
-CHAIN2_ADDRESS=$(get_profile_address "intent-account-chain2")
-TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
-TEST_TOKENS_CHAIN2=$(get_profile_address "test-tokens-chain2")
-REQUESTER_CHAIN1_ADDRESS=$(get_profile_address "requester-chain1")
-SOLVER_CHAIN1_ADDRESS=$(get_profile_address "solver-chain1")
-REQUESTER_CHAIN2_ADDRESS=$(get_profile_address "requester-chain2")
-SOLVER_CHAIN2_ADDRESS=$(get_profile_address "solver-chain2")
+HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
+MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain2")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
+USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
+REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
+SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
+REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain2")
+SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain2")
 
 log ""
-log "📋 Chain Information:"
-log "   Hub Chain Module Address (Chain 1):     $CHAIN1_ADDRESS"
-log "   Connected Chain Module Address (Chain 2): $CHAIN2_ADDRESS"
-log "   Requester Chain 1 (hub):     $REQUESTER_CHAIN1_ADDRESS"
-log "   Solver Chain 1 (hub):       $SOLVER_CHAIN1_ADDRESS"
-log "   Requester Chain 2 (connected): $REQUESTER_CHAIN2_ADDRESS"
-log "   Solver Chain 2 (connected): $SOLVER_CHAIN2_ADDRESS"
+log " Chain Information:"
+log "   Hub Module Address:            $HUB_MODULE_ADDR"
+log "   Connected MVM Module Address:          $MVMCON_MODULE_ADDR"
+log "   Requester Hub:               $REQUESTER_HUB_ADDR"
+log "   Solver Hub:                  $SOLVER_HUB_ADDR"
+log "   Requester MVM (connected):             $REQUESTER_MVMCON_ADDR"
+log "   Solver MVM (connected):                $SOLVER_MVMCON_ADDR"
 
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 # Token amounts: 1 USDhub / 1 USDcon (6 decimals = 1_000_000)
-OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub chain)
+OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
 DESIRED_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals, on connected MVM chain)
 HUB_CHAIN_ID=1
-EVM_ADDRESS="0x0000000000000000000000000000000000000001"
+EVM_ADDR="0x0000000000000000000000000000000000000001"
 
 log ""
-log "🔑 Configuration:"
+log " Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Offered amount: $OFFERED_AMOUNT (1 USDhub on hub chain)"
 log "   Desired amount: $DESIRED_AMOUNT (1 USDcon on connected MVM chain)"
 
 # Get test tokens addresses from profiles
-TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
-TEST_TOKENS_CHAIN2=$(get_profile_address "test-tokens-chain2")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
+USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
 
 log ""
 log "   - Getting USD token metadata addresses..."
-log "     Getting USDhub metadata on Chain 1..."
-USDHUB_METADATA_CHAIN1=$(get_usdxyz_metadata "0x$TEST_TOKENS_CHAIN1" "1")
-log "     ✅ Got USDhub metadata on Chain 1: $USDHUB_METADATA_CHAIN1"
-OFFERED_METADATA_CHAIN1="$USDHUB_METADATA_CHAIN1"
+log "     Getting USDhub metadata on Hub..."
+USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
+log "     ✅ Got USDhub metadata on Hub: $USDHUB_METADATA_HUB"
+OFFERED_METADATA_HUB="$USDHUB_METADATA_HUB"
 
-log "     Getting USDcon metadata on Chain 2..."
-USDCON_METADATA_CHAIN2=$(get_usdxyz_metadata "0x$TEST_TOKENS_CHAIN2" "2")
-log "     ✅ Got USDcon metadata on Chain 2: $USDCON_METADATA_CHAIN2"
-DESIRED_METADATA_CHAIN2="$USDCON_METADATA_CHAIN2"
+log "     Getting USDcon metadata on connected MVM..."
+USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "2")
+log "     ✅ Got USDcon metadata on connected MVM: $USD_MVMCON_ADDR"
+DESIRED_METADATA_MVMCON="$USD_MVMCON_ADDR"
 
 # ============================================================================
 # SECTION 3: DISPLAY INITIAL STATE
 # ============================================================================
 log ""
-display_balances_hub "0x$TEST_TOKENS_CHAIN1"
-display_balances_connected_mvm "0x$TEST_TOKENS_CHAIN2"
+display_balances_hub "0x$TEST_TOKENS_HUB"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
 log_and_echo ""
 
 # ============================================================================
 # SECTION 4: VERIFIER-BASED NEGOTIATION ROUTING
 # ============================================================================
 log ""
-log "🔄 Starting verifier-based negotiation routing..."
+log " Starting verifier-based negotiation routing..."
 log "   Flow: Requester → Verifier → Solver → Verifier → Requester"
 
 # Step 1: Requester submits draft intent to verifier
 log ""
 log "   Step 1: Requester submits draft intent to verifier..."
 DRAFT_DATA=$(build_draft_data \
-    "$OFFERED_METADATA_CHAIN1" \
+    "$OFFERED_METADATA_HUB" \
     "$OFFERED_AMOUNT" \
     "$HUB_CHAIN_ID" \
-    "$DESIRED_METADATA_CHAIN2" \
+    "$DESIRED_METADATA_MVMCON" \
     "$DESIRED_AMOUNT" \
     "$CONNECTED_CHAIN_ID" \
     "$EXPIRY_TIME" \
     "$INTENT_ID" \
-    "$REQUESTER_CHAIN1_ADDRESS" \
-    "{\"chain_addr\": \"$CHAIN1_ADDRESS\", \"flow_type\": \"outflow\", \"requester_addr_connected_chain\": \"$REQUESTER_CHAIN2_ADDRESS\"}")
+    "$REQUESTER_HUB_ADDR" \
+    "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"outflow\", \"requester_addr_connected_chain\": \"$REQUESTER_MVMCON_ADDR\"}")
 
-DRAFT_ID=$(submit_draft_intent "$REQUESTER_CHAIN1_ADDRESS" "$DRAFT_DATA" "$EXPIRY_TIME")
+DRAFT_ID=$(submit_draft_intent "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME")
 log "     Draft ID: $DRAFT_ID"
 
 # Step 2: Wait for solver service to sign the draft (polls automatically)
@@ -119,12 +119,12 @@ log "     (Solver service polls verifier automatically)"
 # Poll for signature with retry logic (solver service needs time to process)
 SIGNATURE_DATA=$(poll_for_signature "$DRAFT_ID" 10 2)
 RETRIEVED_SIGNATURE=$(echo "$SIGNATURE_DATA" | jq -r '.signature')
-RETRIEVED_SOLVER=$(echo "$SIGNATURE_DATA" | jq -r '.solver_addr')
+RETRIEVED_SOLVER=$(echo "$SIGNATURE_DATA" | jq -r '.solver_hub_addr')
 
 if [ -z "$RETRIEVED_SIGNATURE" ] || [ "$RETRIEVED_SIGNATURE" = "null" ]; then
     log_and_echo "❌ ERROR: Failed to retrieve signature from verifier"
     log_and_echo ""
-    log_and_echo "🔍 Diagnostics:"
+    log_and_echo " Diagnostics:"
     
     # Check if solver is running
     SOLVER_LOG_FILE="$PROJECT_ROOT/.tmp/e2e-tests/solver.log"
@@ -142,19 +142,19 @@ if [ -z "$RETRIEVED_SIGNATURE" ] || [ "$RETRIEVED_SIGNATURE" = "null" ]; then
     # Show solver log
     if [ -f "$SOLVER_LOG_FILE" ]; then
         log_and_echo ""
-        log_and_echo "   📋 Solver log (last 100 lines):"
+        log_and_echo "    Solver log (last 100 lines):"
         log_and_echo "   ----------------------------------------"
         tail -100 "$SOLVER_LOG_FILE" | while read line; do log_and_echo "   $line"; done
         log_and_echo "   ----------------------------------------"
     else
-        log_and_echo "   ⚠️  Solver log file not found: $SOLVER_LOG_FILE"
+        log_and_echo "   ️  Solver log file not found: $SOLVER_LOG_FILE"
     fi
     
     # Show verifier log
     VERIFIER_LOG_FILE="$PROJECT_ROOT/.tmp/e2e-tests/verifier.log"
     if [ -f "$VERIFIER_LOG_FILE" ]; then
         log_and_echo ""
-        log_and_echo "   📋 Verifier log (last 30 lines):"
+        log_and_echo "    Verifier log (last 30 lines):"
         log_and_echo "   ----------------------------------------"
         tail -30 "$VERIFIER_LOG_FILE" | while read line; do log_and_echo "   $line"; done
         log_and_echo "   ----------------------------------------"
@@ -171,38 +171,38 @@ log "     Signature: ${RETRIEVED_SIGNATURE:0:20}..."
 log ""
 log "   Creating outflow intent on hub chain..."
 log "   - Requester locks 1 USDhub on hub chain"
-log "   - Requester wants 1 USDcon on connected chain (Chain 2)"
-log "     Offered metadata (hub): $OFFERED_METADATA_CHAIN1"
-log "     Desired metadata (connected): $DESIRED_METADATA_CHAIN2"
+log "   - Requester wants 1 USDcon on connected MVM"
+log "     Offered metadata (hub): $OFFERED_METADATA_HUB"
+log "     Desired metadata (connected MVM): $DESIRED_METADATA_MVMCON"
 log "     Solver address: $RETRIEVED_SOLVER"
-log "     Requester address on connected chain: $REQUESTER_CHAIN2_ADDRESS"
+log "     Requester address on connected chain: $REQUESTER_MVMCON_ADDR"
 
 SOLVER_SIGNATURE_HEX="${RETRIEVED_SIGNATURE#0x}"
 
 aptos move run --profile requester-chain1 --assume-yes \
-    --function-id "0x${CHAIN1_ADDRESS}::fa_intent_outflow::create_outflow_intent_entry" \
-    --args "address:${OFFERED_METADATA_CHAIN1}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_CHAIN2}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_CHAIN2_ADDRESS}" "address:${RETRIEVED_SOLVER}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
+    --function-id "0x${HUB_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry" \
+    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_MVMCON}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_MVMCON_ADDR}" "address:${RETRIEVED_SOLVER}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
 
 # ============================================================================
 # SECTION 6: VERIFY RESULTS
 # ============================================================================
 if [ $? -eq 0 ]; then
-    log "     ✅ Outflow intent created on Chain 1!"
+    log "     ✅ Outflow intent created on Hub!"
 
     sleep 2
     log "     - Verifying intent stored on-chain..."
-    HUB_INTENT_ADDRESS=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_CHAIN1_ADDRESS}/transactions?limit=1" | \
+    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("OracleLimitOrderEvent")) | .data.intent_addr' | head -n 1)
 
-    if [ -n "$HUB_INTENT_ADDRESS" ] && [ "$HUB_INTENT_ADDRESS" != "null" ]; then
-        log "     ✅ Hub outflow intent stored at: $HUB_INTENT_ADDRESS"
+    if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then
+        log "     ✅ Hub outflow intent stored at: $HUB_INTENT_ADDR"
         log_and_echo "✅ Outflow intent created (via verifier negotiation)"
     else
         log_and_echo "❌ ERROR: Could not verify hub outflow intent address"
         exit 1
     fi
 else
-    log_and_echo "❌ Outflow intent creation failed on Chain 1!"
+    log_and_echo "❌ Outflow intent creation failed on Hub!"
     log_and_echo "   Log file contents:"
     log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
@@ -214,12 +214,12 @@ fi
 # SECTION 7: FINAL SUMMARY
 # ============================================================================
 log ""
-display_balances_hub "0x$TEST_TOKENS_CHAIN1"
-display_balances_connected_mvm "0x$TEST_TOKENS_CHAIN2"
+display_balances_hub "0x$TEST_TOKENS_HUB"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
 log_and_echo ""
 
 log ""
-log "🎉 OUTFLOW - HUB CHAIN INTENT CREATION COMPLETE!"
+log " OUTFLOW - HUB CHAIN INTENT CREATION COMPLETE!"
 log "================================================"
 log ""
 log "✅ Steps completed successfully (via verifier-based negotiation):"
@@ -230,13 +230,13 @@ log "   4. Requester polled verifier and retrieved signature"
 log "   5. Requester created outflow intent on-chain with retrieved signature"
 log "   6. Tokens locked on hub chain"
 log ""
-log "📋 Request-intent Details:"
+log " Request-intent Details:"
 log "   Intent ID: $INTENT_ID"
 log "   Draft ID: $DRAFT_ID"
 log "   Solver: $RETRIEVED_SOLVER"
-if [ -n "$HUB_INTENT_ADDRESS" ] && [ "$HUB_INTENT_ADDRESS" != "null" ]; then
-    log "   Chain 1 Hub Outflow Request-intent: $HUB_INTENT_ADDRESS"
+if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then
+    log "   Hub Outflow Request-intent: $HUB_INTENT_ADDR"
 fi
-log "   Requester address on connected chain: $REQUESTER_CHAIN2_ADDRESS"
+log "   Requester address on connected chain: $REQUESTER_MVMCON_ADDR"
 
-save_intent_info "$INTENT_ID" "$HUB_INTENT_ADDRESS"
+save_intent_info "$INTENT_ID" "$HUB_INTENT_ADDR"

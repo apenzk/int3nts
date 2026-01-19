@@ -21,17 +21,17 @@ log_and_echo "✅ Configuring verifier for Connected Move VM Chain..."
 log_and_echo ""
 
 # Extract deployed address from aptos profile
-CHAIN2_ADDRESS=$(get_profile_address "intent-account-chain2")
+CHAIN2_ADDR=$(get_profile_address "intent-account-chain2")
 
-if [ -z "$CHAIN2_ADDRESS" ]; then
+if [ -z "$CHAIN2_ADDR" ]; then
     log_and_echo "❌ ERROR: Could not extract Chain 2 deployed module address"
     exit 1
 fi
 
-log_and_echo "   Chain 2 deployer: $CHAIN2_ADDRESS"
+log_and_echo "   Chain 2 deployer: $CHAIN2_ADDR"
 
 # Get Requester address
-REQUESTER_CHAIN2_ADDRESS=$(get_profile_address "requester-chain2")
+REQUESTER_CHAIN2_ADDR=$(get_profile_address "requester-chain2")
 
 # Config file path (created by chain-hub/configure-verifier.sh)
 VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
@@ -50,8 +50,8 @@ cat > "$TEMP_FILE" << EOF
 name = "Connected Move VM Chain"
 rpc_url = "http://127.0.0.1:8082"
 chain_id = 2
-intent_module_addr = "0x$CHAIN2_ADDRESS"
-escrow_module_addr = "0x$CHAIN2_ADDRESS"
+intent_module_addr = "0x$CHAIN2_ADDR"
+escrow_module_addr = "0x$CHAIN2_ADDR"
 EOF
 
 # Insert the MVM section before [verifier] section

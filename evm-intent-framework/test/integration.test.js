@@ -20,7 +20,11 @@ describe("IntentEscrow - Integration Tests", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Complete Deposit to Claim Workflow
+  // ============================================================================
+  // INTEGRATION TESTS
+  // ============================================================================
+
+  /// 1. Test: Complete Deposit to Claim Workflow
   /// Verifies the full workflow from escrow creation through claim.
   /// Why: Integration test ensures all components work together correctly in the happy path.
   it("Should complete full deposit to claim workflow", async function () {
@@ -70,7 +74,7 @@ describe("IntentEscrow - Integration Tests", function () {
     expect(await token.balanceOf(requester.address)).to.equal(0);
   });
 
-  /// Test: Multi-Token Scenarios
+  /// 2. Test: Multi-Token Scenarios
   /// Verifies that the escrow works with different ERC20 tokens.
   /// Why: The escrow must support any ERC20 token, not just a single token type.
   it("Should handle multiple different ERC20 tokens", async function () {
@@ -121,7 +125,7 @@ describe("IntentEscrow - Integration Tests", function () {
     expect(await token3.balanceOf(escrow.target)).to.equal(amount3);
   });
 
-  /// Test: Comprehensive Event Emission
+  /// 3. Test: Comprehensive Event Emission
   /// Verifies that all events are emitted with correct parameters.
   /// Why: Events are critical for off-chain monitoring and indexing. Incorrect events break integrations.
   it("Should emit all events with correct parameters", async function () {
@@ -152,7 +156,7 @@ describe("IntentEscrow - Integration Tests", function () {
       .withArgs(intentId, solver.address, amount);
   });
 
-  /// Test: Complete Cancellation Workflow
+  /// 4. Test: Complete Cancellation Workflow
   /// Verifies the full workflow from escrow creation through cancellation after expiry.
   /// Why: Integration test ensures the cancellation flow works end-to-end after expiry.
   it("Should complete full cancellation workflow", async function () {

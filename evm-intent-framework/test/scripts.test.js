@@ -63,7 +63,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const amount = ethers.parseEther("1000");
       
       // Set environment variables
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = amount.toString();
       
@@ -81,7 +81,7 @@ describe("EVM Scripts - Utility Functions", function () {
       expect(balance).to.equal(amount);
       
       // Cleanup
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
     });
@@ -92,7 +92,7 @@ describe("EVM Scripts - Utility Functions", function () {
     it("Should mint large amounts correctly", async function () {
       const amount = ethers.parseEther("1000000");
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = bob.address;
       process.env.AMOUNT = amount.toString();
       
@@ -105,7 +105,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const balance = await token.balanceOf(bob.address);
       expect(balance).to.equal(amount);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
     });
@@ -118,7 +118,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const amount2 = ethers.parseEther("200");
       
       // Mint to Alice
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = amount1.toString();
       await mintToken(); // calling from mint-token.js
@@ -131,7 +131,7 @@ describe("EVM Scripts - Utility Functions", function () {
       expect(await token.balanceOf(alice.address)).to.equal(amount1);
       expect(await token.balanceOf(bob.address)).to.equal(amount2);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
     });
@@ -146,7 +146,7 @@ describe("EVM Scripts - Utility Functions", function () {
     /// Verifies that the get-token-balance.js script returns zero for accounts with no tokens.
     /// Why: E2E tests need to verify initial balances before operations to calculate expected final balances.
     it("Should return zero balance for account with no tokens", async function () {
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.ACCOUNT = alice.address;
       
       const output = await captureConsoleOutput(async () => {
@@ -156,7 +156,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const balance = BigInt(output.trim());
       expect(balance).to.equal(0n);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.ACCOUNT;
     });
 
@@ -167,7 +167,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const amount = ethers.parseEther("500");
       await token.connect(deployer).mint(alice.address, amount);
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.ACCOUNT = alice.address;
       
       const output = await captureConsoleOutput(async () => {
@@ -177,7 +177,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const balance = BigInt(output.trim());
       expect(balance).to.equal(amount);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.ACCOUNT;
     });
 
@@ -191,7 +191,7 @@ describe("EVM Scripts - Utility Functions", function () {
       await token.connect(deployer).mint(alice.address, mintAmount);
       await token.connect(alice).transfer(bob.address, transferAmount);
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       
       process.env.ACCOUNT = alice.address;
       const aliceBalanceOutput = await captureConsoleOutput(async () => {
@@ -206,7 +206,7 @@ describe("EVM Scripts - Utility Functions", function () {
       expect(BigInt(aliceBalanceOutput.trim())).to.equal(mintAmount - transferAmount);
       expect(BigInt(bobBalanceOutput.trim())).to.equal(transferAmount);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.ACCOUNT;
     });
   });
@@ -234,7 +234,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const bobBalanceBefore = await token.balanceOf(bob.address);
       
       // Set environment variables
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = transferAmount.toString();
       process.env.INTENT_ID = intentId;
@@ -273,7 +273,7 @@ describe("EVM Scripts - Utility Functions", function () {
       expect(tx.data).to.include(intentId.toLowerCase().replace(/^0x/, ""));
       
       // Cleanup
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
       delete process.env.INTENT_ID;
@@ -286,7 +286,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const transferAmount = ethers.parseEther("500");
       const intentId = "0x2222222222222222222222222222222222222222222222222222222222222222";
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = transferAmount.toString();
       process.env.INTENT_ID = intentId;
@@ -301,7 +301,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const aliceBalance = await token.balanceOf(alice.address);
       expect(aliceBalance).to.equal(transferAmount);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
       delete process.env.INTENT_ID;
@@ -314,7 +314,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const transferAmount = ethers.parseEther("200");
       const intentId = "1111111111111111111111111111111111111111111111111111111111111111";
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = transferAmount.toString();
       process.env.INTENT_ID = intentId;
@@ -331,7 +331,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const receipt = await ethers.provider.getTransactionReceipt(txHashMatch[1]);
       expect(receipt.status).to.equal(1);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
       delete process.env.INTENT_ID;
@@ -347,7 +347,7 @@ describe("EVM Scripts - Utility Functions", function () {
       // Ensure Bob has enough tokens
       await token.connect(deployer).mint(bob.address, transferAmount);
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = transferAmount.toString();
       process.env.INTENT_ID = intentId;
@@ -361,7 +361,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const aliceBalance = await token.balanceOf(alice.address);
       expect(aliceBalance).to.equal(transferAmount);
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
       delete process.env.INTENT_ID;
@@ -374,7 +374,7 @@ describe("EVM Scripts - Utility Functions", function () {
       const transferAmount = ethers.parseEther("1000");
       const intentId = "0x1111111111111111111111111111111111111111111111111111111111111111";
       
-      process.env.TOKEN_ADDRESS = tokenAddress;
+      process.env.TOKEN_ADDR = tokenAddress;
       process.env.RECIPIENT = alice.address;
       process.env.AMOUNT = transferAmount.toString();
       process.env.INTENT_ID = intentId;
@@ -399,7 +399,7 @@ describe("EVM Scripts - Utility Functions", function () {
       expect(dataWithoutPrefix.length).to.equal(200); // 200 hex characters = 100 bytes
       expect(Buffer.from(dataWithoutPrefix, 'hex').length).to.equal(100); // Verify byte length
       
-      delete process.env.TOKEN_ADDRESS;
+      delete process.env.TOKEN_ADDR;
       delete process.env.RECIPIENT;
       delete process.env.AMOUNT;
       delete process.env.INTENT_ID;

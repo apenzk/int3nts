@@ -29,7 +29,7 @@ node_modules/
 .env
 .env.*
 !.env.*.example
-.testnet-keys.env
+testing-infra/testnet/.env.testnet
 
 # Testnet config files (contain sensitive keys)
 solver/config/solver_testnet.toml
@@ -52,3 +52,5 @@ solver/config/solver-e2e-ci-testing.toml
 # Task files
 # tasks.json
 # tasks/ 
+
+frontend/.npm-cache/*

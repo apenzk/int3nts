@@ -214,7 +214,7 @@ impl SigningService {
     ) -> Result<bool> {
         // Get solver profile and address from config
         let profile = self.config.solver.profile.clone();
-        let solver_addr = self.config.solver.address.clone();
+        let solver_hub_addr = self.config.solver.address.clone();
 
         // Get module address and chain number from hub chain config
         let module_addr = self.config.hub_chain.module_addr
@@ -232,7 +232,7 @@ impl SigningService {
         let desired_chain_id = draft_data.desired_chain_id;
         let expiry_time = draft.expiry_time;
         let requester_addr = draft.requester_addr.clone();
-        let solver_addr_clone = solver_addr.clone();
+        let solver_hub_addr_clone = solver_hub_addr.clone();
         let e2e_mode = self.config.service.e2e_mode;
 
         // Get private key, intent hash, and sign - all blocking operations
@@ -265,7 +265,7 @@ impl SigningService {
                 desired_chain_id,
                 expiry_time,
                 &requester_addr,
-                &solver_addr_clone,
+                &solver_hub_addr_clone,
                 chain_num,
                 e2e_mode,
             )
@@ -286,7 +286,7 @@ impl SigningService {
         .map_err(|e| anyhow::anyhow!("Signing failed: {:?}", e))?;
 
         // Get solver address again for submission
-        let solver_addr = self.config.solver.address.clone();
+        let solver_hub_addr = self.config.solver.address.clone();
 
         // Submit signature to verifier
         // Use spawn_blocking since verifier_client uses blocking HTTP
@@ -294,7 +294,7 @@ impl SigningService {
         let draft_id_for_log = draft.draft_id.clone();
         let draft_id_for_submit = draft.draft_id.clone();
         let submission = crate::verifier_client::SignatureSubmission {
-            solver_addr: solver_addr.clone(),
+            solver_hub_addr: solver_hub_addr.clone(),
             signature: signature_hex,
             public_key: public_key_hex,
         };

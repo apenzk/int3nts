@@ -90,16 +90,24 @@ pub fn get_chain_type_from_chain_id(chain_id: u64, config: &Config) -> Result<Ch
         }
     }
 
+    // Check if chain_id matches configured SVM chain
+    if let Some(svm_config) = &config.connected_chain_svm {
+        if svm_config.chain_id == chain_id {
+            return Ok(ChainType::Svm);
+        }
+    }
+
     Err(anyhow::anyhow!(
-        "Chain ID {} does not match any configured connected chain (EVM: {:?}, MVM: {:?})",
+        "Chain ID {} does not match any configured connected chain (MVM: {:?}, EVM: {:?}, SVM: {:?})",
         chain_id,
+        config.connected_chain_mvm.as_ref().map(|c| c.chain_id),
         config.connected_chain_evm.as_ref().map(|c| c.chain_id),
-        config.connected_chain_mvm.as_ref().map(|c| c.chain_id)
+        config.connected_chain_svm.as_ref().map(|c| c.chain_id)
     ))
 }
 
 // ============================================================================
-// ADDRESS VALIDATION UTILITIES
+// ADDR VALIDATION UTILITIES
 // ============================================================================
 
 /// Validates that an address string matches the required format for the chain type.

@@ -5,7 +5,7 @@
 
 use trusted_verifier::mvm_client::MvmClient;
 
-/// Test that we can query events on Chain 1
+/// Test that we can query events on Hub
 /// Why: Event polling is core functionality for monitoring blockchain activity
 #[tokio::test]
 async fn test_get_account_events_chain1() {
@@ -18,7 +18,7 @@ async fn test_get_account_events_chain1() {
     // This might return empty list, which is ok - we're testing API connectivity
     match result {
         Ok(events) => {
-            println!("Found {} events on Chain 1", events.len());
+            println!("Found {} events on Hub", events.len());
         }
         Err(e) => {
             println!("Note: get_account_events returned error (may be expected): {:?}", e);

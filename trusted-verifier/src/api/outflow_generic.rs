@@ -24,6 +24,7 @@ use crate::validator::CrossChainValidator;
 // Chain-specific modules
 use super::outflow_evm;
 use super::outflow_mvm;
+use super::outflow_svm;
 
 // ============================================================================
 // REQUEST/RESPONSE STRUCTURES
@@ -37,7 +38,7 @@ use super::outflow_mvm;
 pub struct ValidateOutflowFulfillmentRequest {
     /// Transaction hash on the connected chain
     pub transaction_hash: String,
-    /// Chain type: "mvm" or "evm"
+    /// Chain type: "mvm", "evm", or "svm"
     pub chain_type: String,
     /// Intent ID to validate against (optional, will be extracted from transaction if not provided)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,6 +116,25 @@ pub async fn handle_outflow_fulfillment_validation(
         }
         "evm" => {
             match outflow_evm::query_evm_fulfillment_transaction(
+                &request.transaction_hash,
+                &validator,
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(error_msg) => {
+                    return Ok(warp::reply::json(&ApiResponse::<
+                        OutflowFulfillmentValidationResponse,
+                    > {
+                        success: false,
+                        data: None,
+                        error: Some(error_msg),
+                    }));
+                }
+            }
+        }
+        "svm" => {
+            match outflow_svm::query_svm_fulfillment_transaction(
                 &request.transaction_hash,
                 &validator,
             )

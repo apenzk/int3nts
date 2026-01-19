@@ -37,7 +37,7 @@ if [ -z "$INTENT_ID" ]; then
     exit 1
 fi
 
-ESCROW_ADDRESS="${ESCROW_CONTRACT_ADDRESS:-}"
+ESCROW_ADDR="${ESCROW_CONTRACT_ADDR:-}"
 INTENT_ID_EVM="${INTENT_ID_EVM:-}"
 
 # Convert INTENT_ID to EVM format if INTENT_ID_EVM is not set
@@ -45,9 +45,9 @@ if [ -z "$INTENT_ID_EVM" ] && [ -n "$INTENT_ID" ]; then
     INTENT_ID_EVM=$(convert_intent_id_to_evm "$INTENT_ID")
 fi
 
-if [ -z "$ESCROW_ADDRESS" ] || [ -z "$INTENT_ID_EVM" ]; then
+if [ -z "$ESCROW_ADDR" ] || [ -z "$INTENT_ID_EVM" ]; then
     log_and_echo "❌ PANIC: Missing required variables for escrow claim check"
-    log_and_echo "   ESCROW_ADDRESS: ${ESCROW_ADDRESS:-not set}"
+    log_and_echo "   ESCROW_ADDR: ${ESCROW_ADDR:-not set}"
     log_and_echo "   INTENT_ID_EVM: ${INTENT_ID_EVM:-not set}"
     log_and_echo "   INTENT_ID: ${INTENT_ID:-not set}"
     display_service_logs "Missing variables for escrow claim check"
@@ -55,7 +55,7 @@ if [ -z "$ESCROW_ADDRESS" ] || [ -z "$INTENT_ID_EVM" ]; then
 fi
 
 log_and_echo "⏳ Waiting for solver to claim escrow..."
-log_and_echo "   Escrow: $ESCROW_ADDRESS"
+log_and_echo "   Escrow: $ESCROW_ADDR"
 log_and_echo "   Intent ID (EVM): $INTENT_ID_EVM"
 
 # Poll for escrow claim (max 30 seconds, every 2 seconds)
@@ -64,7 +64,7 @@ ATTEMPT=1
 ESCROW_CLAIMED=false
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    CLAIM_STATUS=$(is_escrow_claimed "$ESCROW_ADDRESS" "$INTENT_ID_EVM" 2>/dev/null || echo "false")
+    CLAIM_STATUS=$(is_escrow_claimed "$ESCROW_ADDR" "$INTENT_ID_EVM" 2>/dev/null || echo "false")
     if [ "$CLAIM_STATUS" = "true" ]; then
         log_and_echo "   ✅ Escrow claimed!"
         ESCROW_CLAIMED=true

@@ -21,13 +21,13 @@ log_and_echo "✅ Configuring verifier for Connected EVM Chain..."
 log_and_echo ""
 
 # Get EVM escrow contract address (single contract, one escrow per intentId)
-CONTRACT_ADDRESS=$(extract_escrow_contract_address)
-log_and_echo "   EVM Escrow Contract: $CONTRACT_ADDRESS"
+CONTRACT_ADDR=$(extract_escrow_contract_address)
+log_and_echo "   EVM Escrow Contract: $CONTRACT_ADDR"
 
 # Get verifier Ethereum address (Hardhat account 0)
 log "   - Getting verifier Ethereum address (Hardhat account 0)..."
-VERIFIER_ADDRESS=$(get_hardhat_account_address "0")
-log_and_echo "   EVM Verifier: $VERIFIER_ADDRESS"
+VERIFIER_ADDR=$(get_hardhat_account_address "0")
+log_and_echo "   EVM Verifier: $VERIFIER_ADDR"
 
 # Config file path (created by chain-hub/configure-verifier.sh)
 VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
@@ -45,9 +45,9 @@ cat > "$TEMP_FILE" << EOF
 [connected_chain_evm]
 name = "Connected EVM Chain"
 rpc_url = "http://127.0.0.1:8545"
-escrow_contract_addr = "$CONTRACT_ADDRESS"
-chain_id = 31337
-verifier_evm_pubkey_hash = "$VERIFIER_ADDRESS"
+escrow_contract_addr = "$CONTRACT_ADDR"
+chain_id = 3
+verifier_evm_pubkey_hash = "$VERIFIER_ADDR"
 EOF
 
 # Insert the EVM section before [verifier] section

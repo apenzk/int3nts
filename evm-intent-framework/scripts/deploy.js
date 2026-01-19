@@ -8,7 +8,7 @@ const hre = require("hardhat");
 /// Deploys IntentEscrow contract with verifier
 ///
 /// # Environment Variables
-/// - `VERIFIER_ADDRESS`: Optional verifier Ethereum address (defaults to deployer address)
+/// - `VERIFIER_ADDR`: Optional verifier Ethereum address (defaults to deployer address)
 ///
 /// # Returns
 /// Outputs contract address, verifier address, and deployment status on success.
@@ -19,7 +19,7 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   
   // Get verifier address from environment variable or use Hardhat account 1 as fallback
-  const verifierAddress = process.env.VERIFIER_ADDRESS;
+  const verifierAddress = process.env.VERIFIER_ADDR;
   let verifierAddr;
   
   if (verifierAddress) {

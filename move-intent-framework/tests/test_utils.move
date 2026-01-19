@@ -51,6 +51,18 @@ module mvmt_intent::test_utils {
     }
 
     #[test_only]
+    /// Creates a test SVM address (32 bytes) with sequential values starting from `start`
+    public fun create_test_svm_address(start: u8): vector<u8> {
+        let svm_addr = vector::empty<u8>();
+        let i = 0;
+        while (i < 32) {
+            vector::push_back(&mut svm_addr, start + i);
+            i = i + 1;
+        };
+        svm_addr
+    }
+
+    #[test_only]
     /// Helper function to register a token type and mint initial tokens for testing.
     /// Sets up timestamp system and creates one token type with specified mint amount.
     public fun register_and_mint_tokens(

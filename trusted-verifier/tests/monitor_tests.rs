@@ -10,7 +10,7 @@ mod test_helpers;
 use test_helpers::{
     build_test_config_with_mvm, create_default_escrow_event, create_default_fulfillment,
     create_default_intent_mvm, setup_mock_server_with_solver_registry_config,
-    DUMMY_ESCROW_ID_MVM, DUMMY_EXPIRY, DUMMY_SOLVER_ADDR_MVM_HUB, DUMMY_SOLVER_ADDR_MVM_CON,
+    DUMMY_ESCROW_ID_MVM, DUMMY_EXPIRY, DUMMY_SOLVER_ADDR_HUB, DUMMY_SOLVER_ADDR_MVMCON,
 };
 
 // ============================================================================
@@ -105,8 +105,8 @@ fn test_revocable_intent_rejection() {
 async fn test_generates_approval_when_fulfillment_and_escrow_present() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -203,8 +203,8 @@ async fn test_returns_error_when_no_matching_escrow() {
 async fn test_multiple_concurrent_intents() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -347,8 +347,8 @@ async fn test_multiple_concurrent_intents() {
 async fn test_expiry_check_failure_in_monitor_validate_intent_fulfillment() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -411,8 +411,8 @@ async fn test_expiry_check_failure_in_monitor_validate_intent_fulfillment() {
 async fn test_expiry_check_success_in_monitor_validate_intent_fulfillment() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -572,8 +572,8 @@ async fn test_duplicate_intent_event_rejection() {
 async fn test_duplicate_fulfillment_event_handling() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -673,8 +673,8 @@ async fn test_duplicate_fulfillment_event_handling() {
 async fn test_base_helpers_work_with_signature_generation() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),
@@ -728,8 +728,8 @@ async fn test_base_helpers_work_with_signature_generation() {
 async fn test_fulfillment_with_odd_length_intent_id() {
     let _ = tracing_subscriber::fmt::try_init();
     // Setup mock server with solver registry
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
-    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVM_CON;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
+    let solver_connected_chain_mvm_addr = DUMMY_SOLVER_ADDR_MVMCON;
     let (_mock_server, config) = setup_mock_server_with_solver_registry_config(
         Some(solver_addr),
         Some(solver_connected_chain_mvm_addr),

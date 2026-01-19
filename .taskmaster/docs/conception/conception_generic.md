@@ -138,10 +138,12 @@ Only one solver can fulfill an intent, even if multiple solvers attempt simultan
 
 ## Error Cases
 
-**TODO:** Document error cases for the generic protocol steps.
-
-- **Intent Expiry**: Intent cannot be fulfilled after `expiry_time`. The fulfillment transaction aborts.
-- **Invalid Witness**: Wrong witness type provided during intent fulfillment. The intent system uses type-safe witnesses to ensure only the correct completion mechanism can finalize an intent.
+- **Draft signature mismatch**: Request-intent creation fails if the solver signature does not match the draft fields.
+- **Insufficient solver collateral**: Request-intent creation aborts if the solver does not meet collateral requirements on the hub chain.
+- **Intent expiry reached**: Fulfillment or escrow release is rejected after `expiry_time`.
+- **Invalid witness / proof**: Wrong witness type or proof format is provided for the flow; the fulfillment or validation call aborts.
+- **Verifier unavailable or lagging**: Approval signatures are delayed; escrow release must wait until verification completes.
+- **Chain mismatch or metadata mismatch**: Offered/desired token metadata or chain ID does not match the intent; validation rejects the action.
 
 ## Risks
 

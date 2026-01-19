@@ -7,16 +7,18 @@ This guide covers how to run the verifier locally with the dual‑chain setup, t
 File: `trusted-verifier/config/verifier.toml` (relative to project root)
 
 - **hub_chain**: `rpc_url`, `chain_id`, `intent_module_addr` (required)
-- **connected_chain_mvm**: `rpc_url`, `chain_id`, `intent_module_addr`, `escrow_module_addr` (optional, for Move VM escrow monitoring)
+- **connected_chain_mvm**: `rpc_url`, `chain_id`, `intent_module_addr`, `escrow_module_addr` (optional, for MVM escrow monitoring)
 - **connected_chain_evm**: `rpc_url`, `chain_id`, `escrow_contract_addr`, `verifier_addr` (optional, for EVM escrow monitoring)
+- **connected_chain_svm**: `rpc_url`, `chain_id`, `escrow_program_id` (optional, for SVM escrow monitoring)
 - **verifier**: `private_key` (base64, 32‑byte), `public_key` (base64, 32‑byte), polling/timeout
 - **api**: `host`, `port`
 
 The verifier automatically monitors all configured chains concurrently:
 
 - Hub chain monitoring is always enabled
-- Move VM connected chain monitoring starts if `[connected_chain_mvm]` is configured
+- MVM connected chain monitoring starts if `[connected_chain_mvm]` is configured
 - EVM connected chain monitoring starts if `[connected_chain_evm]` is configured
+- SVM connected chain monitoring starts if `[connected_chain_svm]` is configured
 
 Keys
 
@@ -65,6 +67,11 @@ flowchart TD
         E2[From escrow contract address]
         E1 --> E2
     end
+
+    subgraph ConnectedSVM["Connected SVM"]
+        S1[Query escrow PDA accounts]
+        S1 --> S1
+    end
 ```
 
 The verifier uses different mechanisms to discover events on each chain:
@@ -76,7 +83,7 @@ The verifier uses different mechanisms to discover events on each chain:
 3. Polls those accounts for `LimitOrderEvent`, `OracleLimitOrderEvent`, and `LimitOrderFulfillmentEvent`
 4. Caches intent events (including `requester_addr_connected_chain` field)
 
-**Connected Move VM chain** — uses hub intent data (NOT registry):
+**Connected MVM chain** — uses hub intent data (NOT registry):
 
 1. Reads `requester_addr_connected_chain` from cached hub intents
 2. Polls those addresses on the connected chain for `OracleLimitOrderEvent` (escrow)
@@ -87,16 +94,23 @@ The verifier uses different mechanisms to discover events on each chain:
 1. Queries `EscrowInitialized` events directly from the escrow contract
 2. No account polling needed (EVM events are indexed by contract address)
 
+**Connected SVM chain** — uses program account scans:
+
+1. Queries escrow PDA accounts for the SVM escrow program
+2. Parses escrow account state and converts into escrow events
+
 ## Event Linkage
 
 - **Hub chain**
   - `LimitOrderEvent` — inflow intent creation (issuer, amounts, metadata, expiry, revocable, solver, offered_chain_id, desired_chain_id)
   - `OracleLimitOrderEvent` — outflow intent creation (same fields + verifier public key)
   - `LimitOrderFulfillmentEvent` — fulfillment (intent_id, solver, provided amount/metadata)
-- **Connected Move VM chain**
+- **Connected MVM chain**
   - `OracleLimitOrderEvent` (escrow) — escrow deposit with verifier public key and desired amounts
 - **Connected EVM chain**
   - `EscrowInitialized` — escrow creation (intentId, requester, token, reservedSolver)
+- **Connected SVM chain**
+  - Escrow PDA account state — escrow creation (intent_id, requester, token_mint, reserved_solver)
 - **Linking**
   - Shared `intent_id` across chains links hub intents to escrows on connected chains
   - Verifier validates `chain_id` matches between intent `offered_chain_id` and escrow `chain_id`

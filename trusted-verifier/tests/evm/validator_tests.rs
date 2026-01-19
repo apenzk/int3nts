@@ -7,7 +7,7 @@ use trusted_verifier::monitor::IntentEvent;
 #[path = "../mod.rs"]
 mod test_helpers;
 use test_helpers::{
-    create_default_intent_evm, DUMMY_SOLVER_ADDR_EVM, DUMMY_SOLVER_ADDR_MVM_HUB, setup_mock_server_with_error,
+    create_default_intent_evm, DUMMY_SOLVER_ADDR_EVM, DUMMY_SOLVER_ADDR_HUB, setup_mock_server_with_error,
     setup_mock_server_with_evm_address_response,
 };
 
@@ -37,10 +37,10 @@ async fn test_successful_evm_solver_validation() {
     let _ = tracing_subscriber::fmt::try_init();
 
     let (_mock_server, config, _validator) =
-        setup_mock_server_with_evm_address_response(DUMMY_SOLVER_ADDR_MVM_HUB, Some(DUMMY_SOLVER_ADDR_EVM))
+        setup_mock_server_with_evm_address_response(DUMMY_SOLVER_ADDR_HUB, Some(DUMMY_SOLVER_ADDR_EVM))
             .await;
 
-    let intent = create_test_intent(Some(DUMMY_SOLVER_ADDR_MVM_HUB.to_string()));
+    let intent = create_test_intent(Some(DUMMY_SOLVER_ADDR_HUB.to_string()));
 
     // Test with matching address
     let result = trusted_verifier::validator::inflow_evm::validate_evm_escrow_solver(
@@ -104,7 +104,7 @@ async fn test_rejection_when_solver_not_registered() {
 async fn test_rejection_when_evm_addresses_dont_match() {
     let _ = tracing_subscriber::fmt::try_init();
 
-    let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+    let solver_addr = DUMMY_SOLVER_ADDR_HUB;
     let solver_registered_evm_addr = DUMMY_SOLVER_ADDR_EVM;
     let (_mock_server, config, _validator) =
         setup_mock_server_with_evm_address_response(solver_addr, Some(solver_registered_evm_addr))
@@ -150,7 +150,7 @@ async fn test_evm_address_normalization() {
     ];
 
     for (escrow_addr, registered_addr, should_match) in test_cases {
-        let solver_addr = DUMMY_SOLVER_ADDR_MVM_HUB;
+        let solver_addr = DUMMY_SOLVER_ADDR_HUB;
         let (_mock_server, config, _validator) =
             setup_mock_server_with_evm_address_response(solver_addr, Some(registered_addr))
                 .await;
@@ -184,7 +184,7 @@ async fn test_error_handling_for_registry_query_failures() {
     // Setup mock server that returns a 500 error (simulating network/server error)
     let (_mock_server, config, _validator) = setup_mock_server_with_error(500).await;
 
-    let intent = create_test_intent(Some(DUMMY_SOLVER_ADDR_MVM_HUB.to_string()));
+    let intent = create_test_intent(Some(DUMMY_SOLVER_ADDR_HUB.to_string()));
 
     let result = trusted_verifier::validator::inflow_evm::validate_evm_escrow_solver(
         &intent,
@@ -216,7 +216,7 @@ async fn test_rejection_when_intent_has_no_solver() {
     let _ = tracing_subscriber::fmt::try_init();
 
     let (_mock_server, config, _validator) = setup_mock_server_with_evm_address_response(
-        DUMMY_SOLVER_ADDR_MVM_HUB,
+        DUMMY_SOLVER_ADDR_HUB,
         Some(DUMMY_SOLVER_ADDR_EVM),
     )
     .await;

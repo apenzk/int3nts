@@ -140,7 +140,11 @@ sequenceDiagram
 
 ## Error Cases
 
-**TODO:** Document error cases specific to inflow.
+- **Escrow not created or incorrect**: Connected-chain escrow missing, wrong amount, wrong mint, or wrong reserved solver; verifier rejects.
+- **Hub fulfillment mismatch**: Solver fulfills intent with incorrect amount or metadata; hub transaction aborts and no fulfillment event is emitted.
+- **Invalid approval signature**: Escrow release fails if verifier signature or intent ID mismatch.
+- **Expiry reached**: Escrow cannot be released after expiry; requester can cancel and reclaim.
+- **Monitoring gaps**: Verifier does not observe escrow or fulfillment events in time; approval is delayed until events are observed.
 
 ## Protocol steps details
 
@@ -178,7 +182,7 @@ Remarks:
 The notification can be done on-chain using the same contract's call as the deposit (Step 6, in this case, the deposit generates an event monitored by the verifier) or call the verifier via a REST entry point.
 I'm more in favor of the first behavior (on-chain notification) because it's easier to manage scenarios where notifications are missed. For example, if the  verifier is down, the solver needs to manage to resend the filled request, and this logic can be very error-prone (miss notification error, send several time the same notification, ...).
 
-**TODO : TO BE UPDATED**: Current implementation uses on-chain events for verifier monitoring.
+Current implementation uses on-chain events for verifier monitoring on both hub and connected chains. REST notification is not used in the SVM/MVM/EVM flows.
 
 ### 8) Verifier verifies the execution of all legs and signs
 

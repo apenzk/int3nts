@@ -11,24 +11,35 @@ For guidance on how to write rules, see [Cursor Rules Documentation](https://cur
 
 After completing a subtask or task, create a commit with the changes.
 
+**If tests were run:**
 ```bash
 git commit -m "<type of change>: <description>
 
 - <more detailed points if needed (optional)>
 - <more detailed points if needed (optional)>
 
-Tests pass: Move <amount>, EVM <amount>, Verifier (Rust) <number>, Solver (Rust) <number>, Frontend <number>
-"
+Tests pass: Verifier <number>, Solver <number>, Move <amount>, EVM <amount>, SVM <number>, Frontend <number>"
+```
+
+**If tests were NOT run (e.g., project setup, docs only, no test-affecting changes):**
+```bash
+git commit -m "<type of change>: <description>
+
+- <more detailed points if needed (optional)>
+- <more detailed points if needed (optional)>"
 ```
 
 **Commit Rules:**
 
 - **ALWAYS commit after completing each subtask or task** - ensures incremental progress is saved
 - **CRITICAL: NEVER run `git add` or `git add -A`** - files must already be staged by the user
-- **Run tests before committing** to ensure changes work correctly
-- **Always include test results** in the format: `Tests pass: Move <amount>, EVM <amount>, Verifier (Rust) <number>, Solver (Rust) <number>, Frontend <number>`
-- **Display test summary table** after running tests using the commands in the next subsection, showing passed/total for each category (Move, EVM, Verifier, Solver, Frontend)
-- Follow conventional commit format (e.g., `feat:`, `fix:`, `refactor:`, `test:`, `docs:`)
+- **Run tests before committing** ONLY if changes affect existing test code (e.g., adding new tests, modifying code that has tests)
+- **Do NOT run tests for:** project setup, documentation-only changes, configuration files, or other non-code changes
+- **If sandbox prevents test execution**, ask user for help or skip tests (don't include "Tests pass:" line)
+- **Only include test results** in commit message if tests were actually run, in the format: `Tests pass: Verifier <number>, Solver <number>, Move <amount>, EVM <amount>, SVM <number>, Frontend <number>`
+- **If tests were NOT run**, omit the "Tests pass:" line entirely from the commit message
+- **Display test summary table** after running tests using the commands in the next subsection, showing passed/total for each category (Verifier, Solver, Move, EVM, SVM, Frontend)
+- Follow conventional commit format (e.g., `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`)
 - Keep commit messages brief and professional
 - Do NOT mention subtask or task IDs in commit messages
 - Do NOT include AI/Claude references or "Co-Authored-By" phrases
@@ -38,7 +49,7 @@ Tests pass: Move <amount>, EVM <amount>, Verifier (Rust) <number>, Solver (Rust)
 Get test counts for all components and display in a summary table:
 
 ```bash
-./.cursor/test-summary.sh
+./testing-infra/run-all-unit-tests.sh
 ```
 
 This script runs all tests and displays a summary table with passed/failed counts for each component.
@@ -60,6 +71,9 @@ nix develop -c bash -c "cd evm-intent-framework && npm test" 2>&1 | grep -oE "[0
 
 # Frontend tests
 nix develop -c bash -c "cd frontend && npm test" 2>&1 | grep -oE "Tests[[:space:]]+[0-9]+ passed" | grep -oE "[0-9]+"
+
+# SVM tests
+nix develop -c bash -c "cd svm-intent-framework && ./scripts/test.sh" 2>&1 | grep -oE "[0-9]+ test" | awk '{print $1}'
 ```
 
 ## Context Requirements

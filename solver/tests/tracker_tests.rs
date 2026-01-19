@@ -9,7 +9,7 @@ use solver::{
 mod test_helpers;
 use test_helpers::{
     create_default_solver_config, DUMMY_DRAFT_ID, DUMMY_EXPIRY, DUMMY_INTENT_ID,
-    DUMMY_REQUESTER_ADDR_EVM, DUMMY_TOKEN_ADDR_MVM_CON, DUMMY_TOKEN_ADDR_MVM_HUB,
+    DUMMY_REQUESTER_ADDR_EVM, DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
 };
 
 // ============================================================================
@@ -20,10 +20,10 @@ use test_helpers::{
 fn create_default_draft_data_inflow() -> DraftintentData {
     DraftintentData {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        offered_token: DUMMY_TOKEN_ADDR_MVM_CON.to_string(),
+        offered_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         offered_amount: 1000,
         offered_chain_id: 2, // Connected chain (inflow)
-        desired_token: DUMMY_TOKEN_ADDR_MVM_HUB.to_string(),
+        desired_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
         desired_amount: 2000,
         desired_chain_id: 1, // Hub chain
     }
@@ -33,10 +33,10 @@ fn create_default_draft_data_inflow() -> DraftintentData {
 fn create_default_draft_data_outflow() -> DraftintentData {
     DraftintentData {
         intent_id: DUMMY_INTENT_ID.to_string(),
-        offered_token: DUMMY_TOKEN_ADDR_MVM_HUB.to_string(),
+        offered_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
         offered_amount: 1000,
         offered_chain_id: 1, // Hub chain (outflow)
-        desired_token: DUMMY_TOKEN_ADDR_MVM_CON.to_string(),
+        desired_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         desired_amount: 2000,
         desired_chain_id: 2, // Connected chain
     }

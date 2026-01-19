@@ -2,8 +2,10 @@
 
 use anyhow::{Context, Result};
 use serde_json::Value;
+use solana_sdk::pubkey::Pubkey;
 use std::process::Command;
 use std::str;
+use std::str::FromStr;
 
 /// Get intent hash by calling Move view function
 ///
@@ -24,6 +26,12 @@ pub fn get_intent_hash(
     chain_num: u8,
     e2e_mode: bool,
 ) -> Result<Vec<u8>> {
+    // Normalize metadata to Move address format (0x-hex).
+    let offered_metadata = normalize_metadata_for_move(offered_metadata)
+        .context("Failed to normalize offered metadata")?;
+    let desired_metadata = normalize_metadata_for_move(desired_metadata)
+        .context("Failed to normalize desired metadata")?;
+
     // Validate solver address format early (before any CLI calls)
     // Solver address must have 0x prefix (required format), then strip for API call
     let solver_addr = solver
@@ -167,3 +175,25 @@ pub fn get_intent_hash(
     );
 }
 
+/// Normalize metadata to a Move-compatible address string.
+///
+/// SVM mints are base58, so we convert them to 0x-hex.
+/// MVM/EVM addresses already use 0x-hex and are returned as-is.
+///
+/// # Arguments
+///
+/// * `value` - Metadata address or mint string
+///
+/// # Returns
+///
+/// - `Ok(String)` - 0x-prefixed hex string
+/// - `Err(anyhow::Error)` - Invalid metadata string
+fn normalize_metadata_for_move(value: &str) -> Result<String> {
+    if value.starts_with("0x") {
+        return Ok(value.to_string());
+    }
+
+    let pubkey = Pubkey::from_str(value)
+        .context("Invalid base58 SVM mint")?;
+    Ok(format!("0x{}", hex::encode(pubkey.to_bytes())))
+}

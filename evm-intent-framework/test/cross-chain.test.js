@@ -18,13 +18,17 @@ describe("IntentEscrow - Cross-Chain Intent ID Conversion", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Aptos Hex to EVM uint256 Conversion
-  /// Verifies that intent IDs from Aptos hex format can be converted and used in EVM escrow operations.
-  /// Why: Cross-chain intents require intent ID conversion between Aptos (hex) and EVM (uint256) formats.
-  it("Should handle Aptos hex intent ID conversion to EVM uint256", async function () {
-    // Aptos intent ID in hex format (smaller than 32 bytes)
-    const aptosIntentIdHex = "0x1234";
-    const evmIntentId = hexToUint256(aptosIntentIdHex);
+  // ============================================================================
+  // CROSS-CHAIN INTENT ID CONVERSION TESTS
+  // ============================================================================
+
+  /// 1. Test: Hex Intent ID Conversion
+  /// Verifies that intent IDs from hex format can be converted and used in escrow operations.
+  /// Why: Cross-chain intents require intent ID conversion between different formats (hex to uint256).
+  it("Should handle hex intent ID conversion to uint256", async function () {
+    // Intent ID in hex format (smaller than 32 bytes)
+    const intentIdHex = "0x1234";
+    const evmIntentId = hexToUint256(intentIdHex);
 
     // Create escrow with converted intent ID and deposit atomically
     const amount = ethers.parseEther("100");
@@ -41,7 +45,7 @@ describe("IntentEscrow - Cross-Chain Intent ID Conversion", function () {
     expect(await token.balanceOf(escrow.target)).to.equal(amount);
   });
 
-  /// Test: Intent ID Boundary Values
+  /// 2. Test: Intent ID Boundary Values
   /// Verifies that the contract handles boundary intent ID values correctly.
   /// Why: Intent IDs from different chains may have different formats. Boundary testing ensures compatibility.
   it("Should handle intent ID boundary values", async function () {
@@ -71,9 +75,9 @@ describe("IntentEscrow - Cross-Chain Intent ID Conversion", function () {
     expect(edgeEscrowData.amount).to.equal(amount);
   });
 
-  /// Test: Intent ID Zero Padding
+  /// 3. Test: Intent ID Zero Padding
   /// Verifies that shorter intent IDs are properly left-padded with zeros.
-  /// Why: Aptos intent IDs may be shorter than 32 bytes. Zero padding ensures correct uint256 conversion.
+  /// Why: Intent IDs from other chains may be shorter than 32 bytes. Zero padding ensures correct uint256 conversion.
   it("Should handle intent ID zero padding correctly", async function () {
     // Test various short hex strings that need padding
     const shortHexIds = [
@@ -104,10 +108,10 @@ describe("IntentEscrow - Cross-Chain Intent ID Conversion", function () {
     }
   });
 
-  /// Test: Multiple Intent IDs from Different Formats
-  /// Verifies that multiple escrows can be created with intent IDs from different Aptos formats.
+  /// 4. Test: Multiple Intent IDs from Different Formats
+  /// Verifies that multiple escrows can be created with intent IDs from different formats.
   /// Why: Real-world usage involves intent IDs in various formats. The contract must handle all valid formats.
-  it("Should handle multiple intent IDs from different Aptos formats", async function () {
+  it("Should handle multiple intent IDs from different formats", async function () {
     const intentIds = [
       hexToUint256("0x1"),
       hexToUint256("0x1234"),

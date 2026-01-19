@@ -154,7 +154,7 @@ pub struct FulfillmentEvent {
     /// Address of the intent that was fulfilled
     pub intent_addr: String,
     /// Address of the solver who fulfilled the intent
-    pub solver_addr: String,
+    pub solver_hub_addr: String,
     /// Metadata of the asset provided by the solver
     pub provided_metadata: String,
     /// Amount of the asset provided by the solver (u64, matching Move contract constraint)
@@ -279,8 +279,9 @@ impl EventMonitor {
     ///
     /// This function runs monitoring loops:
     /// 1. Hub chain monitoring for intent events (always)
-    /// 2. Connected Move VM chain monitoring for escrow events (if configured)
+    /// 2. Connected MVM chain monitoring for escrow events (if configured)
     /// 3. Connected EVM chain monitoring for escrow events (if configured)
+    /// 4. Connected SVM chain monitoring for escrow events (if configured)
     ///
     /// The function blocks until all monitors complete (which should be never
     /// in normal operation, as they run infinite loops).
@@ -299,31 +300,58 @@ impl EventMonitor {
         // Start hub chain monitoring (always required) - for outflow intents
         let hub_monitor = outflow_generic::monitor_hub_chain(self);
 
-        // Conditionally start connected Move VM chain monitoring if configured - for inflow intents
-        if let Some(_) = &self.config.connected_chain_mvm {
-            info!("Connected Move VM chain configured, starting connected chain monitoring");
-            let mvm_monitor = inflow_generic::monitor_connected_chain(self);
-            let evm_monitor = if let Some(_) = &self.config.connected_chain_evm {
-                info!("Connected EVM chain configured, starting EVM chain monitoring");
-                Some(inflow_generic::monitor_evm_chain(self))
-            } else {
-                info!("No connected EVM chain configured");
-                None
-            };
+        let has_mvm = self.config.connected_chain_mvm.is_some();
+        let has_evm = self.config.connected_chain_evm.is_some();
+        let has_svm = self.config.connected_chain_svm.is_some();
 
-            // Run all monitors concurrently
-            if let Some(evm) = evm_monitor {
-                tokio::try_join!(hub_monitor, mvm_monitor, evm)?;
-            } else {
+        if has_mvm {
+            info!("Connected Move VM chain configured, starting connected chain monitoring");
+        }
+        if has_evm {
+            info!("Connected EVM chain configured, starting EVM chain monitoring");
+        }
+        if has_svm {
+            info!("Connected SVM chain configured, starting SVM chain monitoring");
+        }
+
+        match (has_mvm, has_evm, has_svm) {
+            (true, true, true) => {
+                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
+                let evm_monitor = inflow_generic::monitor_evm_chain(self);
+                let svm_monitor = inflow_generic::monitor_svm_chain(self);
+                tokio::try_join!(hub_monitor, mvm_monitor, evm_monitor, svm_monitor)?;
+            }
+            (true, true, false) => {
+                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
+                let evm_monitor = inflow_generic::monitor_evm_chain(self);
+                tokio::try_join!(hub_monitor, mvm_monitor, evm_monitor)?;
+            }
+            (true, false, true) => {
+                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
+                let svm_monitor = inflow_generic::monitor_svm_chain(self);
+                tokio::try_join!(hub_monitor, mvm_monitor, svm_monitor)?;
+            }
+            (false, true, true) => {
+                let evm_monitor = inflow_generic::monitor_evm_chain(self);
+                let svm_monitor = inflow_generic::monitor_svm_chain(self);
+                tokio::try_join!(hub_monitor, evm_monitor, svm_monitor)?;
+            }
+            (true, false, false) => {
+                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
                 tokio::try_join!(hub_monitor, mvm_monitor)?;
             }
-        } else if let Some(_) = &self.config.connected_chain_evm {
-            info!("Connected EVM chain configured, starting EVM chain monitoring");
-            let evm_monitor = inflow_generic::monitor_evm_chain(self);
-            tokio::try_join!(hub_monitor, evm_monitor)?;
-        } else {
-            info!("No connected chains configured, monitoring hub chain only");
-            hub_monitor.await?;
+            (false, true, false) => {
+                let evm_monitor = inflow_generic::monitor_evm_chain(self);
+                tokio::try_join!(hub_monitor, evm_monitor)?;
+            }
+            (false, false, true) => {
+                let svm_monitor = inflow_generic::monitor_svm_chain(self);
+                tokio::try_join!(hub_monitor, svm_monitor)?;
+            }
+            (false, false, false) => {
+                info!("No connected chains configured, monitoring hub chain only");
+                hub_monitor.await?;
+            }
         }
 
         Ok(())

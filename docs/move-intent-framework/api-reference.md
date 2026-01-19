@@ -169,7 +169,7 @@ public fun create_outflow_intent(
 
 - `ESOLVER_NOT_REGISTERED`: Solver is not registered in the solver registry
 - `EINVALID_SIGNATURE`: Signature verification failed
-- `EINVALID_REQUESTER_ADDRESS`: `requester_addr_connected_chain` is zero address (0x0)
+- `EINVALID_REQUESTER_ADDR`: `requester_addr_connected_chain` is zero address (0x0)
 
 **Entry Function:** For transaction calls, use `create_outflow_intent_entry` which has the same parameters but doesn't return a value (entry functions cannot return values in Move).
 
@@ -430,8 +430,9 @@ The solver registry is a permissionless registry that stores solver information 
 public entry fun register_solver(
     solver: &signer,
     public_key: vector<u8>,
-    connected_chain_evm_addr: Option<vector<u8>>,
     connected_chain_mvm_addr: Option<address>,
+    connected_chain_evm_addr: Option<vector<u8>>,
+    connected_chain_svm_addr: Option<vector<u8>>,
 )
 ```
 
@@ -439,14 +440,16 @@ public entry fun register_solver(
 
 - `solver`: The solver signing the transaction (becomes the solver's hub chain address)
 - `public_key`: Ed25519 public key (32 bytes) for signature validation
+- `connected_chain_mvm_addr`: Optional MVM address on connected chain (None if not applicable)
 - `connected_chain_evm_addr`: Optional EVM address on connected chain (20 bytes, None if not applicable)
-- `connected_chain_mvm_addr`: Optional Move VM address on connected chain (None if not applicable)
+- `connected_chain_svm_addr`: Optional SVM address on connected chain (32 bytes, None if not applicable)
 
 **Note**: Solvers must be registered before creating reserved intents. The registry stores:
 
 - The solver's Ed25519 public key (used for signature verification)
+- The solver's connected chain MVM address (for MVM outflow validation)
 - The solver's connected chain EVM address (for EVM outflow validation)
-- The solver's connected chain Move VM address (for MVM outflow validation)
+- The solver's connected chain SVM address (for SVM outflow validation)
 
 For outflow intents, the verifier validates that the transaction solver on the connected chain matches the registered connected chain address from the hub registry.
 
@@ -455,22 +458,24 @@ For outflow intents, the verifier validates that the transaction solver on the c
 - `E_NOT_INITIALIZED`: Solver registry not initialized
 - `E_SOLVER_ALREADY_REGISTERED`: Solver is already registered
 - `E_PUBLIC_KEY_LENGTH_INVALID`: Public key is not 32 bytes
-- `E_EVM_ADDRESS_LENGTH_INVALID`: EVM address is not 20 bytes (if provided)
+- `E_EVM_ADDR_LENGTH_INVALID`: EVM address is not 20 bytes (if provided)
+- `E_SVM_ADDR_LENGTH_INVALID`: SVM address is not 32 bytes (if provided)
 - `E_INVALID_PUBLIC_KEY`: Public key is not a valid Ed25519 public key
 
 **Usage with Movement CLI:**
 
 When calling `register_solver` via `movement move run`, Option types cannot be passed as "null". Use placeholder values instead:
 
-- For `connected_chain_evm_addr`: Use `0x0000000000000000000000000000000000000000` (20 bytes of zeros) if not applicable
 - For `connected_chain_mvm_addr`: Use `0x0` (zero address) if not applicable
+- For `connected_chain_evm_addr`: Use `0x0000000000000000000000000000000000000000` (20 bytes of zeros) if not applicable
+- For `connected_chain_svm_addr`: Use `0x` followed by 64 zeros (32 bytes) if not applicable
 
 Example:
 
 ```bash
 movement move run --profile solver-profile \
   --function-id 0x<module_address>::solver_registry::register_solver \
-  --args hex:<public_key> hex:<evm_address> address:<mvm_address>
+  --args hex:<public_key> address:<mvm_address> hex:<evm_address> hex:<svm_address>
 ```
 
 ### Querying Solver Information
@@ -478,10 +483,11 @@ movement move run --profile solver-profile \
 The registry provides view functions to query solver information:
 
 - `get_public_key(solver_addr: address): vector<u8>` - Get solver's Ed25519 public key
+- `get_connected_chain_mvm_address(solver_addr: address): Option<address>` - Get solver's MVM address on connected chain
 - `get_connected_chain_evm_address(solver_addr: address): Option<vector<u8>>` - Get solver's EVM address on connected chain
-- `get_connected_chain_mvm_address(solver_addr: address): Option<address>` - Get solver's Move VM address on connected chain
+- `get_connected_chain_svm_address(solver_addr: address): Option<vector<u8>>` - Get solver's SVM address on connected chain
 - `is_registered(solver_addr: address): bool` - Check if solver is registered
-- `get_solver_info(solver_addr: address): (bool, vector<u8>, Option<vector<u8>>, Option<address>, u64)` - Get all solver information
+- `get_solver_info(solver_addr: address): (bool, vector<u8>, Option<address>, Option<vector<u8>>, Option<vector<u8>>, u64)` - Get all solver information
 
 ## Oracle Events
 

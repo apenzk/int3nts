@@ -17,6 +17,11 @@ jobs:
     with:
       script: "cd evm-intent-framework && npm install && npm test"
 
+  svm:
+    uses: ./.github/workflows/unit-tests-reusable.yml
+    with:
+      script: "cd svm-intent-framework && ./scripts/test.sh"
+
   solver:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:

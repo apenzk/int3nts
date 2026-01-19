@@ -1,4 +1,6 @@
-// Verifier API client with polling support
+// ============================================================================
+// Verifier API Client
+// ============================================================================
 
 import type {
   ApiResponse,
@@ -10,10 +12,18 @@ import type {
   Approval,
 } from './types';
 
+// ============================================================================
+// Configuration
+// ============================================================================
+
 const VERIFIER_URL = process.env.NEXT_PUBLIC_VERIFIER_URL;
 if (!VERIFIER_URL) {
   throw new Error('NEXT_PUBLIC_VERIFIER_URL environment variable is not set');
 }
+
+// ============================================================================
+// Client Implementation
+// ============================================================================
 
 class VerifierClient {
   private baseUrl: string;
@@ -67,10 +77,18 @@ class VerifierClient {
     }
   }
 
+  // --------------------------------------------------------------------------
+  // Health
+  // --------------------------------------------------------------------------
+
   // Health check
   async health(): Promise<ApiResponse<string>> {
     return this.fetch<string>('/health');
   }
+
+  // --------------------------------------------------------------------------
+  // Public Key
+  // --------------------------------------------------------------------------
 
   // Get public key
   // Note: API returns the public key directly as the data field (base64 string)
@@ -107,7 +125,7 @@ class VerifierClient {
     return this.fetch<DraftIntentResponse>(`/draftintent/${draftId}/signature`, {
       method: 'POST',
       body: JSON.stringify({
-        solver_addr: solverAddr,
+        solver_hub_addr: solverAddr,
         signature,
         public_key: publicKey,
       }),
@@ -139,7 +157,7 @@ class VerifierClient {
   // Validation endpoints
   async validateOutflowFulfillment(
     transactionHash: string,
-    chainType: 'mvm' | 'evm',
+    chainType: 'mvm' | 'evm' | 'svm',
     intentId?: string
   ): Promise<
     ApiResponse<{

@@ -4,6 +4,10 @@
 
 import { parseUnits, type Address, getAddress } from 'viem';
 
+// ============================================================================
+// ABIs
+// ============================================================================
+
 // IntentEscrow contract ABI (minimal - only what we need)
 export const INTENT_ESCROW_ABI = [
   {
@@ -57,6 +61,10 @@ export const ERC20_ABI = [
     type: 'function',
   },
 ] as const;
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 /**
  * Convert Movement intent ID (32-byte hex address) to EVM uint256

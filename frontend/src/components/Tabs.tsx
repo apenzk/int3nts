@@ -13,6 +13,9 @@ interface TabsProps {
   defaultTab?: string;
 }
 
+/**
+ * Simple tab switcher for page sections.
+ */
 export function Tabs({ tabs, defaultTab }: TabsProps) {
   const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id);
 

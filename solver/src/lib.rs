@@ -3,6 +3,7 @@
 //! Provides signing, acceptance logic, and verifier communication.
 
 pub mod acceptance;
+pub mod api;
 pub mod chains;
 pub mod config;
 pub mod crypto;

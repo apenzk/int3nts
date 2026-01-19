@@ -20,7 +20,7 @@ describe("IntentEscrow - Expiry Handling", function () {
     intentId = fixtures.intentId;
   });
 
-  /// Test: Expired Escrow Cancellation
+  /// 1. Test: Expired Escrow Cancellation
   /// Verifies that requesters can cancel escrows after expiry and reclaim funds.
   /// Why: Requesters need a way to reclaim funds if fulfillment doesn't occur before expiry. Cancellation before expiry is blocked to ensure funds remain locked until expiry.
   it("Should allow requester to cancel expired escrow", async function () {
@@ -52,7 +52,7 @@ describe("IntentEscrow - Expiry Handling", function () {
     expect(escrowData.amount).to.equal(0);
   });
 
-  /// Test: Expiry Timestamp Validation
+  /// 2. Test: Expiry Timestamp Validation
   /// Verifies that expiry timestamp is correctly calculated and stored.
   /// Why: Correct expiry calculation is critical for time-based cancellation logic.
   it("Should verify expiry timestamp is stored correctly", async function () {
@@ -74,7 +74,7 @@ describe("IntentEscrow - Expiry Handling", function () {
     expect(escrowData.isClaimed).to.equal(false);
   });
 
-  /// Test: Expired Escrow Claim Prevention
+  /// 3. Test: Expired Escrow Claim Prevention
   /// Verifies that expired escrows cannot be claimed, even with valid verifier signatures.
   /// Why: Expired escrows should only be cancellable by the requester, not claimable by solvers.
   it("Should prevent claim on expired escrow", async function () {

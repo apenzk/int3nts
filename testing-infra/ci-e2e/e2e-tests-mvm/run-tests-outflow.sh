@@ -17,34 +17,36 @@ source "$SCRIPT_DIR/../util_mvm.sh"
 setup_project_root
 cd "$PROJECT_ROOT"
 
-echo "🧪 E2E Test with Connected Move VM Chain - OUTFLOW"
+echo " E2E Test with Connected Move VM Chain - OUTFLOW"
 echo "=================================================="
 echo ""
 
-echo "🧹 Step 1: Cleaning up any existing chains, accounts and processes..."
+echo " Step 0: Cleaning up any existing chains, accounts and processes..."
 echo "================================================================"
 ./testing-infra/ci-e2e/chain-connected-mvm/cleanup.sh
 
 echo ""
-echo "🔑 Step 1b: Generating verifier keys..."
-echo "======================================="
-generate_verifier_keys
-
-echo ""
-echo "🔨 Step 2: Building Rust services (verifier and solver)..."
-echo "==========================================================="
+echo " Step 1: Build bins and pre-pull docker images"
+echo "========================================"
 pushd "$PROJECT_ROOT/trusted-verifier" > /dev/null
-cargo build --bin trusted-verifier 2>&1 | tail -5
+cargo build --bin trusted-verifier --bin generate_keys 2>&1 | tail -5
 popd > /dev/null
-echo "   ✅ Verifier built"
+echo "   ✅ Verifier: trusted-verifier, generate_keys"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
-cargo build --bin solver 2>&1 | tail -5
+cargo build --bin solver --bin sign_intent 2>&1 | tail -5
 popd > /dev/null
-echo "   ✅ Solver built"
+echo "   ✅ Solver: solver, sign_intent"
+
+echo ""
+docker pull "$APTOS_DOCKER_IMAGE"
+
+echo " Step 2: Generating verifier keys..."
+echo "======================================="
+generate_verifier_keys
 echo ""
 
-echo "🚀 Step 3: Setting up chains, deploying contracts, funding accounts"
+echo " Step 3: Setting up chains, deploying contracts, funding accounts"
 echo "===================================================================="
 ./testing-infra/ci-e2e/chain-hub/setup-chain.sh
 ./testing-infra/ci-e2e/chain-hub/setup-requester-solver.sh
@@ -57,17 +59,17 @@ echo "===================================================================="
 source "$PROJECT_ROOT/.tmp/chain-info.env"
 
 echo ""
-echo "🚀 Step 4: Configuring and starting verifier (for negotiation routing)..."
+echo " Step 4: Configuring and starting verifier (for negotiation routing)..."
 echo "=========================================================================="
 ./testing-infra/ci-e2e/e2e-tests-mvm/start-verifier.sh
 
 # Assert solver has USDcon before starting (should have 1 USDcon from deploy)
-assert_usdxyz_balance "solver-chain2" "2" "$TEST_TOKENS_CHAIN2_ADDRESS" "1000000" "pre-solver-start"
+assert_usdxyz_balance "solver-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "1000000" "pre-solver-start"
 echo "   [DEBUG] Balance assertion completed, continuing..."
 
 # Start solver service for automatic signing and fulfillment
 echo ""
-echo "🚀 Step 4b: Starting solver service..."
+echo " Step 4b: Starting solver service..."
 echo "======================================="
 ./testing-infra/ci-e2e/e2e-tests-mvm/start-solver.sh
 
@@ -75,11 +77,11 @@ echo "======================================="
 ./testing-infra/ci-e2e/verify-solver-running.sh
 
 echo ""
-echo "🚀 Step 5: Testing OUTFLOW intents (hub chain → connected chain)..."
+echo " Step 5: Testing OUTFLOW intents (hub chain → connected chain)..."
 echo "===================================================================="
 echo "   Submitting outflow cross-chain intents via verifier negotiation routing..."
 echo ""
-echo "💰 Pre-Intent Balance Validation"
+echo " Pre-Intent Balance Validation"
 echo "=========================================="
 # Everybody starts with 1 USDhub/USDcon on each chain
 ./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 1000000 1000000 1000000 1000000
@@ -93,7 +95,7 @@ if ! load_intent_info "INTENT_ID"; then
 fi
 
 echo ""
-echo "🤖 Step 5b: Waiting for solver to automatically fulfill..."
+echo " Step 5b: Waiting for solver to automatically fulfill..."
 echo "==========================================================="
 echo "   The solver service is running and will:"
 echo "   1. Detect the intent on hub chain"
@@ -111,7 +113,7 @@ fi
 echo "✅ Solver fulfilled the intent automatically!"
 
 echo ""
-echo "💰 Final Balance View"
+echo " Final Balance View"
 echo "=========================================="
 # Outflow: Solver gets from hub intent (2000000 on hub, 0 on MVM transferred to requester)
 #          Requester receives on MVM (0 on hub locked in intent, 2000000 on MVM)
@@ -121,7 +123,7 @@ echo ""
 echo "✅ E2E outflow test completed!"
 echo ""
 
-echo "🧹 Step 6: Cleaning up chains, accounts and processes..."
+echo " Step 6: Cleaning up chains, accounts and processes..."
 echo "========================================================"
 ./testing-infra/ci-e2e/chain-connected-mvm/cleanup.sh
 

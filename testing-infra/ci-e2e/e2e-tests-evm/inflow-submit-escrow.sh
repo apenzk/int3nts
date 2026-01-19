@@ -13,29 +13,29 @@ setup_logging "inflow-submit-escrow"
 cd "$PROJECT_ROOT"
 
 
-# Load INTENT_ID and SOLVER_EVM_ADDRESS from info file if not provided
-if ! load_intent_info "INTENT_ID,SOLVER_EVM_ADDRESS"; then
+# Load INTENT_ID and SOLVER_EVM_ADDR from info file if not provided
+if ! load_intent_info "INTENT_ID,SOLVER_EVM_ADDR"; then
     exit 1
 fi
 
 # Get EVM escrow contract address from deployment logs
 cd evm-intent-framework
-ESCROW_ADDRESS=$(grep -i "IntentEscrow deployed to" "$PROJECT_ROOT/.tmp/e2e-tests/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
-if [ -z "$ESCROW_ADDRESS" ]; then
+ESCROW_ADDR=$(grep -i "IntentEscrow deployed to" "$PROJECT_ROOT/.tmp/e2e-tests/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
+if [ -z "$ESCROW_ADDR" ]; then
     # Try to get from hardhat config or last deployment
-    ESCROW_ADDRESS=$(nix develop -c bash -c "npx hardhat run scripts/deploy.js --network localhost --dry-run 2>&1 | grep 'IntentEscrow deployed to' | awk '{print \$NF}'" 2>/dev/null | tail -1 | tr -d '\n')
+    ESCROW_ADDR=$(nix develop -c bash -c "npx hardhat run scripts/deploy.js --network localhost --dry-run 2>&1 | grep 'IntentEscrow deployed to' | awk '{print \$NF}'" 2>/dev/null | tail -1 | tr -d '\n')
 fi
 cd ..
 
-if [ -z "$ESCROW_ADDRESS" ]; then
+if [ -z "$ESCROW_ADDR" ]; then
     log_and_echo "❌ ERROR: Could not find escrow contract address. Please ensure IntentEscrow is deployed."
     log_and_echo "   Run: ./testing-infra/ci-e2e/chain-connected-evm/deploy-contract.sh"
     exit 1
 fi
 
 log ""
-log "📋 Chain Information:"
-log "   EVM Chain (Chain 3):    $ESCROW_ADDRESS"
+log " Chain Information:"
+log "   EVM Chain (Chain 3):    $ESCROW_ADDR"
 log "   Intent ID:              $INTENT_ID"
 
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
@@ -43,27 +43,27 @@ EXPIRY_TIME=$(date -d "+1 hour" +%s)
 # Get USDcon token address from chain-info.env
 if [ -f "$PROJECT_ROOT/.tmp/chain-info.env" ]; then
     source "$PROJECT_ROOT/.tmp/chain-info.env"
-    USDCON_TOKEN_ADDRESS="$USDCON_EVM_ADDRESS"
+    USD_EVM_ADDR="$USD_EVM_ADDR"
 fi
-if [ -z "$USDCON_TOKEN_ADDRESS" ]; then
+if [ -z "$USD_EVM_ADDR" ]; then
     log_and_echo "❌ ERROR: Could not find USDcon token address. Please ensure USDcon is deployed."
     exit 1
 fi
 
 # Get test tokens address for balance display
-TEST_TOKENS_CHAIN1=$(get_profile_address "test-tokens-chain1")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
 
 log ""
-log "🔑 Configuration:"
+log " Configuration:"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Intent ID (for escrow): $INTENT_ID"
-log "   USDcon token address: $USDCON_TOKEN_ADDRESS"
+log "   USDcon token address: $USD_EVM_ADDR"
 log "   Escrow amount: 1 USDcon (matches intent offered_amount)"
 
 # Check and display initial balances using common function
 log ""
-display_balances_hub "0x$TEST_TOKENS_CHAIN1"
-display_balances_connected_evm "$USDCON_TOKEN_ADDRESS"
+display_balances_hub "0x$TEST_TOKENS_HUB"
+display_balances_connected_evm "$USD_EVM_ADDR"
 log_and_echo ""
 
 log ""
@@ -81,17 +81,17 @@ log "     Intent ID (EVM): $INTENT_ID_EVM"
 
 # Create escrow for this intent with USDcon ERC20 token
 log "   - Creating escrow for intent (USDcon ERC20 escrow) with funds..."
-# Reserved solver: Must come from verifier (via exported SOLVER_EVM_ADDRESS)
-if [ -z "$SOLVER_EVM_ADDRESS" ]; then
-    log_and_echo "❌ ERROR: SOLVER_EVM_ADDRESS not set"
+# Reserved solver: Must come from verifier (via exported SOLVER_EVM_ADDR)
+if [ -z "$SOLVER_EVM_ADDR" ]; then
+    log_and_echo "❌ ERROR: SOLVER_EVM_ADDR not set"
     log_and_echo "   The solver must register with an EVM address"
     exit 1
 fi
-SOLVER_ADDRESS="$SOLVER_EVM_ADDRESS"
-log "     Using solver EVM address from verifier: $SOLVER_ADDRESS"
+SOLVER_ADDR="$SOLVER_EVM_ADDR"
+log "     Using solver EVM address from verifier: $SOLVER_ADDR"
 # Escrow amount must match the intent's offered_amount (1 USDcon)
 USDCON_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals)
-CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDRESS='$ESCROW_ADDRESS' TOKEN_ADDRESS='$USDCON_TOKEN_ADDRESS' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT' RESERVED_SOLVER='$SOLVER_ADDRESS' npx hardhat run scripts/create-escrow-e2e-tests.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
+CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDR='$ESCROW_ADDR' TOKEN_ADDR='$USD_EVM_ADDR' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT' RESERVED_SOLVER='$SOLVER_ADDR' npx hardhat run scripts/create-escrow-e2e-tests.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
 CREATE_EXIT_CODE=$?
 
 # Check if creation was successful
@@ -119,20 +119,20 @@ log_and_echo "✅ Escrow created"
 cd ..
 
 log ""
-log "🎉 ESCROW CREATION COMPLETE!"
+log " ESCROW CREATION COMPLETE!"
 log "============================"
 log ""
 log "✅ Step completed successfully:"
 log "   1. Escrow created on Chain 3 (EVM) with locked USDcon"
 log ""
-log "📋 Escrow Details:"
+log " Escrow Details:"
 log "   Intent ID: $INTENT_ID"
-log "   Escrow Address: $ESCROW_ADDRESS"
+log "   Escrow Address: $ESCROW_ADDR"
 log "   Locked Amount: 1 USDcon (matches intent offered_amount)"
 
 # Check final balances using common function
-display_balances_hub "0x$TEST_TOKENS_CHAIN1"
-display_balances_connected_evm "$USDCON_TOKEN_ADDRESS"
+display_balances_hub "0x$TEST_TOKENS_HUB"
+display_balances_connected_evm "$USD_EVM_ADDR"
 log_and_echo ""
 
 

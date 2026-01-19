@@ -7,8 +7,8 @@
 //! 2. **Get Verifier Approval**: Call verifier `/validate-outflow-fulfillment` with transaction hash
 //! 3. **Fulfill Intent**: Call hub chain `fulfill_outflow_intent` with verifier signature
 
-use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, HubChainClient};
-use crate::config::{ConnectedChainConfig, SolverConfig};
+use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
+use crate::config::SolverConfig;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use crate::verifier_client::{ValidateOutflowFulfillmentRequest, VerifierClient};
 use anyhow::{Context, Result};
@@ -23,14 +23,12 @@ pub struct OutflowService {
     config: SolverConfig,
     /// Intent tracker for tracking signed intents (shared with other services)
     tracker: Arc<IntentTracker>,
-    /// Connected chain client (MVM or EVM)
-    connected_client: ConnectedChainClient,
-}
-
-/// Enum for connected chain client (MVM or EVM)
-enum ConnectedChainClient {
-    Mvm(ConnectedMvmClient),
-    Evm(ConnectedEvmClient),
+    /// Optional connected MVM chain client
+    mvm_client: Option<ConnectedMvmClient>,
+    /// Optional connected EVM chain client
+    evm_client: Option<ConnectedEvmClient>,
+    /// Optional connected SVM chain client
+    svm_client: Option<ConnectedSvmClient>,
 }
 
 impl OutflowService {
@@ -40,7 +38,6 @@ impl OutflowService {
     ///
     /// * `config` - Solver configuration
     /// * `tracker` - Shared intent tracker instance
-    /// * `hub_client` - Hub chain client instance
     ///
     /// # Returns
     ///
@@ -50,21 +47,59 @@ impl OutflowService {
         config: SolverConfig,
         tracker: Arc<IntentTracker>,
     ) -> Result<Self> {
-        // Create connected chain client based on config
-        let connected_client = match &config.connected_chain {
-            ConnectedChainConfig::Mvm(chain_config) => {
-                ConnectedChainClient::Mvm(ConnectedMvmClient::new(chain_config)?)
-            }
-            ConnectedChainConfig::Evm(chain_config) => {
-                ConnectedChainClient::Evm(ConnectedEvmClient::new(chain_config)?)
-            }
-        };
+        // Create connected chain clients for all configured chains
+        let mvm_client = config.get_mvm_config()
+            .map(|cfg| ConnectedMvmClient::new(cfg))
+            .transpose()?;
+        
+        let evm_client = config.get_evm_config()
+            .map(|cfg| ConnectedEvmClient::new(cfg))
+            .transpose()?;
+        
+        let svm_client = config.get_svm_config()
+            .map(|cfg| ConnectedSvmClient::new(cfg))
+            .transpose()?;
 
         Ok(Self {
             config,
             tracker,
-            connected_client,
+            mvm_client,
+            evm_client,
+            svm_client,
         })
+    }
+    
+    /// Gets the chain ID for a connected chain type
+    fn get_chain_id(&self, chain_type: &str) -> Option<u64> {
+        match chain_type {
+            "mvm" => self.config.get_mvm_config().map(|c| c.chain_id),
+            "evm" => self.config.get_evm_config().map(|c| c.chain_id),
+            "svm" => self.config.get_svm_config().map(|c| c.chain_id),
+            _ => None,
+        }
+    }
+    
+    /// Determines which connected chain to use for an outflow intent
+    /// Returns ("mvm"|"evm"|"svm", chain_id) or None if no matching chain
+    fn get_target_chain_for_intent(&self, intent: &TrackedIntent) -> Option<(&'static str, u64)> {
+        let desired_chain_id = intent.draft_data.desired_chain_id;
+        
+        if let Some(chain_id) = self.get_chain_id("mvm") {
+            if chain_id == desired_chain_id {
+                return Some(("mvm", chain_id));
+            }
+        }
+        if let Some(chain_id) = self.get_chain_id("evm") {
+            if chain_id == desired_chain_id {
+                return Some(("evm", chain_id));
+            }
+        }
+        if let Some(chain_id) = self.get_chain_id("svm") {
+            if chain_id == desired_chain_id {
+                return Some(("svm", chain_id));
+            }
+        }
+        None
     }
 
     /// Polls for pending outflow intents and executes transfers on connected chain
@@ -90,6 +125,14 @@ impl OutflowService {
         let mut executed_transfers = Vec::new();
 
         for intent in pending_intents {
+            if intent.outflow_attempted {
+                warn!(
+                    "Skipping outflow intent {}: transfer already attempted",
+                    intent.intent_id
+                );
+                continue;
+            }
+
             // Get requester_addr_connected_chain from intent
             // TODO: Query intent object on hub chain to get requester_addr_connected_chain
             // For now, we'll need to store this in TrackedIntent or query it
@@ -101,6 +144,14 @@ impl OutflowService {
                     continue;
                 }
             };
+
+            if let Err(e) = self.tracker.mark_outflow_attempted(&intent.intent_id).await {
+                error!(
+                    "Failed to mark outflow intent {} as attempted: {}",
+                    intent.intent_id, e
+                );
+                continue;
+            }
 
             // Execute transfer on connected chain
             let tx_hash = match self.execute_connected_transfer(&intent, &requester_addr_connected_chain).await {
@@ -137,16 +188,29 @@ impl OutflowService {
         let desired_token = &intent.draft_data.desired_token;
         let desired_amount = intent.draft_data.desired_amount;
 
-        match &self.connected_client {
-            ConnectedChainClient::Mvm(client) => {
-                // MVM: Use transfer_with_intent_id function
+        // Determine target chain based on intent's desired_chain_id
+        let (chain_type, _) = self.get_target_chain_for_intent(intent)
+            .context("No configured connected chain matches intent's desired_chain_id")?;
+
+        match chain_type {
+            "mvm" => {
+                let client = self.mvm_client.as_ref()
+                    .context("MVM client not configured")?;
                 client.transfer_with_intent_id(recipient, desired_token, desired_amount, &intent.intent_id)
             }
-            ConnectedChainClient::Evm(client) => {
-                // EVM: Use transfer_with_intent_id via Hardhat script
-                // Same approach as inflow's claim_escrow
+            "evm" => {
+                let client = self.evm_client.as_ref()
+                    .context("EVM client not configured")?;
                 client.transfer_with_intent_id(desired_token, recipient, desired_amount, &intent.intent_id).await
             }
+            "svm" => {
+                let client = self.svm_client.as_ref()
+                    .context("SVM client not configured")?;
+                client
+                    .transfer_with_intent_id(recipient, desired_token, desired_amount, &intent.intent_id)
+                    .await
+            }
+            _ => anyhow::bail!("Unknown chain type: {}", chain_type),
         }
     }
 
@@ -273,10 +337,13 @@ impl OutflowService {
             match self.poll_and_execute_transfers().await {
                 Ok(executed_transfers) => {
                     for (intent, tx_hash) in executed_transfers {
-                        // Get verifier approval
-                        let chain_type = match &self.connected_client {
-                            ConnectedChainClient::Mvm(_) => "mvm",
-                            ConnectedChainClient::Evm(_) => "evm",
+                        // Get verifier approval - determine chain type from intent's desired_chain_id
+                        let chain_type = match self.get_target_chain_for_intent(&intent) {
+                            Some((ct, _)) => ct,
+                            None => {
+                                error!("No matching connected chain for intent {}", intent.intent_id);
+                                continue;
+                            }
                         };
 
                         match self.get_verifier_approval(&tx_hash, chain_type, &intent.intent_id).await {

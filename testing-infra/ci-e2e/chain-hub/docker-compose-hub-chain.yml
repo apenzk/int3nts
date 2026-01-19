@@ -1,7 +1,8 @@
+# APTOS_DOCKER_IMAGE is defined in util.sh and exported before docker-compose runs
 services:
-  # Aptos Localnet Chain 1 - following the single-validator approach
+  # Aptos Localnet Hub - following the single-validator approach
   aptos-localnet-chain1:
-    image: aptoslabs/tools:nightly
+    image: ${APTOS_DOCKER_IMAGE}
     container_name: aptos-localnet-chain1
     network_mode: host
     volumes:
@@ -9,7 +10,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
       sh -c "
-        echo 'Starting Aptos Localnet Chain 1 with faucet (fresh start)...' &&
+        echo 'Starting Aptos Localnet Hub with faucet (fresh start)...' &&
         aptos node run-localnet --with-faucet --force-restart --assume-yes
       "
     restart: unless-stopped

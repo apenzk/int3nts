@@ -7,27 +7,27 @@ The verifier supports two cross-chain flows:
 **Outflow (hub → connected chain):**
 
 1. Monitors intent events on the hub chain (intent creation)
-2. Validates fulfillment transactions on connected chains (Move VM and EVM)
+2. Validates fulfillment transactions on connected chains (MVM, EVM, and SVM)
 3. Validates that transfer conditions match intent requirements
 4. Generates approval signatures for intent fulfillment on hub chain
 
 **Inflow (connected chain → hub):**
 
 1. Monitors intent events on the hub chain (intent creation)
-2. Monitors escrow events on connected chains (Move VM and EVM)
+2. Monitors escrow events on connected chains (MVM, EVM, and SVM)
 3. Monitors fulfillment events on the hub chain (when solver fulfills)
 4. Validates that fulfillment matches escrow conditions
 5. Generates approval signatures for escrow release on connected chain
 
-Supports monitoring multiple connected chains simultaneously. Move VM chains monitor `OracleLimitOrderEvent` events; EVM chains monitor `EscrowInitialized` events. Intents and escrows are monitored on both hub and connected chains - escrows are cached and validated when created.
+Supports monitoring multiple connected chains simultaneously. MVM chains monitor `OracleLimitOrderEvent` events; EVM chains monitor `EscrowInitialized` events; SVM chains monitor escrow PDA accounts. Intents and escrows are monitored on both hub and connected chains - escrows are cached and validated when created.
 
 ## Architecture
 
 ### Components
 
-- **Event Monitor**: Listens for intent and escrow events on hub and connected chains (Move VM and EVM)
-- **Cross-chain Validator**: Validates fulfillment conditions on hub and connected chains (Move VM and EVM)
-- **Approval Service**: Provides approval signatures by signing the `intent_id` (Ed25519 for Move VM, ECDSA for EVM)
+- **Event Monitor**: Listens for intent and escrow events on hub and connected chains (MVM, EVM, and SVM)
+- **Cross-chain Validator**: Validates fulfillment conditions on hub and connected chains (MVM, EVM, and SVM)
+- **Approval Service**: Provides approval signatures by signing the `intent_id` (Ed25519 for MVM and SVM, ECDSA for EVM)
 
 ## Project Structure
 
@@ -42,6 +42,18 @@ trusted-verifier/
 │   └── bin/         # Utility binaries
 └── Cargo.toml
 ```
+
+## SVM Outflow Validation
+
+SVM outflow fulfillment transactions must include a strict memo + transfer pattern so the verifier can tie the connected-chain transfer to the hub `intent_id`:
+
+- The first instruction is an SPL memo with `intent_id=0x...` (32-byte hex).
+- The transaction contains exactly one SPL `transferChecked` instruction.
+- The transfer authority is a signer and must match the solver address for the intent.
+- The transfer destination must match the intent's connected-chain recipient.
+- The transfer amount and mint must match the intent's desired amount and token metadata.
+
+This strict pattern prevents forged memos from being accepted without a matching SPL token transfer.
 
 ## Quick Start
 

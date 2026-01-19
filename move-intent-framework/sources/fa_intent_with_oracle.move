@@ -36,7 +36,7 @@ module mvmt_intent::fa_intent_with_oracle {
     /// Oracle-reported value did not satisfy the minimum threshold.
     const EORACLE_VALUE_TOO_LOW: u64 = 4;
     /// The desired metadata address is invalid or missing for cross-chain intents.
-    const EINVALID_METADATA_ADDRESS: u64 = 5;
+    const EINVALID_METADATA_ADDR: u64 = 5;
 
     // ============================================================================
     // DATA TYPES

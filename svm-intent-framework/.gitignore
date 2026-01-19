@@ -1,0 +1,12 @@
+# Build artifacts
+target/
+.bin/
+
+# Dependencies
+node_modules/
+
+# IDL
+*.json
+
+# Test artifacts
+test-ledger/
