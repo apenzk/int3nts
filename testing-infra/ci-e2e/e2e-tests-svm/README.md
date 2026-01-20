@@ -11,5 +11,5 @@ Scripts for running SVM connected-chain E2E flows with the hub chain.
 
 Notes:
 
-- These scripts assume `nix develop` is available on the host.
+- These scripts assume `nix develop ./nix` is available on the host.
 - The inflow flow currently leaves the SVM escrow locked after fulfillment.

@@ -1,6 +1,8 @@
 //! Unit tests for EVM chain clients
 
+use hex;
 use serde_json::json;
+use sha3::{Digest, Keccak256};
 use solver::chains::ConnectedEvmClient;
 use solver::config::EvmChainConfig;
 use wiremock::matchers::method;
@@ -49,8 +51,10 @@ async fn test_get_escrow_events_evm_success() {
 
     // EscrowInitialized event signature hash
     // keccak256("EscrowInitialized(uint256,address,address,address,address,uint256,uint256)")
-    let event_topic =
-        "0x104303e46c846fc43f53cd6c4ab9ce96acdf68dcee176382e71fc812218a25a0";
+    let event_signature = "EscrowInitialized(uint256,address,address,address,address,uint256,uint256)";
+    let mut hasher = Keccak256::new();
+    hasher.update(event_signature.as_bytes());
+    let event_topic = format!("0x{}", hex::encode(hasher.finalize()));
 
     Mock::given(method("POST"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -204,7 +208,7 @@ fn test_claim_escrow_command_building() {
     let escrow_addr = DUMMY_ESCROW_CONTRACT_ADDR_EVM;
     let intent_id_evm = "0x1234567890abcdef";
     let signature_hex = "aa".repeat(130);
-    let evm_framework_dir = "/path/to/evm-intent-framework";
+    let evm_framework_dir = "/path/to/intent-frameworks/evm";
 
     // Build the command string that would be passed to bash -c
     let command = format!(
@@ -253,17 +257,17 @@ fn test_claim_escrow_hash_extraction() {
     }
 }
 
-/// What is tested: claim_escrow() error handling for missing evm-intent-framework directory
+/// What is tested: claim_escrow() error handling for missing intent-frameworks/evm directory
 /// Why: Ensure proper error message when directory structure is incorrect
 #[test]
 fn test_claim_escrow_missing_directory_error() {
     // Simulate the directory check logic
     let current_dir = std::env::current_dir().unwrap();
     let project_root = current_dir.parent().unwrap();
-    let evm_framework_dir = project_root.join("evm-intent-framework");
+    let evm_framework_dir = project_root.join("intent-frameworks/evm");
 
     // This test documents the expected behavior - actual test would need to mock or use temp dir
-    // In real code, this would bail with: "evm-intent-framework directory not found at: ..."
+    // In real code, this would bail with: "intent-frameworks/evm directory not found at: ..."
     // We're just verifying the path construction logic here
-    assert!(evm_framework_dir.to_string_lossy().contains("evm-intent-framework"));
+    assert!(evm_framework_dir.to_string_lossy().contains("intent-frameworks/evm"));
 }

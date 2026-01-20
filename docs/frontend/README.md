@@ -94,4 +94,4 @@ The frontend communicates with the verifier service for:
 - Exchange rate queries (`GET /acceptance`)
 - Approval status checks (`GET /approved/:intent_id`)
 
-For detailed API documentation, see [Trusted Verifier API](../trusted-verifier/api.md).
+For detailed API documentation, see [Trusted Verifier API](../verifier/api.md).

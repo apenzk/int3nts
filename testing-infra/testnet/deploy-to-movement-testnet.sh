@@ -240,7 +240,7 @@ echo ""
 
 # Compile Move modules
 echo " Step 4: Compiling Move modules..."
-cd "$PROJECT_ROOT/move-intent-framework"
+cd "$PROJECT_ROOT/intent-frameworks/mvm"
 
 movement move compile \
   --named-addresses mvmt_intent="$DEPLOY_ADDR_FULL" \
@@ -354,7 +354,7 @@ echo " NEW Module Address: $DEPLOY_ADDR_FULL"
 echo ""
 echo "️  IMPORTANT: Update these files with the new module address:"
 echo ""
-echo "   1. trusted-verifier/config/verifier_testnet.toml:"
+echo "   1. verifier/config/verifier_testnet.toml:"
 echo "      intent_module_addr = \"$DEPLOY_ADDR_FULL\""
 echo ""
 echo "   2. solver/config/solver_testnet.toml:"

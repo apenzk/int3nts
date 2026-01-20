@@ -10,6 +10,7 @@ use std::collections::HashMap;
 mod test_helpers;
 use test_helpers::{
     create_default_token_pair, DUMMY_INTENT_ID, DUMMY_TOKEN_ADDR_HUB, DUMMY_TOKEN_ADDR_MVMCON,
+    DUMMY_TOKEN_ADDR_UNSUPPORTED,
 };
 
 // ============================================================================
@@ -31,7 +32,7 @@ fn test_config() -> AcceptanceConfig {
     // Token A -> Token C (chain 2) (0.5 rate: 1 Token C = 0.5 Token A, cross-chain)
     token_pairs.insert(
         TokenPair {
-            desired_token: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(), // Token C on chain 2 (different from Token B)
+            desired_token: DUMMY_TOKEN_ADDR_UNSUPPORTED.to_string(), // Different token address on chain 2 to test multiple token pairs
             ..create_default_token_pair()
         },
         0.5,  // 0.5 offered per 1 desired
@@ -95,7 +96,7 @@ fn test_token_pair_reject_unfavorable() {
 fn test_token_pair_with_exchange_rate_accept() {
     let config = test_config();
     let draft = DraftintentData {
-        desired_token: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(), // Token C on chain 2 (different from Token B)
+        desired_token: DUMMY_TOKEN_ADDR_UNSUPPORTED.to_string(), // Token address from configured pair (Token A -> Token C)
         desired_amount: 2000000,  // 2.0 Token C (at 0.5 rate, requires 1.0 offered)
         ..create_default_draft_data()  // offered_amount: 1000000 (1.0) meets the requirement (2.0 * 0.5 = 1.0)
     };
@@ -109,7 +110,7 @@ fn test_token_pair_with_exchange_rate_accept() {
 fn test_unsupported_token_pair_rejected() {
     let config = test_config();
     let draft = DraftintentData {
-        offered_token: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(), // Unsupported token (not in any configured pair)
+        offered_token: DUMMY_TOKEN_ADDR_UNSUPPORTED.to_string(), // Unsupported token (not in any configured pair)
         ..create_default_draft_data()  // offered_amount: 1000000, desired_amount: 1000000, but pair is not configured
     };
     assert!(matches!(evaluate_draft_acceptance(&draft, &config), AcceptanceResult::Reject(_)));

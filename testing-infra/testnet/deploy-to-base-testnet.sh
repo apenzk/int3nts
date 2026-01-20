@@ -37,7 +37,7 @@ fi
 
 if [ -z "$VERIFIER_EVM_PUBKEY_HASH" ]; then
     echo "❌ ERROR: VERIFIER_EVM_PUBKEY_HASH not set in .env.testnet"
-    echo "   Run: nix develop -c bash -c 'cd trusted-verifier && VERIFIER_CONFIG_PATH=config/verifier_testnet.toml cargo run --bin get_verifier_eth_address'"
+    echo "   Run: nix develop ./nix -c bash -c 'cd verifier && VERIFIER_CONFIG_PATH=config/verifier_testnet.toml cargo run --bin get_verifier_eth_address'"
     exit 1
 fi
 
@@ -65,14 +65,14 @@ echo "   RPC URL: $BASE_SEPOLIA_RPC_URL"
 echo ""
 
 # Check if Hardhat config exists
-if [ ! -f "$PROJECT_ROOT/evm-intent-framework/hardhat.config.js" ]; then
+if [ ! -f "$PROJECT_ROOT/intent-frameworks/evm/hardhat.config.js" ]; then
     echo "❌ ERROR: hardhat.config.js not found"
-    echo "   Make sure evm-intent-framework directory exists"
+    echo "   Make sure intent-frameworks/evm directory exists"
     exit 1
 fi
 
-# Change to evm-intent-framework directory
-cd "$PROJECT_ROOT/evm-intent-framework"
+# Change to intent-frameworks/evm directory
+cd "$PROJECT_ROOT/intent-frameworks/evm"
 
 # Export environment variables for Hardhat
 export DEPLOYER_PRIVATE_KEY="$BASE_DEPLOYER_PRIVATE_KEY"
@@ -90,9 +90,9 @@ if [ ! -d "node_modules" ]; then
     echo ""
 fi
 
-# Deploy contract (run from within nix develop shell)
+# Deploy contract (run from within nix develop ./nix shell)
 echo " Deploying IntentEscrow contract..."
-echo "   (Run this script from within 'nix develop' shell)"
+echo "   (Run this script from within 'nix develop ./nix' shell)"
 echo ""
 DEPLOY_OUTPUT=$(npx hardhat run scripts/deploy.js --network baseSepolia 2>&1)
 DEPLOY_EXIT_CODE=$?
@@ -120,7 +120,7 @@ if [ -n "$CONTRACT_ADDR" ]; then
     echo "      Line ~26: escrowContractAddress: '$CONTRACT_ADDR'"
     echo "      (in the 'base-sepolia' section)"
     echo ""
-    echo "   2. trusted-verifier/config/verifier_testnet.toml"
+    echo "   2. verifier/config/verifier_testnet.toml"
     echo "      Line ~24: escrow_contract_addr = \"$CONTRACT_ADDR\""
     echo "      (in the [connected_chain_evm] section)"
     echo ""
@@ -135,7 +135,7 @@ else
     echo ""
     echo " Update the following files:"
     echo "   - frontend/src/config/chains.ts (escrowContractAddress in 'base-sepolia' section)"
-    echo "   - trusted-verifier/config/verifier_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
+    echo "   - verifier/config/verifier_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
     echo "   - solver/config/solver_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
 fi
 echo ""

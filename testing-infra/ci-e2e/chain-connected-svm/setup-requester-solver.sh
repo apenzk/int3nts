@@ -99,7 +99,7 @@ fetch_svm_balance_with_retry() {
     while [ "$attempt" -le "$attempts" ]; do
         set +e
         output=$(SVM_TOKEN_ACCOUNT="$token_account" SVM_RPC_URL="$SVM_RPC_URL" \
-            bash "$PROJECT_ROOT/svm-intent-framework/scripts/get-token-balance.sh" 2>&1)
+            bash "$PROJECT_ROOT/intent-frameworks/svm/scripts/get-token-balance.sh" 2>&1)
         status=$?
         set -e
 

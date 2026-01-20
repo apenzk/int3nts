@@ -38,7 +38,7 @@ SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
 load_verifier_keys
 
 # Create config file path
-VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
+VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
 
 # Generate the complete config file from scratch
 cat > "$VERIFIER_E2E_CI_TESTING_CONFIG" << EOF

@@ -44,6 +44,6 @@ SVM_PROGRAM_ID="$SVM_PROGRAM_ID" \
 SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}" \
 SVM_PAYER_KEYPAIR="$SVM_PAYER_KEYPAIR" \
 SVM_REQUESTER_KEYPAIR="$SVM_REQUESTER_KEYPAIR" \
-"$PROJECT_ROOT/svm-intent-framework/scripts/create-escrow.sh" >> "$LOG_FILE" 2>&1
+"$PROJECT_ROOT/intent-frameworks/svm/scripts/create-escrow.sh" >> "$LOG_FILE" 2>&1
 
 log "✅ SVM escrow created"

@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getAddress } from 'viem';
+import { getEscrowContractAddress, intentIdToEvmFormat } from './escrow';
+import { DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_INTENT_ID } from './test-constants';
 
 vi.mock('@/config/chains', () => ({
   getEscrowContractAddress: (chainId: string) => {
     if (chainId === 'base-sepolia') {
-      return '0x0000000000000000000000000000000000000001';
+      return DUMMY_ESCROW_CONTRACT_ADDR_EVM;
     }
     throw new Error(`Missing escrow contract address for chain: ${chainId}`);
   },
 }));
-
-import { getAddress } from 'viem';
-import { getEscrowContractAddress, intentIdToEvmFormat } from './escrow';
 
 describe('intentIdToEvmFormat', () => {
   /**
@@ -18,7 +18,7 @@ describe('intentIdToEvmFormat', () => {
    * Why: EVM uses uint256 for intent IDs, derived from 32-byte hex.
    */
   it('should convert 0x-prefixed intent IDs to uint256 bigint', () => {
-    const intentId = '0x' + '01'.repeat(32);
+    const intentId = DUMMY_INTENT_ID;
     expect(intentIdToEvmFormat(intentId)).toBe(BigInt(intentId));
   });
 
@@ -39,7 +39,7 @@ describe('getEscrowContractAddress', () => {
    */
   it('should return a checksummed EVM address', () => {
     const address = getEscrowContractAddress('base-sepolia');
-    expect(address).toBe(getAddress('0x0000000000000000000000000000000000000001'));
+    expect(address).toBe(getAddress(DUMMY_ESCROW_CONTRACT_ADDR_EVM));
   });
 
   /**

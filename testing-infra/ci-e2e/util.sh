@@ -86,7 +86,7 @@ generate_verifier_keys() {
     fi
 
     VERIFIER_KEYS_FILE="$PROJECT_ROOT/testing-infra/ci-e2e/.verifier-keys.env"
-    VERIFIER_CONFIG_FILE="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
+    VERIFIER_CONFIG_FILE="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
 
     # If keys already exist, just load them
     if [ -f "$VERIFIER_KEYS_FILE" ]; then
@@ -98,10 +98,10 @@ generate_verifier_keys() {
     fi
 
     log_and_echo "   Generating ephemeral test keys..."
-    cd "$PROJECT_ROOT/trusted-verifier"
+    cd "$PROJECT_ROOT/verifier"
     
     # Use pre-built binary (must be built in Step 1)
-    local generate_keys_bin="$PROJECT_ROOT/trusted-verifier/target/debug/generate_keys"
+    local generate_keys_bin="$PROJECT_ROOT/verifier/target/debug/generate_keys"
     if [ ! -x "$generate_keys_bin" ]; then
         log_and_echo "❌ PANIC: generate_keys not built. Step 1 (build binaries) failed."
         exit 1
@@ -301,14 +301,14 @@ load_intent_info() {
 
 # Stop verifier processes
 # Usage: stop_verifier
-# Stops any running trusted-verifier processes
+# Stops any running verifier processes
 stop_verifier() {
     log "   Checking for existing verifiers..."
     
-    if pgrep -f "cargo.*trusted-verifier" > /dev/null || pgrep -f "target/debug/trusted-verifier" > /dev/null; then
+    if pgrep -f "cargo.*verifier" > /dev/null || pgrep -f "target/debug/verifier" > /dev/null; then
         log "   ️  Found existing verifier processes, stopping them..."
-        pkill -f "cargo.*trusted-verifier" || true
-        pkill -f "target/debug/trusted-verifier" || true
+        pkill -f "cargo.*verifier" || true
+        pkill -f "target/debug/verifier" || true
         sleep 2
         log "   ✅ Verifier processes stopped"
     else
@@ -481,7 +481,7 @@ display_service_logs() {
 
 # Start verifier service
 # Usage: start_verifier [log_file] [rust_log_level]
-# Starts trusted-verifier in background and waits for it to be ready
+# Starts verifier in background and waits for it to be ready
 # Sets VERIFIER_PID and VERIFIER_LOG global variables
 # Exits with error if verifier fails to start
 start_verifier() {
@@ -490,7 +490,7 @@ start_verifier() {
     fi
 
     if [ -z "$VERIFIER_CONFIG_PATH" ]; then
-        export VERIFIER_CONFIG_PATH="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
+        export VERIFIER_CONFIG_PATH="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
     fi
     
     # Load keys
@@ -515,9 +515,9 @@ start_verifier() {
     log "   Log file: $log_file"
     
     # Use pre-built binary (must be built in Step 1)
-    local verifier_binary="$PROJECT_ROOT/trusted-verifier/target/debug/trusted-verifier"
+    local verifier_binary="$PROJECT_ROOT/verifier/target/debug/verifier"
     if [ ! -f "$verifier_binary" ]; then
-        log_and_echo "   ❌ PANIC: trusted-verifier not built. Step 1 (build binaries) failed."
+        log_and_echo "   ❌ PANIC: verifier not built. Step 1 (build binaries) failed."
         exit 1
     fi
     

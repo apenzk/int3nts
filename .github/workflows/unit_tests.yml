@@ -10,17 +10,17 @@ jobs:
   move:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:
-      script: "cd move-intent-framework && movement move test --dev --named-addresses mvmt_intent=0x123"
+      script: "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123"
 
   evm:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:
-      script: "cd evm-intent-framework && npm install && npm test"
+      script: "cd intent-frameworks/evm && npm install && npm test"
 
   svm:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:
-      script: "cd svm-intent-framework && ./scripts/test.sh"
+      script: "cd intent-frameworks/svm && ./scripts/test.sh"
 
   solver:
     uses: ./.github/workflows/unit-tests-reusable.yml
@@ -30,7 +30,7 @@ jobs:
   verifier:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:
-      script: "cd trusted-verifier && cargo test"
+      script: "cd verifier && cargo test"
 
   frontend:
     uses: ./.github/workflows/unit-tests-reusable.yml

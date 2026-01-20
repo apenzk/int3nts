@@ -21,12 +21,12 @@ sleep 2
 
 log ""
 log " Installing npm dependencies..."
-cd evm-intent-framework
+cd intent-frameworks/evm
 
 # Install dependencies if node_modules doesn't exist
 if [ ! -d "node_modules" ]; then
     log "   Running npm install..."
-    nix develop -c bash -c "npm install" >> "$LOG_FILE" 2>&1
+    nix develop "$PROJECT_ROOT/nix" -c bash -c "npm install" >> "$LOG_FILE" 2>&1
     if [ $? -ne 0 ]; then
         log_and_echo "   ❌ ERROR: npm install failed"
         log_and_echo "   Log file contents:"
@@ -43,8 +43,8 @@ fi
 log ""
 log " Starting Hardhat node on port 8545..."
 
-# Start Hardhat node in background (run in nix develop)
-nix develop -c bash -c "npx hardhat node --port 8545" > "$LOG_FILE" 2>&1 &
+# Start Hardhat node in background (run in nix develop ./nix)
+nix develop "$PROJECT_ROOT/nix" -c bash -c "npx hardhat node --port 8545" > "$LOG_FILE" 2>&1 &
 HARDHAT_PID=$!
 
 # Save PID for cleanup (both the nix process and we'll track hardhat process separately)
@@ -128,7 +128,7 @@ for i in {1..180}; do
     sleep 1
 done
 
-cd ..
+cd "$PROJECT_ROOT"
 
 log ""
 log "✅ EVM chain (Hardhat) is running!"

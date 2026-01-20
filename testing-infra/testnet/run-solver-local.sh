@@ -285,7 +285,7 @@ fi
 # Check if --release flag is passed
 if [ "$1" = "--release" ]; then
     echo " Building release binary..."
-    nix develop --command bash -c "cargo build --release --manifest-path solver/Cargo.toml"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "cargo build --release --manifest-path solver/Cargo.toml"
     echo ""
     echo " Starting solver (release mode)..."
     echo "   Press Ctrl+C to stop"
@@ -296,6 +296,6 @@ else
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop --command bash -c "$ENV_VARS cargo run --manifest-path solver/Cargo.toml --bin solver"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "$ENV_VARS cargo run --manifest-path solver/Cargo.toml --bin solver"
 fi
 

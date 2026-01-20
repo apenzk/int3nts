@@ -6,7 +6,7 @@ on:
       script:
         required: true
         type: string
-        description: "Command to run in nix develop"
+        description: "Command to run in nix develop ./nix"
 
 jobs:
   run-test:
@@ -20,5 +20,5 @@ jobs:
           nix_path: nixpkgs=channel:nixpkgs-unstable
       
       - name: Run tests
-        run: nix develop --command bash -c '${{ inputs.script }}'
+        run: nix develop ./nix --command bash -c '${{ inputs.script }}'
 

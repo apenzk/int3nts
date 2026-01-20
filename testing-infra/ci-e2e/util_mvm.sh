@@ -1028,23 +1028,29 @@ list_all_solvers() {
     echo "$events" | jq -s '[.[] | select(.data.public_key != null and (.data.public_key | length) > 0)]' 2>/dev/null | jq -c '.[]' 2>/dev/null | while IFS= read -r event; do
         local solver_addr=$(echo "$event" | jq -r '.data.solver // empty' 2>/dev/null)
         local public_key=$(echo "$event" | jq -r '.data.public_key // []' 2>/dev/null)
-        local evm_addr=$(echo "$event" | jq -r '.data.connected_chain_evm_addr.vec[0] // "None"' 2>/dev/null)
         local mvm_addr=$(echo "$event" | jq -r '.data.connected_chain_mvm_addr.vec[0] // "None"' 2>/dev/null)
+        local evm_addr=$(echo "$event" | jq -r '.data.connected_chain_evm_addr.vec[0] // "None"' 2>/dev/null)
+        local svm_addr=$(echo "$event" | jq -r '.data.connected_chain_svm_addr.vec[0] // "None"' 2>/dev/null)
         local registered_at=$(echo "$event" | jq -r '.data.timestamp // 0' 2>/dev/null)
         
         if [ -n "$solver_addr" ] && [ "$solver_addr" != "null" ]; then
             log_and_echo "   Solver: ${solver_addr}"
             local pk_length=$(echo "$public_key" | jq 'length' 2>/dev/null || echo "0")
             log_and_echo "     Public Key: ${public_key:0:20}... (${pk_length} bytes)"
+            if [ "$mvm_addr" != "None" ] && [ "$mvm_addr" != "null" ] && [ "$mvm_addr" != "" ]; then
+                log_and_echo "     Connected Chain MVM Address: ${mvm_addr}"
+            else
+                log_and_echo "     Connected Chain MVM Address: None"
+            fi
             if [ "$evm_addr" != "None" ] && [ "$evm_addr" != "null" ] && [ "$evm_addr" != "" ]; then
                 log_and_echo "     Connected Chain EVM Address: ${evm_addr}"
             else
                 log_and_echo "     Connected Chain EVM Address: None"
             fi
-            if [ "$mvm_addr" != "None" ] && [ "$mvm_addr" != "null" ] && [ "$mvm_addr" != "" ]; then
-                log_and_echo "     Connected Chain MVM Address: ${mvm_addr}"
+            if [ "$svm_addr" != "None" ] && [ "$svm_addr" != "null" ] && [ "$svm_addr" != "" ]; then
+                log_and_echo "     Connected Chain SVM Address: ${svm_addr}"
             else
-                log_and_echo "     Connected Chain MVM Address: None"
+                log_and_echo "     Connected Chain SVM Address: None"
             fi
             log_and_echo "     Registered At: ${registered_at}"
             log_and_echo ""

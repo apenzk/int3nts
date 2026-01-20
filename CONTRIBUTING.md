@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the Intent Framework!
 
 Before contributing, make sure you've completed the setup steps in the [README.md](README.md#quick-start).
 
-**Important**: Before making significant changes, familiarize yourself with the system architecture. See the [Architecture Documentation](.taskmaster/docs/README.md) for a comprehensive guide to the Intent Framework's domain-based architecture, component mapping, and design principles.
+**Important**: Before making significant changes, familiarize yourself with the system architecture. See the [Architecture Documentation](docs/architecture/README.md) for a comprehensive guide to the Intent Framework's domain-based architecture, component mapping, and design principles.
 
 ## Development Workflow
 

@@ -8,7 +8,7 @@
 
 set -e
 
-# Run a Solana CLI command inside nix develop
+# Run a Solana CLI command inside nix develop ./nix
 # Usage: svm_cmd "<command>"
 svm_cmd() {
     local cmd="$1"
@@ -22,7 +22,7 @@ svm_cmd() {
     # Filter nix develop banners from stdout while preserving the command status.
     local status
     set +e
-    NIX_CONFIG="warn-dirty = false" nix develop "$PROJECT_ROOT" -c bash -c "$cmd" \
+    NIX_CONFIG="warn-dirty = false" nix develop "$PROJECT_ROOT/nix" -c bash -c "$cmd" \
         | sed -e '/^\[nix\] Dev shell ready:/d' -e '/^warning: Git tree/d'
     status=${PIPESTATUS[0]}
     set -e
@@ -70,7 +70,7 @@ get_svm_pubkey() {
 # Convert base58 pubkey to 0x-hex string
 # Usage: svm_pubkey_to_hex <base58_pubkey>
 svm_pubkey_to_hex() {
-    # Use node inside nix develop to avoid relying on system python
+    # Use node inside nix develop ./nix to avoid relying on system python
     if [ -z "$PROJECT_ROOT" ]; then
         setup_project_root
     fi

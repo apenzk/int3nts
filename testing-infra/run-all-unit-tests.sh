@@ -5,7 +5,7 @@
 # Don't use set -e so we can capture all test results even if some fail
 
 echo "Running Verifier tests..."
-VERIFIER_TEST_OUTPUT=$(RUST_LOG=off nix develop -c bash -c "cd trusted-verifier && cargo test --quiet 2>&1") || {
+VERIFIER_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd verifier && cargo test --quiet 2>&1") || {
     echo "Verifier tests failed:"
     echo "$VERIFIER_TEST_OUTPUT"
 }
@@ -13,7 +13,7 @@ VERIFIER_PASSED=$(echo "$VERIFIER_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk 
 VERIFIER_FAILED=$(echo "$VERIFIER_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
 echo "Running Solver tests..."
-SOLVER_TEST_OUTPUT=$(RUST_LOG=off nix develop -c bash -c "cd solver && cargo test --quiet 2>&1") || {
+SOLVER_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd solver && cargo test --quiet 2>&1") || {
     echo "Solver tests failed:"
     echo "$SOLVER_TEST_OUTPUT"
 }
@@ -21,7 +21,7 @@ SOLVER_PASSED=$(echo "$SOLVER_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{su
 SOLVER_FAILED=$(echo "$SOLVER_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
 echo "Running Move tests..."
-MOVE_TEST_OUTPUT=$(nix develop -c bash -c "cd move-intent-framework && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1) || {
+MOVE_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1) || {
     echo "Move tests failed:"
     echo "$MOVE_TEST_OUTPUT"
 }
@@ -31,7 +31,7 @@ MOVE_PASSED=${MOVE_PASSED:-0}
 MOVE_FAILED=${MOVE_FAILED:-0}
 
 echo "Running EVM tests..."
-EVM_TEST_OUTPUT=$(nix develop -c bash -c "cd evm-intent-framework && npm test" 2>&1) || {
+EVM_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test" 2>&1) || {
     echo "EVM tests failed:"
     echo "$EVM_TEST_OUTPUT"
 }
@@ -42,7 +42,7 @@ EVM_FAILED=${EVM_FAILED:-0}
 
 echo "Running SVM tests..."
 # Build and run tests
-SVM_TEST_OUTPUT=$(cd svm-intent-framework && ./scripts/test.sh 2>&1) || {
+SVM_TEST_OUTPUT=$(cd intent-frameworks/svm && ./scripts/test.sh 2>&1) || {
     echo "SVM tests failed:"
     echo "$SVM_TEST_OUTPUT"
 }
@@ -51,7 +51,7 @@ SVM_PASSED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $
 SVM_FAILED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
 echo "Running Frontend tests..."
-FRONTEND_TEST_OUTPUT=$(nix develop -c bash -c "cd frontend && npm test" 2>&1) || {
+FRONTEND_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd frontend && npm test" 2>&1) || {
     echo "Frontend tests failed:"
     echo "$FRONTEND_TEST_OUTPUT"
 }

@@ -30,7 +30,7 @@ VERIFIER_ADDR=$(get_hardhat_account_address "0")
 log_and_echo "   EVM Verifier: $VERIFIER_ADDR"
 
 # Config file path (created by chain-hub/configure-verifier.sh)
-VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
+VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
 
 if [ ! -f "$VERIFIER_E2E_CI_TESTING_CONFIG" ]; then
     log_and_echo "❌ ERROR: Config file not found. Run chain-hub/configure-verifier.sh first."

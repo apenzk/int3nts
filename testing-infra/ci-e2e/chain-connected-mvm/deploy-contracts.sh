@@ -31,7 +31,7 @@ log "   - Getting account address for Chain 2..."
 CHAIN2_ADDR=$(get_profile_address "intent-account-chain2")
 
 log "   - Deploying to Chain 2 with address: $CHAIN2_ADDR"
-cd move-intent-framework
+cd intent-frameworks/mvm
 aptos move publish --dev --profile intent-account-chain2 --named-addresses mvmt_intent=$CHAIN2_ADDR --assume-yes >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
@@ -46,7 +46,7 @@ else
     exit 1
 fi
 
-cd ..
+cd "$PROJECT_ROOT"
 
 # Initialize fa_intent chain info (required for cross-chain intent detection)
 log ""
@@ -78,7 +78,7 @@ log " Deploying USDcon test token to Chain 2..."
 USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
 
 log "   - Deploying USDcon with address: $USD_MVMCON_MODULE_ADDR"
-cd testing-infra/ci-e2e/test-tokens
+cd "$PROJECT_ROOT/testing-infra/ci-e2e/test-tokens"
 aptos move publish --profile test-tokens-chain2 --named-addresses test_tokens=$USD_MVMCON_MODULE_ADDR --assume-yes >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then

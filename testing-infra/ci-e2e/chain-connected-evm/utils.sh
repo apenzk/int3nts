@@ -29,12 +29,12 @@ run_hardhat_command() {
         setup_project_root
     fi
     
-    cd "$PROJECT_ROOT/evm-intent-framework"
+    cd "$PROJECT_ROOT/intent-frameworks/evm"
     
     if [ -n "$env_vars" ]; then
-        nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && $env_vars $cmd"
+        nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && $env_vars $cmd"
     else
-        nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && $cmd"
+        nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && $cmd"
     fi
     
     local exit_code=$?

@@ -27,7 +27,7 @@ get_usdcon_balance_evm() {
         setup_project_root
     fi
     
-    local balance_output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && TOKEN_ADDR='$token_addr' ACCOUNT='$account' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+    local balance_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && TOKEN_ADDR='$token_addr' ACCOUNT='$account' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
     local balance=$(echo "$balance_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
     
     if [ -z "$balance" ]; then
@@ -60,19 +60,19 @@ display_balances_connected_evm() {
         setup_project_root
     fi
     
-    cd "$PROJECT_ROOT/evm-intent-framework"
+    cd "$PROJECT_ROOT/intent-frameworks/evm"
     
     # Use the actual script files instead of inline heredoc (Hardhat doesn't support inline scripts)
     # Account 0 = deployer, Account 1 = Requester, Account 2 = Solver
-    local requester_evm_output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+    local requester_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
     local requester_evm=$(echo "$requester_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
     
-    local solver_evm_output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+    local solver_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
     local solver_evm=$(echo "$solver_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
     
     # Get account addresses for USDcon balance lookup
-    local requester_addr=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
-    local solver_addr=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
+    local requester_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
+    local solver_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
     
     cd "$PROJECT_ROOT"
     
@@ -135,7 +135,7 @@ is_escrow_claimed() {
         setup_project_root
     fi
     
-    local output=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDR='$escrow_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-escrow-status.js --network localhost" 2>&1)
+    local output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_ADDR='$escrow_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-escrow-status.js --network localhost" 2>&1)
     
     # Check for "isClaimed: true" or "isClaimed: false" in output
     if echo "$output" | grep -q "isClaimed: true"; then

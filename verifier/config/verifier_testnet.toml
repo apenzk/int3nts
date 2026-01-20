@@ -1,0 +1,68 @@
+# Trusted Verifier Configuration - Testnet
+# 
+# Configuration for Movement Bardock Testnet (Hub) + Base Sepolia (Connected).
+# Copy this template and update with values from .testnet-keys.env.
+#
+# SECURITY WARNING: This file contains private keys and should never be committed to version control!
+
+# Hub Chain Configuration
+# Movement Bardock Testnet - where intents are created and monitored
+[hub_chain]
+name = "Movement Bardock Testnet"
+rpc_url = "https://testnet.movementnetwork.xyz/v1"
+chain_id = 250
+intent_module_addr = "0xff9ee5d1a0fa9d4bdd4471f08cb794424c6ec6ca136fea727059951dc65631e5"
+# escrow_module_addr is optional for hub chain (omit to leave unset)
+known_accounts = ["0xb60a91baf0352d36fee1b70163e118a9c19329c8beb8661729fdf532695d1c5c", "0x92759d64e3225b2c8455562cdbf5be4f7461cd3555d29a1b124db503874603f5"]
+
+# Connected EVM Chain Configuration
+# Base Sepolia - where escrow events occur and are monitored
+[connected_chain_evm]
+name = "Base Sepolia"
+rpc_url = "https://sepolia.base.org"
+chain_id = 84532
+escrow_contract_addr = "0x90Fb7731edE86f4B2DB37afd132732979cA90015"
+verifier_evm_pubkey_hash = "0x54713cD1DBE9694148C43eFBF836B1221aFCA8bC"  # keccak256 hash of ECDSA public key (last 20 bytes)
+
+# Connected SVM Chain Configuration
+# Solana Devnet - where escrow events occur and are monitored
+[connected_chain_svm]
+name = "Solana Devnet"
+rpc_url = "https://api.devnet.solana.com"
+chain_id = 901
+escrow_program_id = "4CSPxZQ3QJszv3R6EKmDj2ndzp7pKZbatggds8Ct4B22"
+
+# Verifier Configuration
+# Cryptographic keys and timing parameters
+# Keys are loaded from environment variables at runtime (set from .testnet-keys.env)
+[verifier]
+private_key_env = "VERIFIER_PRIVATE_KEY"  # Environment variable name (default: VERIFIER_PRIVATE_KEY)
+public_key_env = "VERIFIER_PUBLIC_KEY"    # Environment variable name (default: VERIFIER_PUBLIC_KEY)
+polling_interval_ms = 5000                 # Polling interval for event monitoring
+validation_timeout_ms = 60000              # Timeout for validation operations
+
+# API Server Configuration
+[api]
+host = "0.0.0.0"                        # Listen on all interfaces (required for EC2)
+port = 3333                             # API server port
+cors_origins = ["*"]                    # Adjust for production
+
+# Default Solver Acceptance Criteria
+# Token pairs listed here are exposed via /acceptance; ratios are fetched live from the solver.
+[acceptance]
+solver_url = "http://127.0.0.1:4444"
+pairs = [
+  { source_chain_id = 250, source_token = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7", target_chain_id = 84532, target_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+  { source_chain_id = 84532, source_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e", target_chain_id = 250, target_token = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7" },
+  { source_chain_id = 250, source_token = "0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e", target_chain_id = 84532, target_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+  { source_chain_id = 84532, source_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e", target_chain_id = 250, target_token = "0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e" },
+  { source_chain_id = 250, source_token = "0xe8d4819362f685b3276275ab44e1a20e2a30ae8e8bbbfb5126329a45e44ac4e0", target_chain_id = 84532, target_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+  { source_chain_id = 84532, source_token = "0x036CbD53842c5426634e7929541eC2318f3dCF7e", target_chain_id = 250, target_token = "0xe8d4819362f685b3276275ab44e1a20e2a30ae8e8bbbfb5126329a45e44ac4e0" },
+  { source_chain_id = 250, source_token = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7", target_chain_id = 901, target_token = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" },
+  { source_chain_id = 901, source_token = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", target_chain_id = 250, target_token = "0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7" },
+  { source_chain_id = 250, source_token = "0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e", target_chain_id = 901, target_token = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU" },
+  { source_chain_id = 901, source_token = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", target_chain_id = 250, target_token = "0x351a5fbcb9ccd79a7a3c4f203dca74bb02d681221771fd37694d9cd15112f27e" },
+  { source_chain_id = 250, source_token = "0x2fa1ab0e37fdd22cbf9da880826e9f79f06e8e5d9df9bce774b1f47b708fe121", target_chain_id = 84532, target_token = "0x0000000000000000000000000000000000000000" },
+  { source_chain_id = 84532, source_token = "0x0000000000000000000000000000000000000000", target_chain_id = 250, target_token = "0x2fa1ab0e37fdd22cbf9da880826e9f79f06e8e5d9df9bce774b1f47b708fe121" }
+]
+

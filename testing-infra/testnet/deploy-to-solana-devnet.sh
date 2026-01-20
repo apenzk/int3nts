@@ -46,8 +46,8 @@ echo "   Network: Solana Devnet"
 echo "   RPC URL: $SOLANA_RPC_URL"
 echo ""
 
-# Change to svm-intent-framework directory
-cd "$PROJECT_ROOT/svm-intent-framework"
+# Change to intent-frameworks/svm directory
+cd "$PROJECT_ROOT/intent-frameworks/svm"
 
 # Create temporary keypair file from base58 private key
 # Solana CLI can read base58 private keys directly if we use solana-keygen recover
@@ -57,7 +57,7 @@ DEPLOYER_KEYPAIR="$TEMP_KEYPAIR_DIR/deployer.json"
 echo " Converting deployer private key to keypair file..."
 
 # Use Node.js to convert base58 private key to JSON keypair format
-# Node.js is available in nix develop shell
+# Node.js is available in nix develop ./nix shell
 node -e "
 const bs58 = require('bs58');
 const keyBytes = bs58.decode('$SOLANA_DEPLOYER_PRIVATE_KEY');
@@ -97,7 +97,7 @@ fi
 
 if [ ! -s "$DEPLOYER_KEYPAIR" ]; then
     echo "❌ ERROR: Failed to convert private key"
-    echo "   Node.js is required (available in nix develop shell)"
+    echo "   Node.js is required (available in nix develop ./nix shell)"
     rm -rf "$TEMP_KEYPAIR_DIR"
     exit 1
 fi
@@ -133,8 +133,8 @@ echo ""
 echo " Building program..."
 ./scripts/build.sh
 
-PROGRAM_SO="$PROJECT_ROOT/svm-intent-framework/target/deploy/intent_escrow.so"
-PROGRAM_KEYPAIR_PATH="$PROJECT_ROOT/svm-intent-framework/target/deploy/intent_escrow-keypair.json"
+PROGRAM_SO="$PROJECT_ROOT/intent-frameworks/svm/target/deploy/intent_escrow.so"
+PROGRAM_KEYPAIR_PATH="$PROJECT_ROOT/intent-frameworks/svm/target/deploy/intent_escrow-keypair.json"
 
 if [ ! -f "$PROGRAM_SO" ]; then
     echo "❌ ERROR: Program binary not found at $PROGRAM_SO"
@@ -257,10 +257,10 @@ console.log(JSON.stringify(b58decode('$SOLANA_DEPLOYER_PRIVATE_KEY')));
 " > "$DEPLOYER_KEYPAIR"
         
         # Build CLI if needed
-        CLI_BIN="$PROJECT_ROOT/svm-intent-framework/target/debug/intent_escrow_cli"
+        CLI_BIN="$PROJECT_ROOT/intent-frameworks/svm/target/debug/intent_escrow_cli"
         if [ ! -x "$CLI_BIN" ]; then
             echo " Building CLI tool..."
-            cd "$PROJECT_ROOT/svm-intent-framework"
+            cd "$PROJECT_ROOT/intent-frameworks/svm"
             cargo build --bin intent_escrow_cli 2>/dev/null
         fi
         
@@ -283,7 +283,7 @@ console.log(JSON.stringify(b58decode('$SOLANA_DEPLOYER_PRIVATE_KEY')));
             }
         else
             echo "⚠️  CLI not built - skipping initialization"
-            echo "   Run manually: ./svm-intent-framework/scripts/initialize.sh"
+            echo "   Run manually: ./intent-frameworks/svm/scripts/initialize.sh"
         fi
         
         rm -rf "$TEMP_KEYPAIR_DIR"
@@ -296,7 +296,7 @@ echo ""
 echo "   1. .env.testnet"
 echo "      SOLANA_PROGRAM_ID=$PROGRAM_ID"
 echo ""
-echo "   2. trusted-verifier/config/verifier_testnet.toml"
+echo "   2. verifier/config/verifier_testnet.toml"
 echo "      Add [connected_chain_svm] section with:"
 echo "      escrow_program_id = \"$PROGRAM_ID\""
 echo ""

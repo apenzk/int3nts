@@ -117,7 +117,7 @@ curl -s http://localhost:3333/health | jq
 #### Prerequisites for Local Testing
 
 - Verifier and solver config files populated with deployed addresses:
-  - `trusted-verifier/config/verifier_testnet.toml`
+  - `verifier/config/verifier_testnet.toml`
   - `solver/config/solver_testnet.toml`
 - `.env.testnet` in this directory with all required keys
 - Movement CLI profile configured (solver only)
@@ -128,7 +128,7 @@ curl -s http://localhost:3333/health | jq
 All scripts read from:
 
 - `.env.testnet` - Private keys and addresses in this directory (gitignored)
-- `trusted-verifier/config/verifier_testnet.toml` - Verifier service config (gitignored)
+- `verifier/config/verifier_testnet.toml` - Verifier service config (gitignored)
 - `solver/config/solver_testnet.toml` - Solver service config (gitignored)
 - `config/testnet-assets.toml` - Public asset addresses and decimals
 

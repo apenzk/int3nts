@@ -58,22 +58,22 @@ Individual component commands:
 
 ```bash
 # Move tests
-nix develop -c bash -c "cd move-intent-framework && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1 | grep "Total tests:"
+nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1 | grep "Total tests:"
 
 # Verifier tests
-RUST_LOG=off nix develop -c bash -c "cd trusted-verifier && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
+RUST_LOG=off nix develop ./nix -c bash -c "cd verifier && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
 
 # Solver tests
-RUST_LOG=off nix develop -c bash -c "cd solver && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
+RUST_LOG=off nix develop ./nix -c bash -c "cd solver && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
 
 # EVM tests
-nix develop -c bash -c "cd evm-intent-framework && npm test" 2>&1 | grep -oE "[0-9]+ passing" | awk '{print $1}'
+nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test" 2>&1 | grep -oE "[0-9]+ passing" | awk '{print $1}'
 
 # Frontend tests
-nix develop -c bash -c "cd frontend && npm test" 2>&1 | grep -oE "Tests[[:space:]]+[0-9]+ passed" | grep -oE "[0-9]+"
+nix develop ./nix -c bash -c "cd frontend && npm test" 2>&1 | grep -oE "Tests[[:space:]]+[0-9]+ passed" | grep -oE "[0-9]+"
 
 # SVM tests
-nix develop -c bash -c "cd svm-intent-framework && ./scripts/test.sh" 2>&1 | grep -oE "[0-9]+ test" | awk '{print $1}'
+nix develop ./nix -c bash -c "cd intent-frameworks/svm && ./scripts/test.sh" 2>&1 | grep -oE "[0-9]+ test" | awk '{print $1}'
 ```
 
 ## Context Requirements
@@ -108,15 +108,19 @@ For comprehensive architecture documentation, see `.taskmaster/docs/` - includes
 
 ### Move/Aptos Contracts
 
-See [Move Intent Framework Documentation](docs/move-intent-framework/README.md) for API reference, technical overview, and oracle-guarded intents. Planned cross-chain functions documented in [Implementation Plan](.taskmaster/implementplan.md).
+See [Move Intent Framework Documentation](docs/intent-frameworks/mvm/README.md) for API reference, technical overview, and oracle-guarded intents. Planned cross-chain functions documented in [Implementation Plan](.taskmaster/implementplan.md).
 
 ### EVM/Solidity Contracts
 
-See [EVM Intent Framework README](docs/evm-intent-framework/README.md) for contract interface and usage. Outflow transaction format documented in [Implementation Plan](.taskmaster/implementplan.md#scenario-b-evm-connected-chain).
+See [EVM Intent Framework README](docs/intent-frameworks/evm/README.md) for contract interface and usage. Outflow transaction format documented in [Implementation Plan](.taskmaster/implementplan.md#scenario-b-evm-connected-chain).
+
+### SVM/Solana Program
+
+See [SVM Intent Framework README](docs/intent-frameworks/svm/README.md) for Solana escrow program structure and usage.
 
 ### Rust Services
 
-See [Trusted Verifier README](docs/trusted-verifier/README.md) and [Solver README](docs/solver/README.md) for service architecture and implementation details.
+See [Trusted Verifier README](docs/verifier/README.md) and [Solver README](docs/solver/README.md) for service architecture and implementation details.
 
 ### Testing Infrastructure
 
@@ -139,8 +143,8 @@ See [`.cursor/codestandards.md`](.cursor/codestandards.md) for language-specific
 
 ## Testing Standards
 
-- **Move tests**: Place in `move-intent-framework/tests/` with `*_tests.move` naming
-- **Solidity tests**: Place in `evm-intent-framework/test/` with `*.test.js` naming
+- **Move tests**: Place in `intent-frameworks/mvm/tests/` with `*_tests.move` naming
+- **Solidity tests**: Place in `intent-frameworks/evm/test/` with `*.test.js` naming
 - **E2E tests**: Use shell scripts in `testing-infra/ci-e2e/e2e-tests-*/`
 - **Test isolation**: Each test should be independent and clean up after itself
 - **Balance checks**: Use granular balance display functions appropriate for the chain being tested

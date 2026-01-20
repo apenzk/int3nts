@@ -13,19 +13,30 @@ import {
   svmHexToPubkey,
   svmPubkeyToHex,
 } from './svm-escrow';
+import {
+  DUMMY_INTENT_ID,
+  DUMMY_REQUESTER_ADDR_SVM,
+  DUMMY_TOKEN_MINT_SVM,
+  DUMMY_SOLVER_ADDR_SVM,
+  DUMMY_STATE_PDA,
+  DUMMY_ESCROW_PDA,
+  DUMMY_VAULT_PDA,
+  DUMMY_PUBKEY_TEST,
+  DUMMY_SIGNATURE,
+} from './test-constants';
 
 // ============================================================================
 // Test Fixtures
 // ============================================================================
 
 const PROGRAM_ID = SystemProgram.programId;
-const INTENT_ID = '0x' + '01'.repeat(32);
-const REQUESTER = new PublicKey('BPFLoader1111111111111111111111111111111111');
-const TOKEN_MINT = new PublicKey('So11111111111111111111111111111111111111112');
-const SOLVER = new PublicKey('Vote111111111111111111111111111111111111111');
-const STATE_PDA = new PublicKey(new Uint8Array(32).fill(1));
-const ESCROW_PDA = new PublicKey(new Uint8Array(32).fill(2));
-const VAULT_PDA = new PublicKey(new Uint8Array(32).fill(3));
+const INTENT_ID = DUMMY_INTENT_ID;
+const REQUESTER = DUMMY_REQUESTER_ADDR_SVM;
+const TOKEN_MINT = DUMMY_TOKEN_MINT_SVM;
+const SOLVER = DUMMY_SOLVER_ADDR_SVM;
+const STATE_PDA = DUMMY_STATE_PDA;
+const ESCROW_PDA = DUMMY_ESCROW_PDA;
+const VAULT_PDA = DUMMY_VAULT_PDA;
 
 describe('svmHex helpers', () => {
   /**
@@ -43,7 +54,7 @@ describe('svmHex helpers', () => {
    * Why: Address conversions must be lossless across SVM <-> hex.
    */
   it('should round-trip pubkey hex conversion', () => {
-    const pubkey = new PublicKey(new Uint8Array(32).fill(7));
+    const pubkey = DUMMY_PUBKEY_TEST;
     const hex = svmPubkeyToHex(pubkey);
     expect(hex).toMatch(/^0x[a-f0-9]{64}$/);
     const restored = svmHexToPubkey(hex);
@@ -52,7 +63,7 @@ describe('svmHex helpers', () => {
 });
 
 beforeEach(() => {
-  vi.spyOn(PublicKey, 'findProgramAddressSync').mockImplementation((seeds) => {
+  vi.spyOn(PublicKey, 'findProgramAddressSync').mockImplementation((seeds: (Uint8Array | Buffer)[]) => {
     const seedLabel = Buffer.from(seeds[0]).toString('utf8');
     if (seedLabel === 'state') {
       return [STATE_PDA, 255];
@@ -153,7 +164,7 @@ describe('instruction builders', () => {
   it('should build claim instruction with sysvar and token program keys', () => {
     const instruction = buildClaimInstruction({
       intentId: INTENT_ID,
-      signature: new Uint8Array(64).fill(3),
+      signature: DUMMY_SIGNATURE,
       solverToken: SOLVER,
       programId: PROGRAM_ID,
     });

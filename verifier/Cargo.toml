@@ -1,0 +1,77 @@
+[package]
+name = "verifier"
+version = "0.1.0"
+edition = "2021"
+authors = ["Intent Framework Team"]
+description = "Trusted verifier service for cross-chain escrow validation"
+
+[lib]
+name = "verifier"
+path = "src/lib.rs"
+
+[[bin]]
+name = "verifier"
+path = "src/main.rs"
+
+[[bin]]
+name = "generate_keys"
+path = "src/bin/generate_keys.rs"
+test = false
+
+[[bin]]
+name = "get_verifier_eth_address"
+path = "src/bin/get_verifier_eth_address.rs"
+test = false
+
+[dependencies]
+# Async runtime (matching aptos-core version)
+tokio = { version = "1.35.1", features = ["full"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bcs = "0.1"
+toml = "0.8"
+hex = "0.4"
+borsh = "0.10"
+
+# HTTP client for cross-chain communication
+reqwest = { version = "0.11", features = ["json"] }
+url = "2.5"
+
+# Cryptography
+ed25519-dalek = "2.1.0"
+k256 = { version = "0.13", features = ["ecdsa"] }
+sha2 = "0.10"
+sha3 = "0.10"
+base64 = "0.21"
+elliptic-curve = "0.13"
+solana-program = "2.1"
+
+# Random number generation
+rand = "0.8"
+
+# Web framework for API
+warp = "0.3"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Configuration
+config = "0.13"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID generation
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+wiremock = "0.5"

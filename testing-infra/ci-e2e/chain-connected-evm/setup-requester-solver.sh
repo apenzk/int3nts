@@ -66,8 +66,8 @@ log "% - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 log ""
 log " Checking initial balances..."
 
-cd evm-intent-framework
-BALANCES_OUTPUT=$(nix develop -c bash -c "npx hardhat run scripts/get-accounts.js" 2>&1)
+cd intent-frameworks/evm
+BALANCES_OUTPUT=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "npx hardhat run scripts/get-accounts.js" 2>&1)
 
 if [ $? -ne 0 ]; then
     log_and_echo "❌ Error: Failed to get account balances"
@@ -78,7 +78,7 @@ fi
 REQUESTER_BALANCE=$(echo "$BALANCES_OUTPUT" | grep "^REQUESTER_BALANCE=" | cut -d'=' -f2 | tr -d '\n')
 SOLVER_BALANCE=$(echo "$BALANCES_OUTPUT" | grep "^SOLVER_BALANCE=" | cut -d'=' -f2 | tr -d '\n')
 
-cd ..
+cd "$PROJECT_ROOT"
 
 if [ -z "$REQUESTER_BALANCE" ] || [ -z "$SOLVER_BALANCE" ]; then
     log_and_echo "❌ Error: Failed to extract account balances from output"

@@ -9,7 +9,7 @@
 # Use this to test before deploying to EC2.
 #
 # Prerequisites:
-#   - trusted-verifier/config/verifier_testnet.toml configured with actual deployed addresses
+#   - verifier/config/verifier_testnet.toml configured with actual deployed addresses
 #   - .env.testnet with VERIFIER_PRIVATE_KEY and VERIFIER_PUBLIC_KEY
 #   - Rust toolchain installed
 #
@@ -28,13 +28,13 @@ echo "==========================================="
 echo ""
 
 # Check config exists
-VERIFIER_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier_testnet.toml"
+VERIFIER_CONFIG="$PROJECT_ROOT/verifier/config/verifier_testnet.toml"
 
 if [ ! -f "$VERIFIER_CONFIG" ]; then
     echo "❌ ERROR: verifier_testnet.toml not found at $VERIFIER_CONFIG"
     echo ""
     echo "   Create it from the template:"
-    echo "   cp trusted-verifier/config/verifier.template.toml trusted-verifier/config/verifier_testnet.toml"
+    echo "   cp verifier/config/verifier.template.toml verifier/config/verifier_testnet.toml"
     echo ""
     echo "   Then populate with actual deployed contract addresses:"
     echo "   - intent_module_addr (hub_chain section)"
@@ -127,7 +127,7 @@ echo "   API Server:"
 echo "     Port:             ${API_PORT:-3333}"
 echo ""
 
-cd "$PROJECT_ROOT/trusted-verifier"
+cd "$PROJECT_ROOT/verifier"
 
 # Export environment variables for verifier keys
 export VERIFIER_PRIVATE_KEY
@@ -136,17 +136,17 @@ export VERIFIER_PUBLIC_KEY
 # Check if --release flag is passed
 if [ "$1" = "--release" ]; then
     echo " Building release binary..."
-    nix develop --command bash -c "cd '$PROJECT_ROOT/trusted-verifier' && cargo build --release"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/verifier' && cargo build --release"
     echo ""
     echo " Starting verifier (release mode)..."
     echo "   Press Ctrl+C to stop"
     echo ""
-    RUST_LOG=info ./target/release/trusted-verifier --testnet
+    RUST_LOG=info ./target/release/verifier --testnet
 else
     echo " Starting verifier (debug mode)..."
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop --command bash -c "cd '$PROJECT_ROOT/trusted-verifier' && RUST_LOG=info cargo run --bin trusted-verifier -- --testnet"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/verifier' && RUST_LOG=info cargo run --bin verifier -- --testnet"
 fi
 

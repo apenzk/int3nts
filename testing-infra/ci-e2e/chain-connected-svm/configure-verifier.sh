@@ -27,7 +27,7 @@ if [ -z "$SVM_PROGRAM_ID" ]; then
     exit 1
 fi
 
-VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier-e2e-ci-testing.toml"
+VERIFIER_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
 if [ ! -f "$VERIFIER_E2E_CI_TESTING_CONFIG" ]; then
     log_and_echo "❌ ERROR: Config file not found. Run chain-hub/configure-verifier.sh first."
     exit 1

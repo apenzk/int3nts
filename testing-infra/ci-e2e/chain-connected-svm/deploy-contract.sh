@@ -27,12 +27,12 @@ if [ -z "$SVM_PAYER_KEYPAIR" ]; then
     exit 1
 fi
 
-PROGRAM_DIR="$PROJECT_ROOT/svm-intent-framework"
+PROGRAM_DIR="$PROJECT_ROOT/intent-frameworks/svm"
 PROGRAM_KEYPAIR="$PROGRAM_DIR/target/deploy/intent_escrow-keypair.json"
 PROGRAM_SO="$PROGRAM_DIR/target/deploy/intent_escrow.so"
 
 log "   Building program..."
-nix develop "$PROJECT_ROOT" -c bash -c "cd \"$PROGRAM_DIR\" && ./scripts/build.sh" >> "$LOG_FILE" 2>&1
+nix develop "$PROJECT_ROOT/nix" -c bash -c "cd \"$PROGRAM_DIR\" && ./scripts/build.sh" >> "$LOG_FILE" 2>&1
 
 if [ ! -f "$PROGRAM_KEYPAIR" ]; then
     log "   Generating program keypair..."
@@ -69,7 +69,7 @@ sleep 10
 set +e
 init_success=0
 for attempt in 1 2 3 4 5; do
-    nix develop "$PROJECT_ROOT" -c bash -c "cd \"$PROGRAM_DIR\" && SVM_VERIFIER_PUBKEY=\"$SVM_VERIFIER_PUBKEY\" SVM_PROGRAM_ID=\"$SVM_PROGRAM_ID\" SVM_RPC_URL=\"$SVM_RPC_URL\" SVM_PAYER_KEYPAIR=\"$SVM_PAYER_KEYPAIR\" bash ./scripts/initialize.sh" >> "$LOG_FILE" 2>&1
+    nix develop "$PROJECT_ROOT/nix" -c bash -c "cd \"$PROGRAM_DIR\" && SVM_VERIFIER_PUBKEY=\"$SVM_VERIFIER_PUBKEY\" SVM_PROGRAM_ID=\"$SVM_PROGRAM_ID\" SVM_RPC_URL=\"$SVM_RPC_URL\" SVM_PAYER_KEYPAIR=\"$SVM_PAYER_KEYPAIR\" bash ./scripts/initialize.sh" >> "$LOG_FILE" 2>&1
     status=$?
     if [ "$status" -eq 0 ]; then
         log "   ✅ Program initialized"

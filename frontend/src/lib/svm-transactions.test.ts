@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Ed25519Program, TransactionInstruction } from '@solana/web3.js';
+import { DUMMY_MESSAGE, DUMMY_SIGNATURE_BYTES, DUMMY_PUBKEY_BYTES } from './test-constants';
 
 vi.mock('@/config/chains', () => ({
   getRpcUrl: (chainId: string) => {
@@ -64,14 +65,14 @@ describe('buildEd25519VerificationIx', () => {
       .spyOn(Ed25519Program, 'createInstructionWithPublicKey')
       .mockReturnValue(mockInstruction);
     const instruction = buildEd25519VerificationIx({
-      message: new Uint8Array([1, 2, 3]),
-      signature: new Uint8Array(64).fill(2),
-      publicKey: new Uint8Array(32).fill(3),
+      message: DUMMY_MESSAGE,
+      signature: DUMMY_SIGNATURE_BYTES,
+      publicKey: DUMMY_PUBKEY_BYTES,
     });
     expect(spy).toHaveBeenCalledWith({
-      message: new Uint8Array([1, 2, 3]),
-      signature: new Uint8Array(64).fill(2),
-      publicKey: new Uint8Array(32).fill(3),
+      message: DUMMY_MESSAGE,
+      signature: DUMMY_SIGNATURE_BYTES,
+      publicKey: DUMMY_PUBKEY_BYTES,
     });
     expect(instruction.programId.toBase58()).toBe(Ed25519Program.programId.toBase58());
     expect(instruction.data.length).toBeGreaterThan(0);

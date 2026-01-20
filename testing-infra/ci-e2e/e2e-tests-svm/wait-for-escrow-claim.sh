@@ -39,7 +39,7 @@ ESCROW_CLAIMED=false
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
     CLAIM_STATUS=$(SVM_RPC_URL="$SVM_RPC_URL" SVM_PROGRAM_ID="$SVM_PROGRAM_ID" SVM_INTENT_ID="$INTENT_ID" \
-        "$PROJECT_ROOT/svm-intent-framework/scripts/get-escrow.sh" 2>/dev/null \
+        "$PROJECT_ROOT/intent-frameworks/svm/scripts/get-escrow.sh" 2>/dev/null \
         | grep -Eo 'Claimed: (true|false)' | awk '{print $2}' | tail -1 | tr -d '\n')
 
     if [ "$CLAIM_STATUS" = "true" ]; then

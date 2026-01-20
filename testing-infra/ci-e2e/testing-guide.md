@@ -5,6 +5,7 @@ This guide contains testing and validation commands for Docker-based localnets.
 ## Multi-Chain Testing
 
 ### Service Health Checks for Multiple Chains
+
 ```bash
 # Hub (ports 8080/8081)
 curl -s http://127.0.0.1:8080/v1/ledger/info
@@ -16,6 +17,7 @@ curl -s http://127.0.0.1:8083/
 ```
 
 ### Multi-Chain Account Funding
+
 ```bash
 # Fund account on Hub
 curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000"
@@ -25,6 +27,7 @@ curl -X POST "http://127.0.0.1:8083/mint?address=<ACCOUNT_ADDR>&amount=100000000
 ```
 
 ### Multi-Chain Balance Verification
+
 ```bash
 # Check balance on Hub
 curl -s "http://127.0.0.1:8080/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
@@ -36,6 +39,7 @@ curl -s "http://127.0.0.1:8082/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] 
 ## Service Health Checks
 
 ### Node API Status
+
 ```bash
 # Basic API health check
 curl -s http://127.0.0.1:8080/v1/ledger/info
@@ -48,6 +52,7 @@ curl -s http://127.0.0.1:8080/v1/ledger/info
 ```
 
 ### Faucet Service Status
+
 ```bash
 # Check faucet health
 curl -s http://127.0.0.1:8081/
@@ -58,6 +63,7 @@ curl -s http://127.0.0.1:8081/
 ## Account Management
 
 ### Manual Account Funding
+
 ```bash
 # Fund an account via faucet API
 curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000"
@@ -68,6 +74,7 @@ TX_HASH=$(curl -s -X POST "http://127.0.0.1:8081/mint?address=${SENDER}&amount=1
 ```
 
 ### Transaction Verification
+
 ```bash
 # Check transaction status
 curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq '.success, .vm_status'
@@ -81,6 +88,7 @@ curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq '.events
 **Important**: Modern Aptos versions use the Fungible Asset (FA) system instead of the traditional CoinStore.
 
 ### Checking Balances
+
 ```bash
 # Check actual on-chain balance via FA store (replace STORE_ADDR with actual address)
 curl -s "http://127.0.0.1:8080/v1/accounts/<STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
@@ -91,6 +99,7 @@ curl -s "http://127.0.0.1:8080/v1/accounts/${FA_STORE}/resources" | jq '.[] | se
 ```
 
 ### Key Differences from Traditional CoinStore
+
 - **CoinStore**: `0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>` (outdated)
 - **Fungible Asset**: `0x1::fungible_asset::FungibleStore` (current)
 - **CLI Balance**: Shows simulated/cached values (usually accurate)
@@ -98,6 +107,7 @@ curl -s "http://127.0.0.1:8080/v1/accounts/${FA_STORE}/resources" | jq '.[] | se
 - **Account Resources**: May only show `0x1::account::Account`, not CoinStore
 
 ### Why This Matters
+
 - Direct REST API queries for CoinStore will return empty `[]`
 - Real balances are in fungible asset store objects
 - Transaction events show `fungible_asset::Deposit/Withdraw` instead of `coin::DepositEvent`
@@ -145,7 +155,9 @@ curl -s "http://127.0.0.1:8080/v1/accounts/${FA_STORE}/resources" | jq '.[] | se
 ## Troubleshooting
 
 ### CLI Funding Issues
+
 If `aptos init` hangs during funding:
+
 ```bash
 # Check if validator is running
 ps aux | grep "aptos node"
@@ -158,7 +170,9 @@ curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000
 ```
 
 ### Port Conflicts
+
 If you get port conflicts:
+
 ```bash
 # Check what's using the ports
 lsof -i :8080

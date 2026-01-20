@@ -53,9 +53,9 @@ echo ""
 
 # Compute EVM address from private key
 echo "   Computing EVM address from VERIFIER_PRIVATE_KEY..."
-COMPUTED_ADDR=$(cd "$PROJECT_ROOT/trusted-verifier" && \
+COMPUTED_ADDR=$(cd "$PROJECT_ROOT/verifier" && \
     VERIFIER_CONFIG_PATH=config/verifier_testnet.toml \
-    nix develop -c bash -c "cargo run --bin get_verifier_eth_address --quiet 2>&1" | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
+    nix develop "$PROJECT_ROOT/nix" -c bash -c "cargo run --bin get_verifier_eth_address --quiet 2>&1" | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
 
 if [ -z "$COMPUTED_ADDR" ]; then
     echo "❌ ERROR: Failed to compute EVM address from private key"
@@ -87,7 +87,7 @@ fi
 
 # Check on-chain contract (if config is available)
 ONCHAIN_MATCH=false
-VERIFIER_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier_testnet.toml"
+VERIFIER_CONFIG="$PROJECT_ROOT/verifier/config/verifier_testnet.toml"
 if [ -f "$VERIFIER_CONFIG" ]; then
     # Extract escrow contract address and RPC URL from config
     ESCROW_ADDR=$(grep -A5 "\[connected_chain_evm\]" "$VERIFIER_CONFIG" | grep "escrow_contract_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' | head -1)

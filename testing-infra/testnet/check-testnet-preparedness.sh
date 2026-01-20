@@ -13,7 +13,7 @@
 #   - Ethereum Sepolia (ETH, USDC)
 # 
 # Assets Config: testing-infra/testnet/config/testnet-assets.toml
-# Service Configs: trusted-verifier/config/verifier_testnet.toml, solver/config/solver_testnet.toml (gitignored)
+# Service Configs: verifier/config/verifier_testnet.toml, solver/config/solver_testnet.toml (gitignored)
 # Keys: .env.testnet
 
 # Get the script directory and project root
@@ -614,7 +614,7 @@ check_evm_contract() {
 
 # Movement Intent Module
 # Read from verifier_testnet.toml (gitignored config file)
-VERIFIER_CONFIG="$PROJECT_ROOT/trusted-verifier/config/verifier_testnet.toml"
+VERIFIER_CONFIG="$PROJECT_ROOT/verifier/config/verifier_testnet.toml"
 if [ -f "$VERIFIER_CONFIG" ]; then
     MOVEMENT_INTENT_MODULE_ADDR=$(grep -A5 "\[hub_chain\]" "$VERIFIER_CONFIG" | grep "intent_module_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
 fi

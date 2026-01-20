@@ -19,13 +19,13 @@ if ! load_intent_info "INTENT_ID,SOLVER_EVM_ADDR"; then
 fi
 
 # Get EVM escrow contract address from deployment logs
-cd evm-intent-framework
+cd intent-frameworks/evm
 ESCROW_ADDR=$(grep -i "IntentEscrow deployed to" "$PROJECT_ROOT/.tmp/e2e-tests/deploy-contract"*.log 2>/dev/null | tail -1 | awk '{print $NF}' | tr -d '\n')
 if [ -z "$ESCROW_ADDR" ]; then
     # Try to get from hardhat config or last deployment
-    ESCROW_ADDR=$(nix develop -c bash -c "npx hardhat run scripts/deploy.js --network localhost --dry-run 2>&1 | grep 'IntentEscrow deployed to' | awk '{print \$NF}'" 2>/dev/null | tail -1 | tr -d '\n')
+    ESCROW_ADDR=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "npx hardhat run scripts/deploy.js --network localhost --dry-run 2>&1 | grep 'IntentEscrow deployed to' | awk '{print \$NF}'" 2>/dev/null | tail -1 | tr -d '\n')
 fi
-cd ..
+cd "$PROJECT_ROOT"
 
 if [ -z "$ESCROW_ADDR" ]; then
     log_and_echo "❌ ERROR: Could not find escrow contract address. Please ensure IntentEscrow is deployed."
@@ -73,7 +73,7 @@ log "   - Requester provides hub chain intent_id when creating escrow"
 log "   - Using intent_id from hub chain: $INTENT_ID"
 log "   - Amount matches intent offered_amount"
 
-cd evm-intent-framework
+cd intent-frameworks/evm
 
 # Convert intent_id from Move VM format to EVM uint256
 INTENT_ID_EVM=$(convert_intent_id_to_evm "$INTENT_ID")
@@ -91,7 +91,7 @@ SOLVER_ADDR="$SOLVER_EVM_ADDR"
 log "     Using solver EVM address from verifier: $SOLVER_ADDR"
 # Escrow amount must match the intent's offered_amount (1 USDcon)
 USDCON_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals)
-CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT" -c bash -c "cd '$PROJECT_ROOT/evm-intent-framework' && ESCROW_ADDR='$ESCROW_ADDR' TOKEN_ADDR='$USD_EVM_ADDR' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT' RESERVED_SOLVER='$SOLVER_ADDR' npx hardhat run scripts/create-escrow-e2e-tests.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
+CREATE_OUTPUT=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_ADDR='$ESCROW_ADDR' TOKEN_ADDR='$USD_EVM_ADDR' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT' RESERVED_SOLVER='$SOLVER_ADDR' npx hardhat run scripts/create-escrow-e2e-tests.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
 CREATE_EXIT_CODE=$?
 
 # Check if creation was successful
@@ -116,7 +116,7 @@ fi
 log "     ✅ Escrow created on Chain 3 (EVM)!"
 log_and_echo "✅ Escrow created"
 
-cd ..
+cd "$PROJECT_ROOT"
 
 log ""
 log " ESCROW CREATION COMPLETE!"

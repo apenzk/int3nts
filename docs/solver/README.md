@@ -30,7 +30,7 @@ A continuous service that automatically:
 
 Solvers interact through verifier-based negotiation routing: Creator submits draft to verifier → solvers poll verifier for drafts → first solver to sign wins (FCFS) → creator retrieves signature from verifier.
 
-See [Negotiation Routing Guide](../docs/trusted-verifier/negotiation-routing.md) for details.
+See [Negotiation Routing Guide](../docs/verifier/negotiation-routing.md) for details.
 
 Components:
 
@@ -170,7 +170,7 @@ Reserved intents require off-chain negotiation:
 
 This ensures only the authorized solver can fulfill the intent, providing commitment guarantees for cross-chain scenarios.
 
-**Negotiation**: Creator submits draft to verifier, solvers poll for drafts (FCFS). See [Negotiation Routing Guide](../docs/trusted-verifier/negotiation-routing.md) for details.
+**Negotiation**: Creator submits draft to verifier, solvers poll for drafts (FCFS). See [Negotiation Routing Guide](../docs/verifier/negotiation-routing.md) for details.
 
 Signature generation process:
 

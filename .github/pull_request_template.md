@@ -6,15 +6,15 @@
 
 ## Types of Changes
 
-<!-- Select the types of changes that this PR contains and remove the others -->
+<!-- Select the types of changes that this PR contains and check the boxes -->
 
-- Bug fix
-- New feature
-- Documentation
-- Refactor
-- Breaking change
-- Tests
-- CI/CD
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Documentation
+- [ ] Refactor
+- [ ] Breaking change
+- [ ] Tests
+- [ ] CI/CD
 
 ## Description
 

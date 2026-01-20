@@ -3,7 +3,7 @@
 //! These tests verify event polling functionality for both chains.
 //! They require the Aptos chains to be running with deployed contracts.
 
-use trusted_verifier::mvm_client::MvmClient;
+use verifier::mvm_client::MvmClient;
 
 /// Test that we can query events on Hub
 /// Why: Event polling is core functionality for monitoring blockchain activity
@@ -53,11 +53,11 @@ async fn test_get_account_events_chain2() {
 #[tokio::test]
 async fn test_poll_hub_events_api() {
     // This test requires chains to be running with deployed contracts
-    let config = trusted_verifier::config::Config::load()
+    let config = verifier::config::Config::load()
         .expect("Failed to load verifier config");
     
     // Create a temporary monitor to test polling
-    let monitor = trusted_verifier::monitor::EventMonitor::new(&config).await
+    let monitor = verifier::monitor::EventMonitor::new(&config).await
         .expect("Failed to create monitor");
     
     // Poll for events - this only tests API connectivity, not parsing of real events
@@ -81,11 +81,11 @@ async fn test_poll_hub_events_api() {
 #[tokio::test]
 async fn test_poll_connected_events_api() {
     // This test requires chains to be running with deployed contracts
-    let config = trusted_verifier::config::Config::load()
+    let config = verifier::config::Config::load()
         .expect("Failed to load verifier config");
     
     // Create a temporary monitor to test polling
-    let monitor = trusted_verifier::monitor::EventMonitor::new(&config).await
+    let monitor = verifier::monitor::EventMonitor::new(&config).await
         .expect("Failed to create monitor");
     
     // Poll for events - this only tests API connectivity, not parsing of real events
@@ -116,11 +116,11 @@ async fn test_poll_connected_events_api() {
 //     //
 //     // This test runs BEFORE inflow-fulfill-hub-intent.sh, so the intent should still exist.
 //     
-//     let config = trusted_verifier::config::Config::load()
+//     let config = verifier::config::Config::load()
 //         .expect("Failed to load verifier config");
 //     
 //     // Create a temporary monitor to test polling
-//     let monitor = trusted_verifier::monitor::EventMonitor::new(&config).await
+//     let monitor = verifier::monitor::EventMonitor::new(&config).await
 //         .expect("Failed to create monitor");
 //     
 //     // Poll for events

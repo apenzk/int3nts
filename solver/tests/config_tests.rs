@@ -4,7 +4,7 @@
 mod test_helpers;
 use test_helpers::{
     create_default_connected_mvm_chain_config, create_default_solver_config, create_default_token_pair,
-    DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_TOKEN_ADDR_EVM, DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
+    DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_SVM_ESCROW_PROGRAM_ID, DUMMY_TOKEN_ADDR_EVM, DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
 };
 
 use solver::config::{AcceptanceConfig, ConnectedChainConfig, EvmChainConfig, MvmChainConfig, SvmChainConfig, SolverConfig, TokenPairConfig};
@@ -108,7 +108,7 @@ fn test_config_validation_rejects_svm_invalid_hex_length() {
         name: "svm".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
         chain_id: 901,
-        escrow_program_id: "11111111111111111111111111111111".to_string(),
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
     }));
     config.acceptance.token_pairs = vec![TokenPairConfig {
@@ -133,7 +133,7 @@ fn test_config_validation_rejects_invalid_svm_base58_token() {
         name: "svm".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
         chain_id: 901,
-        escrow_program_id: "11111111111111111111111111111111".to_string(),
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
     }));
     config.acceptance.token_pairs = vec![TokenPairConfig {
@@ -322,19 +322,22 @@ private_key_env = "BASE_SOLVER_PRIVATE_KEY"
 /// Why: Ensure SVM chain config is correctly parsed from TOML
 #[test]
 fn test_connected_chain_svm_deserialization() {
-    let toml_str = r#"
+    let toml_str = format!(
+        r#"
 name = "Connected SVM Chain"
 rpc_url = "http://127.0.0.1:8899"
 chain_id = 100
-escrow_program_id = "11111111111111111111111111111111"
+escrow_program_id = "{}"
 private_key_env = "SOLANA_SOLVER_PRIVATE_KEY"
-"#;
+"#,
+        DUMMY_SVM_ESCROW_PROGRAM_ID
+    );
 
-    let config: SvmChainConfig = toml::from_str(toml_str).unwrap();
+    let config: SvmChainConfig = toml::from_str(&toml_str).unwrap();
 
     assert_eq!(config.chain_id, 100);
     assert_eq!(config.name, "Connected SVM Chain");
-    assert_eq!(config.escrow_program_id, "11111111111111111111111111111111");
+    assert_eq!(config.escrow_program_id, DUMMY_SVM_ESCROW_PROGRAM_ID);
     assert_eq!(config.private_key_env, "SOLANA_SOLVER_PRIVATE_KEY");
 }
 
@@ -356,7 +359,8 @@ fn test_config_load_from_file() {
     fs::create_dir_all(test_config_dir).unwrap();
     
     // Write test config
-    let toml_content = r#"
+    let toml_content = format!(
+        r#"
 [service]
 verifier_url = "http://127.0.0.1:3333"
 polling_interval_ms = 2000
@@ -379,15 +383,17 @@ profile = "connected-profile"
 [acceptance]
 [[acceptance.tokenpair]]
 source_chain_id = 1
-source_token = "0x000000000000000000000000000000000000000000000000000000000000000b"
+source_token = "{}"
 target_chain_id = 2
-target_token = "0x000000000000000000000000000000000000000000000000000000000000000c"
+target_token = "{}"
 ratio = 1.0
 
 [solver]
 profile = "hub-profile"
 address = "0xccc"
-"#;
+"#,
+        DUMMY_TOKEN_ADDR_HUB, DUMMY_TOKEN_ADDR_MVMCON
+    );
     
     fs::write(&test_config_file, toml_content).unwrap();
     
