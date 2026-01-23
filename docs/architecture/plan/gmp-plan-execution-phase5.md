@@ -8,6 +8,8 @@
 
 ## Commits
 
+> 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
+
 ### Commit 1: Update frontend for GMP integration
 
 **Files:**

@@ -8,6 +8,8 @@
 
 ## Commits
 
+> 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
+
 ### Commit 1: Add LayerZero OApp base for Movement (MVM)
 
 **Files:**

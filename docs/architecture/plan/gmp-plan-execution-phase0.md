@@ -85,6 +85,8 @@ CI-E2E scripts (other):
 
 ## Commits
 
+> 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
+
 ### Commit 1: Extract Coordinator Service
 
 **Files:**
@@ -211,6 +213,13 @@ Unit test script:
   - Replace "Verifier" section with "Coordinator" section (`cd coordinator && cargo test`)
   - Add "Trusted GMP" section (`cd trusted-gmp && cargo test`)
   - Update summary table to show Coordinator and Trusted GMP instead of Verifier
+
+Project rules:
+
+- [ ] Update `.cursor/rules`:
+  - Replace "Verifier" with "Coordinator, Trusted GMP" in commit message format (line 21, 39)
+  - Update verifier test command (line 64) to run both `cd coordinator && cargo test` and `cd trusted-gmp && cargo test`
+  - Update "Trusted Verifier README" reference (line 123) to "Coordinator README" and "Trusted GMP README"
 
 **Test:**
 
