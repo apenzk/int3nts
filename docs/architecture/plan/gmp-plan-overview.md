@@ -4,6 +4,10 @@
 **Date:** 2026-01-22
 **Summary:** Architectural proposal to replace the trusted off-chain verifier with Generic Message Passing (GMP) protocol integration, moving validation on-chain and leveraging cross-chain messaging for authorization.
 
+> **🔷 GMP Protocol: LayerZero v2**
+>
+> This proposal uses **LayerZero v2** as the GMP protocol. LayerZero provides the best cross-chain coverage (Movement/Aptos, EVM, Solana), mature integration, and flexible executor network. See [GMP Protocol Comparison](#gmp-protocol-comparison) for full analysis.
+
 ---
 
 ## Executive Summary
@@ -41,21 +45,95 @@ Replace the verifier with **on-chain validation + GMP messaging**:
 | Trade-off | Current | New |
 |-----------|---------|-----|
 | **Gas costs** | Low (signatures cheap) | Higher (GMP fees + on-chain validation) |
-| **Contract complexity** | Low | High (validation logic on-chain) |
+| **Contract complexity** | Low | Medium (validation logic on-chain) |
 | **Infrastructure burden** | High (run verifier service) | Low (coordinator only) |
 | **Flexibility** | Easy to update validation logic | Requires contract redeployment |
 
 ---
 
-## Feasibility Assessment
+## Verifier Separation (Phase 0)
 
-### Can GMPs Replace the Verifier?
+**Critical first step:** Before migrating to real GMP protocols, we split the current verifier into two independent services:
 
-**Direct replacement: NOT FEASIBLE** - GMPs cannot perform the verifier's current tasks directly.
+### Current Verifier (Monolithic)
 
-**With architectural redesign: FEASIBLE** - Moving validation on-chain enables GMP-based coordination.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    VERIFIER SERVICE                         │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐   │
+│  │ Event       │ │ Validation  │ │ Signature           │   │
+│  │ Monitoring  │ │ Logic       │ │ Generation          │   │
+│  └─────────────┘ └─────────────┘ └─────────────────────┘   │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────────────┐   │
+│  │ REST API    │ │ Negotiation │ │ 🔴 PRIVATE KEYS     │   │
+│  └─────────────┘ └─────────────┘ └─────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Verifier Task Analysis: How Redesign Enables Each Task
+### New Architecture (Split)
+
+```text
+┌─────────────────────────────────┐  ┌─────────────────────────────────┐
+│      COORDINATOR SERVICE        │  │      TRUSTED GMP SERVICE        │
+│  ┌─────────────┐ ┌───────────┐  │  │  ┌─────────────┐ ┌───────────┐  │
+│  │ Event       │ │ REST API  │  │  │  │ GMP Event   │ │ Message   │  │
+│  │ Monitoring  │ │ (read)    │  │  │  │ Monitoring  │ │ Delivery  │  │
+│  └─────────────┘ └───────────┘  │  │  └─────────────┘ └───────────┘  │
+│  ┌─────────────┐ ┌───────────┐  │  │  ┌─────────────────────────┐    │
+│  │ Event       │ │Negotiation│  │  │  │ 🔴 OPERATOR WALLET       │    │
+│  │ Caching     │ │ API       │  │  │  │    (privkey in config)   │    │
+│  └─────────────┘ └───────────┘  │  │  └─────────────────────────┘    │
+│                                 │  │                                 │
+│  🟢 NO KEYS                     │  │  🔴 CAN STEAL FUNDS             │
+│  🟢 NO VALIDATION               │  │     (same risk as verifier)     │
+│  🟢 CANNOT STEAL FUNDS          │  │                                 │
+│                                 │  │  (Only for local/CI testing -   │
+│                                 │  │   production uses real GMP)     │
+└─────────────────────────────────┘  └─────────────────────────────────┘
+```
+
+**Security model by environment:**
+
+| Environment | Message Verification | Trust Model |
+|-------------|---------------------|-------------|
+| **Current (Verifier)** | Verifier signatures | 🔴 Our service can steal funds |
+| **Local/CI (Trusted GMP)** | Trusted GMP relays | 🔴 Our service can steal funds (same risk) |
+| **Production (Real GMP)** | LayerZero DVNs | 🟡 LayerZero DVNs can steal funds |
+
+**We are not eliminating trust - we are moving it.** In production, we trust LayerZero's DVN network instead of our own verifier. Whether this is "better" depends on:
+
+- LayerZero's security track record
+- DVN decentralization (how many, who operates them)
+- Economic incentives and slashing mechanisms
+- Your threat model (internal vs external attackers)
+
+### Why This Matters
+
+| Aspect | Current Verifier | Coordinator | Trusted GMP (testing) | Production (real GMP) |
+|--------|------------------|-------------|----------------------|----------------------|
+| **Can steal funds** | 🔴 YES (us) | 🟢 NO | 🔴 YES (us) | 🟡 YES (LayerZero DVNs) |
+| **Validation logic** | 🔴 Off-chain | 🟢 On-chain | 🟢 On-chain | 🟢 On-chain |
+| **If compromised** | 🔴 Steal funds | 🟢 Disrupt UX | 🔴 Steal funds | 🟡 Steal funds |
+| **Trust assumption** | 🔴 Our service | 🟢 None | 🔴 Our service | 🟡 LayerZero network |
+
+### Migration Benefits
+
+- ✅ **Coordinator has no keys** - Cannot steal funds, only affects UX
+- ✅ **Clean break** - Old verifier completely removed, no legacy code
+- ✅ **Cleaner architecture** - Clear separation of concerns
+- ✅ **On-chain validation** - All validation logic is transparent and auditable
+- ✅ **Production security** - Trust moves from us to LayerZero DVNs
+- ⚠️ **Testing still requires trust** - Trusted GMP for local/CI has same risk as verifier
+
+> **See [Phase 0: Verifier Separation](gmp-plan-execution-phase0.md) for implementation details.**
+
+---
+
+## Architectural Changes
+
+This migration moves validation logic on-chain and uses GMP for cross-chain message delivery. The table below shows how each current verifier task maps to the new architecture.
+
+### Verifier Task Migration
 
 | # | Task | How Architectural Redesign Addresses It |
 | --- | ------ | --------------------------------------- |
@@ -348,7 +426,7 @@ See execution phase documents for detailed implementation plan:
 
 ---
 
-## Recommended GMP Selection
+## GMP Protocol Comparison
 
 ### Evaluation Criteria
 
@@ -381,25 +459,26 @@ See execution phase documents for detailed implementation plan:
 
 ### The Concept
 
-**Convert the existing verifier into a "Trusted GMP" provider** - an alternative to real GMP protocols (LayerZero, Axelar, etc.) that can be used for:
+**The Trusted GMP Service** replaces the verifier as a message relay for testing. It is used for:
+
 - **Local development** - No need for testnet GMP infrastructure
 - **CI testing** - Fast, deterministic message delivery
 - **Debugging** - Easier to trace and debug message flows
-- **Gradual migration** - Keep verifier as fallback during transition
 - **Testing environments** - Full control over message delivery
 
 ### How It Works
 
 | Environment | GMP Provider | Flow |
 |-------------|--------------|------|
-| **Production** | Real GMP (LayerZero/Axelar) | Contract → `lzSend()` → [Real GMP DVNs + Executors] → `lzReceive()` → Destination |
-| **Local/CI/Testing** | Trusted GMP (Verifier) | Contract → `lzSend()` → [Mock endpoint emits event] → [Verifier watches] → [Calls `lzReceive()`] → Destination |
+| **Production** | Real GMP (LayerZero) | Contract → `lzSend()` → [Real GMP DVNs + Executors] → `lzReceive()` → Destination |
+| **Local/CI/Testing** | Trusted GMP Service | Contract → `lzSend()` → [Mock endpoint emits event] → [Trusted GMP watches] → [Calls `lzReceive()`] → Destination |
 
 ### Key Principle
 
 **Contracts remain identical across all environments** - they use the same GMP interfaces. Only the underlying endpoint implementation differs:
-- **Production**: Real GMP endpoint (LayerZero, Axelar, etc.)
-- **Local/CI/Testing**: Mock endpoint + Trusted GMP verifier
+
+- **Production**: Real LayerZero endpoint
+- **Local/CI/Testing**: Mock endpoint + Trusted GMP service
 
 ### Verifier Transformation
 
@@ -408,24 +487,23 @@ See execution phase documents for detailed implementation plan:
 | **Watches events** | `IntentCreated`, `EscrowCreated` | `MessageSent` (from mock endpoints) | N/A - not running |
 | **Validates logic** | 15+ validation checks | ❌ NONE - contracts validate | N/A |
 | **Action taken** | Generates signatures | Calls `lzReceive()` on destination contracts | N/A - real GMP delivers |
-| **Private keys** | ✅ YES (critical) | ❌ NO KEYS NEEDED | N/A |
-| **Trust required** | 🔴 HIGH (can steal funds) | 🟢 NONE (just relays messages) | 🟢 NONE |
-| **Security impact** | 🔴 CRITICAL | 🟢 LOW (read-only relay) | 🟢 NONE |
+| **Private keys** | ✅ YES (verifier signing) | ✅ YES (operator wallet privkey per chain) | N/A |
+| **Can steal funds** | 🔴 YES (forge signatures) | 🔴 YES (forge messages) | 🟡 LayerZero DVNs can |
+| **Security impact** | 🔴 CRITICAL | 🔴 SAME AS VERIFIER | 🟡 Trust LayerZero |
 
-### Implementation Approach
+### Implementation
 
-**Option 1: Configuration-Based Switching**
-- Contracts have configurable GMP endpoint address
-- Local/CI: Point to mock endpoint (watched by verifier)
-- Production: Point to real GMP endpoint
-- Verifier runs in "trusted GMP mode" (no keys, just message relay)
+**Phase 0 splits the verifier into two separate services:**
 
-**Option 2: Dual Mode Verifier**
-- Verifier can run in two modes:
-  - **Current mode**: Trusted verifier (with keys, validation, signatures)
-  - **Trusted GMP mode**: Message relay only (no keys, no validation)
-- Switch via configuration flag
-- Same infrastructure, different behavior
+1. **Coordinator Service** - UX functions (event monitoring, API, negotiation) - NO KEYS, CANNOT STEAL FUNDS
+2. **Trusted GMP Service** - message relay for local/CI testing - REQUIRES FUNDED OPERATOR WALLET on each chain (private key in config, pays gas to call `lzReceive()`), CAN FORGE MESSAGES, CAN STEAL FUNDS
+
+**Contracts use configurable GMP endpoint address:**
+
+- **Local/CI**: Mock endpoint → Trusted GMP service relays messages
+- **Production**: Real LayerZero endpoint → LayerZero handles delivery
+
+> ⚠️ **No backwards compatibility.** The current verifier (with keys, validation, signatures) is completely replaced. Old architecture is deprecated and removed.
 
 ### Benefits
 
@@ -434,15 +512,13 @@ See execution phase documents for detailed implementation plan:
 - **Deterministic tests** - no flaky tests from network delays
 - **Cost efficient** - no testnet gas fees for every CI run
 - **Easier debugging** - full control over message delivery timing
-- **Gradual migration** - can keep verifier as fallback during transition
 - **Local development** - developers can test without testnet GMP setup
 
-### Migration Path
+### Environment Configuration
 
-1. **Phase 1**: Implement trusted GMP mode in verifier (message relay only)
-2. **Phase 2**: Update contracts to support configurable GMP endpoint
-3. **Phase 3**: Use trusted GMP for local/CI, real GMP for production
-4. **Phase 4**: Keep trusted GMP as optional fallback (or remove if not needed)
+1. **Local/CI**: Deploy mock endpoints, run Trusted GMP service for message relay
+2. **Testnet**: Use real LayerZero endpoints on testnets
+3. **Production**: Use real LayerZero endpoints on mainnets
 
 ---
 
@@ -472,19 +548,19 @@ Replacing the trusted verifier with GMP integration is **FEASIBLE** but requires
 
 ### Key Benefits
 
-✅ **Eliminate trusted verifier** - no single point of failure
-✅ **Decentralize trust** - leverage GMP validator networks
-✅ **Increase transparency** - validation logic on-chain
-✅ **Improve security** - no private keys to compromise
-✅ **Enable censorship resistance** - permissionless execution
+- ✅ **Eliminate trusted verifier** - no single point of failure
+- ✅ **Decentralize trust** - leverage GMP validator networks
+- ✅ **Increase transparency** - validation logic on-chain
+- ✅ **Improve security** - no private keys to compromise
+- ✅ **Enable censorship resistance** - permissionless execution
 
 ### Key Trade-offs
 
-⚠️ **Higher gas costs** - GMP fees + on-chain validation
-⚠️ **Contract complexity** - more logic on-chain
-⚠️ **Development time** - 2-3 weeks for testnet (with AI assistance)
-⚠️ **New dependencies** - rely on GMP protocol security
-⚠️ **Solver UX changes** - must use validation contracts
+- ⚠️ **Higher gas costs** - GMP fees + on-chain validation
+- ⚠️ **Contract complexity** - moderate increase (~50-100 lines per contract)
+- ⚠️ **Development time** - 2-3 weeks for testnet (with AI assistance)
+- ⚠️ **New dependencies** - rely on GMP protocol security
+- ⚠️ **Solver UX changes** - must use validation contracts
 
 ---
 

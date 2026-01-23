@@ -10,3 +10,5 @@ gmp
 devnet
 toml
 solana
+tx
+txs

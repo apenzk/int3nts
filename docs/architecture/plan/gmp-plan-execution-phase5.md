@@ -8,31 +8,7 @@
 
 ## Commits
 
-### Commit 1: Add dual-mode support for testing both flows
-
-**Files:**
-
-- `verifier/src/dual_mode.rs`
-- `verifier/src/config.rs`
-- `verifier/src/tests/dual_mode_tests.rs`
-
-**Tasks:**
-
-- [ ] Add config flag `--legacy-mode` to enable old verifier logic
-- [ ] Add config flag `--gmp-simulator` to enable GMP simulator mode
-- [ ] Support running both modes simultaneously
-- [ ] Log which mode handles each intent
-- [ ] Test mode switching and concurrent operation
-
-**Test:**
-
-```bash
-nix develop ./nix -c bash -c "cd verifier && cargo test -- --test dual_mode_tests"
-```
-
----
-
-### Commit 2: Update frontend for GMP integration
+### Commit 1: Update frontend for GMP integration
 
 **Files:**
 
@@ -42,10 +18,10 @@ nix develop ./nix -c bash -c "cd verifier && cargo test -- --test dual_mode_test
 
 **Tasks:**
 
-- [ ] Add feature flag for GMP vs legacy mode
 - [ ] Show GMP message status in intent details
 - [ ] Update status tracking for GMP-based intents
-- [ ] Test UI renders correctly for both modes
+- [ ] Display cross-chain message delivery progress
+- [ ] Test UI renders correctly for GMP flows
 
 **Test:**
 
@@ -55,7 +31,7 @@ nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
 
 ---
 
-### Commit 3: Update solver SDK for GMP integration
+### Commit 2: Update solver SDK for GMP integration
 
 **Files:**
 
@@ -64,10 +40,10 @@ nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
 
 **Tasks:**
 
-- [ ] Detect intent mode (GMP vs legacy)
-- [ ] Use validation contract for GMP-based outflow intents
-- [ ] Handle escrow creation for GMP-based inflow intents
-- [ ] Test both fulfillment flows work correctly
+- [ ] Use validation contract for outflow intents
+- [ ] Handle escrow creation for inflow intents
+- [ ] Integrate with coordinator API for intent discovery
+- [ ] Test fulfillment flows work correctly
 
 **Test:**
 
@@ -77,7 +53,7 @@ nix develop ./nix -c bash -c "cd solver && cargo test -- --test gmp_tests"
 
 ---
 
-### Commit 4: Add full cross-chain testnet integration test
+### Commit 3: Add full cross-chain testnet integration test
 
 **Files:**
 
@@ -99,7 +75,7 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-tes
 
 ---
 
-### Commit 5: Add GMP integration documentation
+### Commit 4: Add GMP integration documentation
 
 **Files:**
 
@@ -123,29 +99,33 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-tes
 
 ---
 
-### Commit 6: Deprecate legacy verifier code
+### Commit 5: Final cleanup and verification
 
 **Files:**
 
-- `verifier/src/legacy/mod.rs` (move old code)
-- `verifier/DEPRECATION.md`
 - `CHANGELOG.md`
+- `README.md` (update architecture section)
 
 **Tasks:**
 
-- [ ] Move legacy validation code to `legacy/` module
-- [ ] Add deprecation warnings to legacy functions
+- [ ] Verify old verifier code is completely removed (done in Phase 0)
 - [ ] Update CHANGELOG with GMP integration notes
-- [ ] Document rollback procedures if needed
+- [ ] Update README with new architecture diagram
+- [ ] Verify coordinator has no private keys (trusted-gmp requires operator wallet privkeys per chain)
+- [ ] Final security review of coordinator + trusted-gmp
 
 **Test:**
 
 ```bash
-# Verify deprecation warnings appear
-nix develop ./nix -c bash -c "cd verifier && cargo build 2>&1 | grep -i deprecat"
+# Verify no verifier directory exists
+test ! -d verifier && echo "Old verifier removed"
 
-# Verify all tests still pass
-nix develop ./nix -c bash -c "cd verifier && cargo test"
+# Verify coordinator has no private key references (trusted-gmp requires operator wallet privkeys)
+grep -r "private_key\|secret_key\|signing_key" coordinator/ && exit 1 || echo "Coordinator has no keys"
+
+# All tests pass
+nix develop ./nix -c bash -c "cd coordinator && cargo test"
+nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
 ```
 
 ---
@@ -153,8 +133,11 @@ nix develop ./nix -c bash -c "cd verifier && cargo test"
 ## Run All Tests
 
 ```bash
-# Verifier tests (including dual-mode)
-nix develop ./nix -c bash -c "cd verifier && cargo test"
+# Coordinator tests
+nix develop ./nix -c bash -c "cd coordinator && cargo test"
+
+# Trusted GMP tests
+nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
 
 # Frontend GMP tests
 nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
@@ -168,12 +151,26 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-tes
 
 ---
 
+## Documentation Update
+
+At the end of Phase 5, update:
+
+- [ ] `docs/gmp/architecture.md` - Complete GMP architecture documentation
+- [ ] `docs/gmp/solver-guide.md` - Complete solver integration guide
+- [ ] `docs/gmp/troubleshooting.md` - Common issues and solutions
+- [ ] `README.md` - Update with new architecture diagram
+- [ ] `CHANGELOG.md` - Document GMP integration milestone
+- [ ] Review ALL conception documents for accuracy after full GMP migration
+- [ ] Final audit: Check if any files still reference old verifier architecture and update them
+
+---
+
 ## Exit Criteria
 
-- [ ] All 6 commits merged to feature branch
-- [ ] Dual-mode verifier works correctly
+- [ ] All 5 commits merged to feature branch
 - [ ] Frontend shows GMP status correctly
-- [ ] Solver handles both GMP and legacy flows
+- [ ] Solver uses validation contracts (GMP flow only)
 - [ ] Full cross-chain testnet integration passes
 - [ ] Documentation complete
-- [ ] Legacy verifier code deprecated
+- [ ] Old verifier completely removed (no legacy code)
+- [ ] All conception documents reviewed and updated

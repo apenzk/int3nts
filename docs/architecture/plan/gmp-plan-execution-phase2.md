@@ -361,6 +361,18 @@ async fn test_outflow_cross_chain() {
 
 ---
 
+## Documentation Update
+
+At the end of Phase 2, update:
+
+- [ ] `docs/architecture/plan/gmp-devnet-deployment.md` - Document deployed SVM program IDs
+- [ ] `docs/svm/` - Add GMP program usage documentation
+- [ ] `intent-frameworks/svm/README.md` - Update with new GMP programs
+- [ ] Review conception documents for accuracy after changes
+- [ ] Check if other files reference SVM escrow flow and update them
+
+---
+
 ## Exit Criteria
 
 - [ ] All 7 commits merged to feature branch
@@ -368,3 +380,4 @@ async fn test_outflow_cross_chain() {
 - [ ] Programs deployed to Solana devnet
 - [ ] Programs verified on Solana Explorer
 - [ ] Smoke test on devnet passes
+- [ ] Documentation updated

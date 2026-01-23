@@ -410,6 +410,20 @@ jobs:
 
 ---
 
+## Documentation Update
+
+At the end of Phase 3, update:
+
+- [ ] `docs/mvm/` - Add GMP integration documentation for MVM contracts
+- [ ] `docs/evm/` - Add GMP integration documentation for EVM contracts
+- [ ] `docs/testing/` - Document how to run LayerZero simulator for local testing
+- [ ] `intent-frameworks/mvm/README.md` - Update with GMP module info
+- [ ] `intent-frameworks/evm/README.md` - Update with GMP contract info
+- [ ] Review conception documents for accuracy after changes
+- [ ] Check if other files reference MVM/EVM flows and update them
+
+---
+
 ## Exit Criteria
 
 - [ ] All 8 commits merged to feature branch
@@ -418,3 +432,4 @@ jobs:
 - [ ] Verifier simulator tests pass
 - [ ] All cross-chain E2E tests pass (MVM↔SVM, MVM↔EVM)
 - [ ] All three chains can send/receive GMP messages in test environment
+- [ ] Documentation updated

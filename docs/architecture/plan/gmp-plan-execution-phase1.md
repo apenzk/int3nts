@@ -248,9 +248,21 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p gmp-comm
 
 ---
 
+## Documentation Update
+
+At the end of Phase 1, update:
+
+- [ ] `docs/architecture/plan/gmp-endpoints.md` - Document all LayerZero endpoint addresses
+- [ ] `docs/architecture/plan/gmp-message-schemas.md` - Document message payload formats
+- [ ] `docs/architecture/plan/gmp-selection.md` - Final LayerZero selection rationale
+- [ ] Review conception documents for accuracy after changes
+- [ ] Check if other files reference old message formats and update them
+
+---
+
 ## Exit Criteria
 
-- [ ] All 8 commits merged to feature branch
+- [ ] All 9 commits merged to feature branch
 - [ ] All SVM program interfaces build without errors
 - [ ] All MVM interfaces compile without errors
 - [ ] Message schema encoding tests pass

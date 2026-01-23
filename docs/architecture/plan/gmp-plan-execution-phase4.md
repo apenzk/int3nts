@@ -222,11 +222,25 @@ docker-compose up -d coordinator && curl http://localhost:8080/health && docker-
 
 ---
 
+## Documentation Update
+
+At the end of Phase 4, update:
+
+- [ ] `docs/coordinator/README.md` - Coordinator service overview
+- [ ] `docs/coordinator/api-reference.md` - Full API documentation
+- [ ] `docs/solver/migration-guide.md` - How solvers migrate to GMP flow
+- [ ] `docker-compose.yml` - Document coordinator + PostgreSQL setup
+- [ ] Review conception documents for accuracy after changes
+- [ ] Check if other files reference old verifier API and update them
+
+---
+
 ## Exit Criteria
 
 - [ ] All 7 commits merged to feature branch
 - [ ] Coordinator service runs and indexes events from all chains
 - [ ] All API endpoints return correct data
+- [ ] Documentation updated
 - [ ] WebSocket subscriptions work
 - [ ] Frontend uses coordinator API successfully
 - [ ] Solver SDK uses coordinator API successfully
