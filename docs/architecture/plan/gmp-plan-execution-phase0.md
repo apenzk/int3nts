@@ -24,6 +24,65 @@ This separation:
 
 ---
 
+## Important: Incremental Migration
+
+> ⚠️ **Verifier must keep working until Commit 3.** Commits 1 & 2 **COPY** files from verifier (not move). This ensures:
+>
+> - Existing shell scripts (`run-verifier-local.sh`, `run-solver-local.sh`, etc.) continue working
+> - CI/CD pipelines remain functional
+> - Safe rollback if issues discovered
+>
+> Only in Commit 3 do we delete verifier and update scripts.
+
+**Shell scripts that depend on verifier:**
+
+Testnet scripts:
+
+- `testing-infra/testnet/run-verifier-local.sh` - runs verifier binary
+- `testing-infra/testnet/run-solver-local.sh` - checks verifier health
+- `testing-infra/testnet/check-testnet-preparedness.sh` - checks verifier config
+- `testing-infra/testnet/create-intent.sh` - uses verifier for negotiation
+- `testing-infra/testnet/verify-verifier-evm-address.sh` - verifies EVM address
+- `testing-infra/testnet/deploy-to-*.sh` - reference verifier config
+
+CI-E2E scripts (configure verifier):
+
+- `testing-infra/ci-e2e/chain-hub/configure-verifier.sh`
+- `testing-infra/ci-e2e/chain-connected-evm/configure-verifier.sh`
+- `testing-infra/ci-e2e/chain-connected-svm/configure-verifier.sh`
+- `testing-infra/ci-e2e/chain-connected-mvm/configure-verifier.sh`
+
+CI-E2E scripts (start verifier):
+
+- `testing-infra/ci-e2e/e2e-tests-evm/start-verifier.sh`
+- `testing-infra/ci-e2e/e2e-tests-svm/start-verifier.sh`
+- `testing-infra/ci-e2e/e2e-tests-mvm/start-verifier.sh`
+
+CI-E2E scripts (run tests - build verifier):
+
+- `testing-infra/ci-e2e/e2e-tests-evm/run-tests-outflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-evm/run-tests-inflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-svm/run-tests-outflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-svm/run-tests-inflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-mvm/run-tests-outflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-mvm/run-tests-inflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-mvm/verifier-rust-integration-tests.sh`
+
+CI-E2E scripts (submit intents - verify_verifier_running):
+
+- `testing-infra/ci-e2e/e2e-tests-*/inflow-submit-hub-intent.sh`
+- `testing-infra/ci-e2e/e2e-tests-*/outflow-submit-hub-intent.sh`
+
+CI-E2E scripts (other):
+
+- `testing-infra/ci-e2e/chain-hub/deploy-contracts.sh` - initialize_verifier
+- `testing-infra/ci-e2e/chain-connected-evm/deploy-contract.sh` - get_verifier_eth_address
+- `testing-infra/ci-e2e/chain-connected-svm/deploy-contract.sh` - load_verifier_keys
+- `testing-infra/ci-e2e/chain-*/cleanup.sh` - stop_verifier
+- `testing-infra/ci-e2e/util.sh` - verifier helper functions
+
+---
+
 ## Commits
 
 ### Commit 1: Extract Coordinator Service
@@ -31,32 +90,38 @@ This separation:
 **Files:**
 
 - `coordinator/src/main.rs`
-- `coordinator/src/monitor/` (moved from `verifier/src/monitor/`)
-- `coordinator/src/api/` (moved from `verifier/src/api/`)
-- `coordinator/src/storage/` (moved from `verifier/src/storage/`)
+- `coordinator/src/config/` (copied from `verifier/src/config/`, keys removed)
+- `coordinator/src/monitor/` (copied from `verifier/src/monitor/`)
+- `coordinator/src/api/` (copied from `verifier/src/api/`, validation endpoints removed)
+- `coordinator/src/storage/` (copied from `verifier/src/storage/`)
 - `coordinator/Cargo.toml`
+
+> ⚠️ **COPY, not move.** Verifier must keep working. Use `cp -r` not `git mv`.
 
 **Tasks:**
 
 - [ ] Create new `coordinator/` crate
-- [ ] Move event monitoring logic from verifier (no validation, just monitoring)
-- [ ] Move REST API from verifier (no signature endpoints, just read-only)
-- [ ] Move event caching/storage from verifier
+- [ ] Copy event monitoring logic from verifier (no validation, just monitoring)
+- [ ] Copy REST API from verifier (no signature endpoints, just read-only)
+- [ ] Copy event caching/storage from verifier
 - [ ] Remove all cryptographic operations (no keys, no signing)
 - [ ] Remove all validation logic (contracts will handle this)
 - [ ] Keep negotiation API (application logic, not security-critical)
 - [ ] Update configuration to remove key-related settings
 - [ ] Test coordinator can monitor events and serve API without keys
+- [ ] Verify verifier still builds and works (scripts unchanged)
 
 **Test:**
 
 ```bash
-# Build coordinator
-nix develop ./nix -c bash -c "cd coordinator && cargo build"
+# Run all unit tests (verifier still exists at this point)
+./testing-infra/run-all-unit-tests.sh
 
-# Test coordinator API (should work without keys)
-nix develop ./nix -c bash -c "cd coordinator && cargo test"
+# Verify coordinator builds and tests pass
+nix develop ./nix -c bash -c "cd coordinator && cargo build && cargo test"
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.** E2E tests run in CI, not locally.
 
 ---
 
@@ -65,9 +130,12 @@ nix develop ./nix -c bash -c "cd coordinator && cargo test"
 **Files:**
 
 - `trusted-gmp/src/main.rs`
+- `trusted-gmp/src/config/` (new config with operator wallet keys)
 - `trusted-gmp/src/monitor/gmp_events.rs`
 - `trusted-gmp/src/delivery/` (message delivery logic)
 - `trusted-gmp/Cargo.toml`
+
+> ⚠️ **Verifier still exists.** This commit creates trusted-gmp alongside verifier.
 
 **Tasks:**
 
@@ -80,36 +148,69 @@ nix develop ./nix -c bash -c "cd coordinator && cargo test"
 - [ ] Configure operator wallet private key for each chain in config (MVM account, EVM EOA, SVM keypair) - these wallets must be funded with native tokens to pay gas for `lzReceive()` calls - can forge messages, same risk as verifier
 - [ ] Add configuration for trusted mode (which chains to connect)
 - [ ] Test message delivery works end-to-end
+- [ ] Verify verifier still builds and works (scripts unchanged)
 
 **Test:**
 
 ```bash
-# Build trusted-gmp
-nix develop ./nix -c bash -c "cd trusted-gmp && cargo build"
+# Run all unit tests (verifier still exists at this point)
+./testing-infra/run-all-unit-tests.sh
 
-# Test message delivery
-nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
+# Verify trusted-gmp builds and tests pass
+nix develop ./nix -c bash -c "cd trusted-gmp && cargo build && cargo test"
+
+# Verify coordinator still works
+nix develop ./nix -c bash -c "cd coordinator && cargo build && cargo test"
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.** E2E tests run in CI, not locally.
 
 ---
 
-### Commit 3: Remove Old Verifier, Keep Coordinator + Trusted GMP Only
+### Commit 3: Remove Old Verifier, Update Scripts
 
 **Files:**
 
 - `verifier/` (DELETED - old verifier is completely removed)
 - `coordinator/src/main.rs` (standalone service)
 - `trusted-gmp/src/main.rs` (standalone service)
+- All scripts listed in "Shell scripts that depend on verifier" section above
+
+> ⚠️ **This is the breaking change commit.** After this, verifier no longer exists.
 
 **Tasks:**
 
 - [ ] Delete the old `verifier/` crate entirely
-- [ ] Coordinator runs as standalone service (no verifier dependency)
-- [ ] Trusted GMP runs as standalone service (no verifier dependency)
-- [ ] Remove all validation logic (contracts handle this now)
-- [ ] Remove all signature generation (GMP handles authorization now)
-- [ ] Remove all private key configuration
+
+Testnet scripts:
+
+- [ ] Rename `run-verifier-local.sh` → `run-coordinator-local.sh`
+- [ ] Update `run-solver-local.sh` to check coordinator health (same API, different service name)
+- [ ] Update `check-testnet-preparedness.sh` to check coordinator config
+- [ ] Update `create-intent.sh` to use coordinator
+- [ ] Update `verify-verifier-evm-address.sh` or remove if no longer needed
+- [ ] Update `deploy-to-*.sh` scripts to reference coordinator config
+
+CI-E2E scripts:
+
+- [ ] Rename `configure-verifier.sh` → `configure-coordinator.sh` (all chains)
+- [ ] Rename `start-verifier.sh` → `start-coordinator.sh` (all test suites)
+- [ ] Update `run-tests-*.sh` to build coordinator instead of verifier
+- [ ] Update `*-submit-hub-intent.sh` to use `verify_coordinator_running`
+- [ ] Update `deploy-contracts.sh` and `deploy-contract.sh` scripts
+- [ ] Update `cleanup.sh` scripts to use `stop_coordinator`
+- [ ] Update `util.sh` helper functions (rename verifier → coordinator)
+
+CI/CD:
+
 - [ ] Update CI/CD to deploy coordinator + trusted-gmp instead of verifier
+
+Unit test script:
+
+- [ ] Update `testing-infra/run-all-unit-tests.sh`:
+  - Replace "Verifier" section with "Coordinator" section (`cd coordinator && cargo test`)
+  - Add "Trusted GMP" section (`cd trusted-gmp && cargo test`)
+  - Update summary table to show Coordinator and Trusted GMP instead of Verifier
 
 **Test:**
 
@@ -117,12 +218,14 @@ nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
 # Verify old verifier is removed
 test ! -d verifier && echo "Old verifier removed"
 
-# Test coordinator standalone
-nix develop ./nix -c bash -c "cd coordinator && cargo test"
+# Run all unit tests (now uses coordinator + trusted-gmp instead of verifier)
+./testing-infra/run-all-unit-tests.sh
 
-# Test trusted-gmp standalone
-nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
+# Test updated testnet scripts work
+./testing-infra/testnet/run-coordinator-local.sh --help
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.** E2E tests run in CI, not locally.
 
 ---
 
@@ -145,9 +248,14 @@ nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
 **Test:**
 
 ```bash
-# Run all Phase 0 integration tests
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Run Phase 0 integration tests
 nix develop ./nix -c bash -c "cd testing-infra/ci-e2e/phase0-tests && cargo test"
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 0 is complete.** E2E tests run in CI, not locally.
 
 ---
 

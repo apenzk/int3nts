@@ -34,9 +34,11 @@
 **Test:**
 
 ```bash
-# Build gmp-common (auto-included in workspace)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p gmp-common"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
 
 ---
 
@@ -59,9 +61,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p gmp-com
 **Test:**
 
 ```bash
-# Build and test gmp-common
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p gmp-common && cargo test -p gmp-common --tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
 
 ---
 
@@ -84,9 +88,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p gmp-com
 **Test:**
 
 ```bash
-# Build outflow-validator (verifies it compiles)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p outflow-validator"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
 
 ---
 
@@ -109,9 +115,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p outflow
 **Test:**
 
 ```bash
-# Build escrow-gmp (verifies it compiles)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p escrow-gmp"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
 
 ---
 
@@ -130,9 +138,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p escrow-
 **Test:**
 
 ```bash
-# Compile MVM contracts (verifies it compiles)
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move compile --named-addresses mvmt_intent=0x123"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
 
 ---
 
@@ -155,9 +165,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move compile 
 **Test:**
 
 ```bash
-# Build mock-lz-endpoint (verifies it compiles)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p mock-lz-endpoint"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 7.**
 
 ---
 
@@ -177,9 +189,14 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p mock-lz
 **Test:**
 
 ```bash
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
 # Run fee estimation script
 nix develop ./nix -c bash -c "cd intent-frameworks/svm && npx ts-node scripts/estimate-fees.ts"
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 8.**
 
 ---
 
@@ -202,9 +219,13 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && npx ts-node scripts/es
 **Test:**
 
 ```bash
-# Documentation review - no automated test
-# Manual: Review document for completeness
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Documentation review - manual
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 9.**
 
 ---
 
@@ -226,27 +247,24 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && npx ts-node scripts/es
 **Test:**
 
 ```bash
-# Documentation review - no automated test
-# Manual: Review document for completeness
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Documentation review - manual
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 1 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# Build all GMP packages (library crates only - stubs compile)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo build -p gmp-common -p mock-lz-endpoint -p outflow-validator -p escrow-gmp"
-
-# Compile MVM contracts
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move compile --named-addresses mvmt_intent=0x123"
-
-# Run message schema tests
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p gmp-common --tests"
-
-# Verify existing programs still build
-./intent-frameworks/svm/scripts/build.sh
+# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow) must pass before merging.**
 
 ---
 

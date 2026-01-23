@@ -29,8 +29,11 @@
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123 --filter layerzero"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
 
 ---
 
@@ -54,12 +57,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --d
 **Test:**
 
 ```bash
-# Test new GMP functionality
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123 --filter intent_gmp"
-
-# Verify existing intent tests still pass
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123 --filter intent"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
 
 ---
 
@@ -93,8 +95,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --d
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test -- --grep 'OutflowValidator'"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
 
 ---
 
@@ -123,22 +128,21 @@ nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test -- --grep 'Ou
 **Test:**
 
 ```bash
-# Test new GMP escrow
-nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test -- --grep 'InflowEscrowGMP'"
-
-# Verify existing EVM tests still pass
-nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test -- --grep 'Escrow'"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
 
 ---
 
-### Commit 5: Implement LayerZero simulator in verifier
+### Commit 5: Implement LayerZero simulator in trusted-gmp
 
 **Files:**
 
-- `verifier/src/layerzero_simulator.rs`
-- `verifier/src/main.rs`
-- `verifier/src/tests/simulator_tests.rs`
+- `trusted-gmp/src/layerzero_simulator.rs`
+- `trusted-gmp/src/main.rs`
+- `trusted-gmp/src/tests/simulator_tests.rs`
 
 **Tasks:**
 
@@ -146,18 +150,17 @@ nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test -- --grep 'Es
 - [ ] Watch for `MessageSent` events on all chains (MVM, SVM, EVM)
 - [ ] Deliver messages by calling `lzReceive` / `deliver_message`
 - [ ] Support configurable chain RPCs and mock endpoints
-- [ ] Integrate into existing verifier binary as `--mode simulator`
+- [ ] Integrate into trusted-gmp binary as `--mode simulator`
 - [ ] Test event parsing and message delivery
 
 **Test:**
 
 ```bash
-# Test new simulator
-nix develop ./nix -c bash -c "cd verifier && cargo test --test simulator_tests"
-
-# Verify existing verifier tests still pass
-nix develop ./nix -c bash -c "cd verifier && cargo test --lib"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
 
 ---
 
@@ -180,8 +183,11 @@ nix develop ./nix -c bash -c "cd verifier && cargo test --lib"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-outflow.sh"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 7.**
 
 ---
 
@@ -204,8 +210,11 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-outfl
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-inflow.sh"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 8.**
 
 ---
 
@@ -225,30 +234,22 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-inflo
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-outflow.sh"
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-inflow.sh"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 3 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# MVM unit tests
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123"
-
-# EVM unit tests
-nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test"
-
-# Verifier unit tests
-nix develop ./nix -c bash -c "cd verifier && cargo test"
-
-# Cross-chain E2E tests (requires Docker)
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-outflow.sh"
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-inflow.sh"
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-outflow.sh"
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-inflow.sh"
+# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow, plus new GMP cross-chain tests) must pass before merging.**
 
 ---
 
@@ -326,7 +327,7 @@ contract MockLayerZeroEndpoint {
 ### LayerZero Simulator
 
 ```rust
-// verifier/src/layerzero_simulator.rs
+// trusted-gmp/src/layerzero_simulator.rs
 pub struct LayerZeroSimulator {
     hub_rpc: String,
     connected_rpcs: HashMap<u64, String>,
@@ -352,7 +353,7 @@ impl LayerZeroSimulator {
 ### Simulator Configuration
 
 ```toml
-# verifier/config.ci.toml
+# trusted-gmp/config.ci.toml
 [mode]
 type = "ci_simulator"
 
@@ -400,8 +401,8 @@ jobs:
 
       - name: Start simulator
         run: |
-          cd verifier && cargo build --release
-          ./target/release/verifier --config config.ci.toml &
+          cd trusted-gmp && cargo build --release
+          ./target/release/trusted-gmp --config config.ci.toml &
           sleep 3
 
       - name: Run integration tests
@@ -429,7 +430,7 @@ At the end of Phase 3, update:
 - [ ] All 8 commits merged to feature branch
 - [ ] MVM GMP unit tests pass
 - [ ] EVM GMP unit tests pass
-- [ ] Verifier simulator tests pass
+- [ ] Trusted GMP simulator tests pass
 - [ ] All cross-chain E2E tests pass (MVM↔SVM, MVM↔EVM)
 - [ ] All three chains can send/receive GMP messages in test environment
 - [ ] Documentation updated

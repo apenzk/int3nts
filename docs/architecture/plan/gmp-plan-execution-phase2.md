@@ -28,9 +28,11 @@
 **Test:**
 
 ```bash
-# Run tests (auto-enters nix shell)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p mock-lz-endpoint --tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
 
 ---
 
@@ -66,9 +68,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p mock-lz-
 **Test:**
 
 ```bash
-# Run tests (auto-enters nix shell)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p outflow-validator --tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
 
 ---
 
@@ -102,9 +106,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p outflow-
 **Test:**
 
 ```bash
-# Run tests (auto-enters nix shell)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p escrow-gmp --tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
 
 ---
 
@@ -131,9 +137,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p escrow-g
 **Test:**
 
 ```bash
-# Run outflow integration test
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --test outflow_e2e"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
 
 ---
 
@@ -156,9 +164,11 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --
 **Test:**
 
 ```bash
-# Run inflow integration test
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --test inflow_e2e"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
 
 ---
 
@@ -181,9 +191,15 @@ nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --
 **Test:**
 
 ```bash
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Dry-run deployment scripts
 cd intent-frameworks/svm && ./scripts/deploy-outflow-validator.sh --dry-run
 cd intent-frameworks/svm && ./scripts/deploy-escrow-gmp.sh --dry-run
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 7.**
 
 ---
 
@@ -204,32 +220,26 @@ cd intent-frameworks/svm && ./scripts/deploy-escrow-gmp.sh --dry-run
 **Test:**
 
 ```bash
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
 # Verify deployment
 nix develop ./nix -c bash -c "solana program show <OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet"
 nix develop ./nix -c bash -c "solana program show <ESCROW_GMP_PROGRAM_ID> --url devnet"
-
-# Smoke test: read program state
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo run --bin read-config -- --cluster devnet"
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 2 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# Build all programs (auto-enters nix shell)
-./intent-frameworks/svm/scripts/build.sh
-
-# Unit tests (all GMP packages)
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p gmp-common -p mock-lz-endpoint -p outflow-validator -p escrow-gmp --tests"
-
-# Integration tests
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --test outflow_e2e"
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p tests --test inflow_e2e"
-
-# Verify existing intent_escrow still works
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && cargo test -p intent_escrow --tests"
+# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow) must pass before merging.**
 
 ---
 

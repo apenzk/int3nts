@@ -35,12 +35,11 @@
 **Test:**
 
 ```bash
-# Build coordinator (no database required for build)
-nix develop ./nix -c bash -c "cd coordinator && cargo build"
-
-# Database tests (requires PostgreSQL - skip in CI if unavailable)
-# nix develop ./nix -c bash -c "cd coordinator && sqlx database create && sqlx migrate run && cargo test -- --test db_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
 
 ---
 
@@ -65,8 +64,11 @@ nix develop ./nix -c bash -c "cd coordinator && cargo build"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test listener_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
 
 ---
 
@@ -94,8 +96,11 @@ nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test listener_te
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test api_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
 
 ---
 
@@ -117,8 +122,11 @@ nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test api_tests"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test websocket_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
 
 ---
 
@@ -142,8 +150,11 @@ nix develop ./nix -c bash -c "cd coordinator && cargo test -- --test websocket_t
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'coordinator'"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
 
 ---
 
@@ -168,8 +179,11 @@ nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'coordinator'"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd solver && cargo test -- --test coordinator_client_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 7.**
 
 ---
 
@@ -197,28 +211,27 @@ nix develop ./nix -c bash -c "cd solver && cargo test -- --test coordinator_clie
 **Test:**
 
 ```bash
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Docker smoke test
 docker-compose up -d coordinator
 curl http://localhost:8080/health
 docker-compose down
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 4 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# Coordinator unit tests
-nix develop ./nix -c bash -c "cd coordinator && cargo test"
-
-# Frontend integration tests
-nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'coordinator'"
-
-# Solver integration tests
-nix develop ./nix -c bash -c "cd solver && cargo test -- --test coordinator_client_tests"
-
-# Docker smoke test
-docker-compose up -d coordinator && curl http://localhost:8080/health && docker-compose down
+# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow) must pass before merging.**
 
 ---
 

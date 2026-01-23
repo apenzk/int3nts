@@ -26,8 +26,11 @@
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
 
 ---
 
@@ -48,8 +51,11 @@ nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "cd solver && cargo test -- --test gmp_tests"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
 
 ---
 
@@ -70,8 +76,11 @@ nix develop ./nix -c bash -c "cd solver && cargo test -- --test gmp_tests"
 **Test:**
 
 ```bash
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-testnet.sh"
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
 
 ---
 
@@ -93,9 +102,13 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-tes
 **Test:**
 
 ```bash
-# Documentation review - no automated test
-# Manual: Review documentation for completeness
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
+# Documentation review - manual
 ```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
 
 ---
 
@@ -117,37 +130,28 @@ nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-tes
 **Test:**
 
 ```bash
+# Run all unit tests
+./testing-infra/run-all-unit-tests.sh
+
 # Verify no verifier directory exists
 test ! -d verifier && echo "Old verifier removed"
 
-# Verify coordinator has no private key references (trusted-gmp requires operator wallet privkeys)
+# Verify coordinator has no private key references
 grep -r "private_key\|secret_key\|signing_key" coordinator/ && exit 1 || echo "Coordinator has no keys"
-
-# All tests pass
-nix develop ./nix -c bash -c "cd coordinator && cargo test"
-nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
 ```
+
+> ⚠️ **CI e2e tests must pass before Phase 5 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# Coordinator tests
-nix develop ./nix -c bash -c "cd coordinator && cargo test"
-
-# Trusted GMP tests
-nix develop ./nix -c bash -c "cd trusted-gmp && cargo test"
-
-# Frontend GMP tests
-nix develop ./nix -c bash -c "cd frontend && npm test -- --grep 'gmp'"
-
-# Solver GMP tests
-nix develop ./nix -c bash -c "cd solver && cargo test -- --test gmp_tests"
-
-# Full testnet integration (requires deployed contracts)
-nix develop ./nix -c bash -c "./testing-infra/ci-e2e/e2e-tests-gmp/full-flow-testnet.sh"
+# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
+./testing-infra/run-all-unit-tests.sh
 ```
+
+> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow, plus GMP cross-chain tests) must pass before merging.**
 
 ---
 
