@@ -51,6 +51,21 @@ Replace the verifier with **on-chain validation + GMP messaging**:
 
 ---
 
+## Implementation Roadmap
+
+See execution phase documents for detailed implementation plan:
+
+- [Phase 0: Verifier Separation](gmp-plan-execution-phase0.md) (3-4 days) - Separate verifier into Coordinator + Trusted GMP
+- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) (2-3 days)
+- [Phase 2: SVM Prototype](gmp-plan-execution-phase2.md) (3-4 days)
+- [Phase 3: Multi-Chain Expansion](gmp-plan-execution-phase3.md) (5-7 days)
+- [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (2 days) - Coordinator already extracted in Phase 0; this phase adds GMP message tracking
+- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (2-3 days)
+
+**Total Timeline:** 3-4 weeks (testnet only)
+
+---
+
 ## Verifier Separation (Phase 0)
 
 **Critical first step:** Before migrating to real GMP protocols, we split the current verifier into two independent services:
@@ -386,21 +401,6 @@ The verifier service transforms from **"Trusted Authority"** to **"Coordinator"*
 
 ---
 
-## Implementation Roadmap
-
-See execution phase documents for detailed implementation plan:
-
-- [Phase 0: Verifier Separation](gmp-plan-execution-phase0.md) (3-4 days) - **NEW** - Separate verifier into Coordinator + Trusted GMP
-- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) (2-3 days)
-- [Phase 2: SVM Prototype](gmp-plan-execution-phase2.md) (3-4 days)
-- [Phase 3: Multi-Chain Expansion](gmp-plan-execution-phase3.md) (5-7 days)
-- [Phase 4: Coordinator Service](gmp-plan-execution-phase4.md) (2 days) - **UPDATED** - Now focuses on GMP integration (coordinator already extracted in Phase 0)
-- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (2-3 days)
-
-**Total Timeline:** 2-3 weeks (testnet only)
-
----
-
 ## Cost Analysis
 
 ### Current System Costs
@@ -516,9 +516,13 @@ See execution phase documents for detailed implementation plan:
 
 ### Environment Configuration
 
-1. **Local/CI**: Deploy mock endpoints, run Trusted GMP service for message relay
-2. **Testnet**: Use real LayerZero endpoints on testnets
-3. **Production**: Use real LayerZero endpoints on mainnets
+| Environment | Movement | Solana | EVM |
+| ----------- | -------- | ------ | --- |
+| **Local/CI** | Mock + Trusted GMP | Mock + Trusted GMP | Mock + Trusted GMP |
+| **Testnet** | Mock + Trusted GMP (LZ not yet available) | Real LZ (devnet) | Real LZ (Base Sepolia) |
+| **Mainnet** | Real LZ | Real LZ | Real LZ |
+
+> **Note:** LayerZero does not yet support Movement testnet. Until LZ testnet support is available, Movement testnet uses mock endpoints + Trusted GMP (same as local/CI). Mainnet uses real LayerZero.
 
 ---
 
@@ -544,7 +548,7 @@ Replacing the trusted verifier with GMP integration is **FEASIBLE** but requires
 - **GMP integration** - add cross-chain messaging to all contracts
 - **New validation contracts** - deploy on all connected chains
 - **Coordinator service** - handles negotiation/discovery (no keys, no validation)
-- **4-6 week timeline** - achievable with AI-assisted development (testnet only)
+- **3-4 week timeline** - achievable with AI-assisted development (testnet only)
 
 ### Key Benefits
 
@@ -558,7 +562,7 @@ Replacing the trusted verifier with GMP integration is **FEASIBLE** but requires
 
 - ⚠️ **Higher gas costs** - GMP fees + on-chain validation
 - ⚠️ **Contract complexity** - moderate increase (~50-100 lines per contract)
-- ⚠️ **Development time** - 2-3 weeks for testnet (with AI assistance)
+- ⚠️ **Development time** - 3-4 weeks for testnet (with AI assistance)
 - ⚠️ **New dependencies** - rely on GMP protocol security
 - ⚠️ **Solver UX changes** - must use validation contracts
 

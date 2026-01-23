@@ -23,8 +23,10 @@
 
 - [ ] Create `gmp-common` library crate under `programs/` (auto-included via workspace glob `programs/*`)
 - [ ] Define LayerZero endpoint address constants for Solana devnet
-- [ ] Define LayerZero endpoint address constants for Movement testnet
-- [ ] **Environment Configuration**: Support testnet vs mainnet endpoint addresses (configuration management)
+- [ ] Define LayerZero endpoint address constants for Solana mainnet
+- [ ] Define LayerZero endpoint address constants for Movement mainnet (LZ not yet on Movement testnet)
+- [ ] Define mock endpoint addresses for Movement testnet (Trusted GMP until LZ supports testnet)
+- [ ] **Environment Configuration**: Support testnet (mock) vs mainnet (real LZ) endpoint addresses
 - [ ] **Endpoint Verification**: Document how to verify endpoint addresses are legitimate LayerZero endpoints
 - [ ] **Upgrade Handling**: Document procedures for handling endpoint contract upgrades
 - [ ] Document chain IDs and endpoint addresses
