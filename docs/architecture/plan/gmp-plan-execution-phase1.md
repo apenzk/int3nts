@@ -55,13 +55,13 @@
 
 **Tasks:**
 
-- [ ] Research LZ's Solana integration (OApp pattern in native Rust)
-- [ ] Research LZ's Movement/Aptos integration (OApp pattern in Move)
-- [ ] Document endpoint addresses for Solana devnet/mainnet
-- [ ] Document endpoint addresses for Movement testnet/mainnet (or confirm LZ not yet available)
-- [ ] Document how message payloads are wrapped by LZ on each chain
-- [ ] Document nonce tracking differences between chains
-- [ ] Identify any chain-specific limitations or quirks
+- [x] Research LZ's Solana integration (OApp pattern in native Rust)
+- [x] Research LZ's Movement/Aptos integration (OApp pattern in Move)
+- [x] Document endpoint addresses for Solana devnet/mainnet
+- [x] Document endpoint addresses for Movement testnet/mainnet (or confirm LZ not yet available)
+- [x] Document how message payloads are wrapped by LZ on each chain
+- [x] Document nonce tracking differences between chains
+- [x] Identify any chain-specific limitations or quirks
 
 **Test:**
 
