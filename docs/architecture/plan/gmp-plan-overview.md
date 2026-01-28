@@ -51,11 +51,11 @@ Add **on-chain validation + GMP messaging** so production does not depend on our
 
 See execution phase documents for detailed implementation plan:
 
-- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) (2-3 days)
-- [Phase 2: SVM Prototype](gmp-plan-execution-phase2.md) (3-4 days)
-- [Phase 3: Multi-Chain Expansion](gmp-plan-execution-phase3.md) (5-7 days)
+- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) (2-3 days) - Interfaces, message schemas, fee analysis
+- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) (5-7 days) - Build both chains together for real cross-chain testing
+- [Phase 3: EVM Expansion](gmp-plan-execution-phase3.md) (3-4 days) - Add EVM connected chain support
 - [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (2 days) - Add GMP message tracking to coordinator
-- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (2-3 days)
+- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (2-3 days) - Frontend, solver SDK, final cleanup
 
 **Total Timeline:** ~3 weeks (testnet only)
 

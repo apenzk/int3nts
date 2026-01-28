@@ -4,7 +4,7 @@
 **Depends On:** None
 **Blocks:** Phase 2
 
-**Note:** Coordinator and Trusted GMP already exist as separate services. Phase 1 focuses on on-chain validation design.
+**Goal:** Define the shared message format and interfaces that all chains will use. Research LayerZero integration for both Solana and Movement.
 
 ---
 
@@ -12,66 +12,148 @@
 
 > 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
 
-### Commit 1: Add gmp-common crate with LayerZero endpoint configuration
+### Commit 1: Research LayerZero integration for Solana and Movement
+
+**Files:**
+
+- `docs/architecture/plan/layerzero-solana-integration.md`
+- `docs/architecture/plan/layerzero-movement-integration.md`
+
+**Tasks:**
+
+- [ ] Research LayerZero's Solana integration (OApp pattern in native Rust)
+- [ ] Research LayerZero's Movement/Aptos integration (OApp pattern in Move)
+- [ ] Document endpoint addresses for Solana devnet/mainnet
+- [ ] Document endpoint addresses for Movement testnet/mainnet (or confirm LZ not yet available)
+- [ ] Document how message payloads are wrapped by LayerZero on each chain
+- [ ] Document nonce tracking differences between chains
+- [ ] Identify any chain-specific limitations or quirks
+
+**Test:**
+
+```bash
+# Documentation review - manual
+```
+
+> ⚠️ **Review complete before proceeding to Commit 2.**
+
+---
+
+### Commit 2: Define GMP message wire format specification
+
+**Files:**
+
+- `docs/architecture/plan/gmp-message-spec.md`
+
+**Tasks:**
+
+- [ ] Define wire format for `IntentRequirements` message (hub → connected chain)
+  - Fields: message_type, intent_id, recipient, amount, token, authorized_solver, expiry
+  - Encoding: fixed-width fields, big-endian integers, 32-byte addresses
+- [ ] Define wire format for `EscrowConfirmation` message (connected chain → hub)
+  - Fields: message_type, intent_id, escrow_id, amount, token, creator
+- [ ] Define wire format for `FulfillmentProof` message (hub → connected chain, or connected → hub)
+  - Fields: message_type, intent_id, solver, amount, timestamp
+- [ ] Document byte layout for each message type
+- [ ] Document message_type discriminator bytes
+- [ ] Explain why this format was chosen (simplicity, no dependencies, easy to implement in Move/Rust/Solidity)
+
+**Test:**
+
+```bash
+# Documentation review - manual
+```
+
+> ⚠️ **Review complete before proceeding to Commit 3.**
+
+---
+
+### Commit 3: Add gmp-common crate with message encoding (SVM)
 
 **Files:**
 
 - `intent-frameworks/svm/programs/gmp-common/Cargo.toml`
 - `intent-frameworks/svm/programs/gmp-common/src/lib.rs`
+- `intent-frameworks/svm/programs/gmp-common/src/messages.rs`
 - `intent-frameworks/svm/programs/gmp-common/src/endpoints.rs`
-- `docs/architecture/plan/gmp-endpoints.md`
+- `intent-frameworks/svm/programs/gmp-common/tests/message_tests.rs`
 
 **Tasks:**
 
-- [ ] Create `gmp-common` library crate under `programs/` (auto-included via workspace glob `programs/*`)
-- [ ] Define LayerZero endpoint address constants for Solana devnet
-- [ ] Define LayerZero endpoint address constants for Solana mainnet
-- [ ] Define LayerZero endpoint address constants for Movement mainnet (LZ not yet on Movement testnet)
-- [ ] Define mock endpoint addresses for Movement testnet (Trusted GMP until LZ supports testnet)
-- [ ] **Environment Configuration**: Support testnet (mock) vs mainnet (real LZ) endpoint addresses
-- [ ] **Endpoint Verification**: Document how to verify endpoint addresses are legitimate LayerZero endpoints
-- [ ] **Upgrade Handling**: Document procedures for handling endpoint contract upgrades
-- [ ] Document chain IDs and endpoint addresses
+- [ ] Create `gmp-common` library crate
+- [ ] Implement `IntentRequirements` encode/decode per wire format spec
+- [ ] Implement `EscrowConfirmation` encode/decode per wire format spec
+- [ ] Implement `FulfillmentProof` encode/decode per wire format spec
+- [ ] Define LayerZero endpoint addresses (devnet, mainnet, mock)
+- [ ] Test encoding matches documented wire format exactly
+- [ ] Test decoding of known byte sequences
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 2.**
+> ⚠️ **CI tests must pass before proceeding to Commit 4.**
 
 ---
 
-### Commit 2: Define GMP message payload schemas (Rust)
+### Commit 4: Add gmp-common module with message encoding (MVM)
 
 **Files:**
 
-- `intent-frameworks/svm/programs/gmp-common/src/messages.rs`
-- `intent-frameworks/svm/programs/gmp-common/tests/message_tests.rs`
-- `docs/architecture/plan/gmp-message-schemas.md`
+- `intent-frameworks/mvm/sources/gmp_common/messages.move`
+- `intent-frameworks/mvm/sources/gmp_common/endpoints.move`
+- `intent-frameworks/mvm/tests/gmp_common_tests.move`
 
 **Tasks:**
 
-- [ ] Define `IntentRequirements` struct (intent_id, recipient, amount, token, solver)
-- [ ] Define `EscrowConfirmation` struct (intent_id, escrow_id, amount, token)
-- [ ] Define `FulfillmentProof` struct (intent_id, solver, timestamp)
-- [ ] Document message encoding format (Borsh serialization)
-- [ ] Test encoding/decoding roundtrips correctly
+- [ ] Create `gmp_common` module
+- [ ] Implement `IntentRequirements` encode/decode per wire format spec
+- [ ] Implement `EscrowConfirmation` encode/decode per wire format spec
+- [ ] Implement `FulfillmentProof` encode/decode per wire format spec
+- [ ] Define LayerZero endpoint addresses (testnet, mainnet, mock)
+- [ ] Test encoding matches documented wire format exactly
+- [ ] Test decoding of known byte sequences (same test vectors as SVM)
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 3.**
+> ⚠️ **CI tests must pass before proceeding to Commit 5.**
 
 ---
 
-### Commit 3: Add outflow validation program interface
+### Commit 5: Add cross-chain encoding compatibility test
+
+**Files:**
+
+- `testing-infra/gmp-encoding-test/test-vectors.json`
+- `testing-infra/gmp-encoding-test/verify-svm.sh`
+- `testing-infra/gmp-encoding-test/verify-mvm.sh`
+
+**Tasks:**
+
+- [ ] Create test vectors JSON with known inputs and expected byte outputs
+- [ ] Script to run SVM encoding and compare to expected bytes
+- [ ] Script to run MVM encoding and compare to expected bytes
+- [ ] Verify both chains produce identical bytes for same logical message
+- [ ] Add to CI pipeline
+
+**Test:**
+
+```bash
+./testing-infra/gmp-encoding-test/verify-svm.sh
+./testing-infra/gmp-encoding-test/verify-mvm.sh
+```
+
+> ⚠️ **Both chains must produce identical encoding before proceeding to Commit 6.**
+
+---
+
+### Commit 6: Add outflow validator interface (SVM)
 
 **Files:**
 
@@ -80,25 +162,23 @@
 
 **Tasks:**
 
-- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`, `borsh`
-- [ ] Define `fulfill_intent` instruction signature (for authorized solvers to call)
-- [ ] Define `lz_receive` instruction for intent requirements
-- [ ] Define events: `ValidationSucceeded`, `ValidationFailed`
-- [ ] Define trusted remote verification via PDA
-- [ ] Add stub implementations that return `Ok(())` (to pass build)
+- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
+- [ ] Define `lz_receive` instruction for receiving intent requirements
+- [ ] Define `fulfill_intent` instruction for authorized solvers
+- [ ] Define `FulfillmentSucceeded`, `FulfillmentFailed` events
+- [ ] Add stub implementations that return `Ok(())`
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 4.**
+> ⚠️ **CI tests must pass before proceeding to Commit 7.**
 
 ---
 
-### Commit 4: Add inflow escrow GMP program interface
+### Commit 7: Add inflow escrow GMP interface (SVM)
 
 **Files:**
 
@@ -107,25 +187,23 @@
 
 **Tasks:**
 
-- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`, `borsh`
-- [ ] Define `receive_intent_requirements` instruction (GMP inbound)
+- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
+- [ ] Define `lz_receive` instruction for intent requirements
 - [ ] Define `create_escrow_with_validation` instruction
-- [ ] Define `receive_fulfillment_proof` instruction (GMP inbound)
-- [ ] Define `send_escrow_confirmation` instruction (GMP outbound)
-- [ ] Add stub implementations that return `Ok(())` (to pass build)
+- [ ] Define `lz_receive` instruction for fulfillment proof
+- [ ] Add stub implementations that return `Ok(())`
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
+> ⚠️ **CI tests must pass before proceeding to Commit 8.**
 
 ---
 
-### Commit 5: Add hub intent contract GMP interface (MVM)
+### Commit 8: Add hub intent GMP interface (MVM)
 
 **Files:**
 
@@ -133,238 +211,90 @@
 
 **Tasks:**
 
-- [ ] Define `send_intent_requirements()` function (GMP outbound) - stub
-- [ ] Define `receive_escrow_confirmation()` function (GMP inbound) - stub
-- [ ] Define `send_fulfillment_proof()` function (GMP outbound) - stub
+- [ ] Define `send_intent_requirements()` function signature (GMP outbound)
+- [ ] Define `receive_escrow_confirmation()` function signature (GMP inbound)
+- [ ] Define `send_fulfillment_proof()` function signature (GMP outbound)
+- [ ] Define `receive_fulfillment_proof()` function signature (GMP inbound)
+- [ ] Add stub implementations
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
+> ⚠️ **CI tests must pass before proceeding to Commit 9.**
 
 ---
 
-### Commit 6: Add mock LayerZero endpoint interface (Solana)
+### Commit 9: Add mock LayerZero endpoint interfaces (SVM + MVM)
 
 **Files:**
 
 - `intent-frameworks/svm/programs/mock-lz-endpoint/Cargo.toml`
-- `intent-frameworks/svm/programs/mock-lz-endpoint/src/lib.rs` (interface only - stub implementations)
+- `intent-frameworks/svm/programs/mock-lz-endpoint/src/lib.rs` (interface only)
+- `intent-frameworks/mvm/sources/mocks/mock_lz_endpoint.move` (interface only)
 
 **Tasks:**
 
-- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`, `borsh`
-- [ ] Define `send` instruction signature (emits event)
-- [ ] Define `deliver_message` instruction for simulator to call
-- [ ] Define `set_trusted_remote` for configuration
-- [ ] Define `MessageSent` event
-- [ ] Add stub implementations that return `Ok(())` (to pass build)
+- [ ] SVM: Define `send` instruction signature (emits event)
+- [ ] SVM: Define `deliver_message` instruction for simulator
+- [ ] SVM: Add stub implementations
+- [ ] MVM: Define `lz_send()` function signature
+- [ ] MVM: Define `deliver_message()` entry function for simulator
+- [ ] MVM: Add stub implementations
 
 **Test:**
 
 ```bash
-# Run all unit tests
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 7.**
+> ⚠️ **CI tests must pass before proceeding to Commit 10.**
 
 ---
 
-### Commit 7: Add fee estimation script
+### Commit 10: Add fee estimation and document endpoint configuration
 
 **Files:**
 
-- `intent-frameworks/svm/scripts/estimate-fees.ts`
+- `docs/architecture/plan/gmp-endpoints.md`
 - `docs/architecture/plan/gmp-fee-analysis.md`
 
 **Tasks:**
 
-- [ ] Script to estimate validation program compute units
-- [ ] Script to estimate LayerZero message fees
-- [ ] Document cost comparison vs current Trusted GMP (signer) system
+- [ ] Document all LayerZero endpoint addresses (Solana, Movement, mock)
+- [ ] Document environment configuration (local/CI uses mock, testnet uses mock for Movement + real for Solana, mainnet uses real everywhere)
+- [ ] Estimate LayerZero message fees for each route
+- [ ] Estimate on-chain validation gas costs
+- [ ] Compare costs to current Trusted GMP system
 
 **Test:**
 
 ```bash
-# Run all unit tests
-./testing-infra/run-all-unit-tests.sh
-
-# Run fee estimation script
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && npx ts-node scripts/estimate-fees.ts"
-```
-
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 8.**
-
----
-
-### Commit 8: Research LayerZero Solana integration
-
-**Files:**
-
-- `docs/architecture/plan/layerzero-solana-integration.md`
-
-**Tasks:**
-
-- [ ] Research LayerZero's Solana integration documentation
-- [ ] Understand LayerZero's Solana endpoint interface (how it differs from EVM)
-- [ ] Document how to implement OApp pattern in native Solana Rust (not just copy EVM pattern)
-- [ ] Document LayerZero's Solana-specific message format (how LayerZero wraps Borsh messages)
-- [ ] Document how to handle LayerZero's nonce tracking on Solana
-- [ ] Document account model differences (Solana uses accounts, not contracts)
-- [ ] Document program structure requirements (must implement OApp pattern manually)
-
-**Test:**
-
-```bash
-# Run all unit tests
-./testing-infra/run-all-unit-tests.sh
-
 # Documentation review - manual
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 9.**
-
----
-
-### Commit 9: Document LayerZero selection and integration details
-
-**Files:**
-
-- `docs/architecture/plan/gmp-selection.md`
-
-**Tasks:**
-
-- [ ] Document LayerZero v2 as final selection (decision already made)
-- [ ] Document LayerZero Solana integration details and requirements
-- [ ] Document Movement testnet/mainnet LayerZero endpoint addresses
-- [ ] Document LayerZero fee structure for testnet chains
-- [ ] Document OApp pattern implementation requirements for each chain type
-- [ ] Document endpoint configuration for testnet vs mainnet
-
-**Test:**
-
-```bash
-# Run all unit tests
-./testing-infra/run-all-unit-tests.sh
-
-# Documentation review - manual
-```
-
-> ⚠️ **CI e2e tests must pass before Phase 1 is complete.**
+> ⚠️ **Documentation complete before Phase 1 is complete.**
 
 ---
 
 ## Run All Tests
 
 ```bash
-# Run all unit tests (includes coordinator, trusted-gmp, solver, MVM, EVM, SVM, frontend)
 ./testing-infra/run-all-unit-tests.sh
 ```
-
-> ⚠️ **CI runs e2e tests automatically. All e2e tests (MVM, EVM, SVM - inflow + outflow) must pass before merging.**
-
----
-
-## Documentation Update
-
-At the end of Phase 1, update:
-
-- [ ] `docs/architecture/plan/gmp-endpoints.md` - Document all LayerZero endpoint addresses
-- [ ] `docs/architecture/plan/gmp-message-schemas.md` - Document message payload formats
-- [ ] `docs/architecture/plan/gmp-selection.md` - Final LayerZero selection rationale
-- [ ] Review conception documents for accuracy after changes
-- [ ] Check if other files reference old message formats and update them
 
 ---
 
 ## Exit Criteria
 
-- [ ] All 9 commits merged to feature branch
-- [ ] All SVM program interfaces build without errors
-- [ ] All MVM interfaces compile without errors
-- [ ] Message schema encoding tests pass
-- [ ] Fee analysis document complete
-- [ ] GMP selection document reviewed and approved
-
----
-
-## Reference: GMP Protocol Interfaces
-
-### LayerZero
-
-```solidity
-interface ILayerZeroEndpoint {
-    function send(
-        uint16 _dstChainId,
-        bytes calldata _destination,
-        bytes calldata _payload,
-        address payable _refundAddress,
-        address _zroPaymentAddress,
-        bytes calldata _adapterParams
-    ) external payable;
-}
-
-interface ILayerZeroReceiver {
-    function lzReceive(
-        uint16 _srcChainId,
-        bytes calldata _srcAddress,
-        uint64 _nonce,
-        bytes calldata _payload
-    ) external;
-}
-```
-
-### Axelar
-
-```solidity
-interface IAxelarGateway {
-    function callContract(
-        string calldata destinationChain,
-        string calldata contractAddress,
-        bytes calldata payload
-    ) external;
-}
-
-interface IAxelarExecutable {
-    function execute(
-        bytes32 commandId,
-        string calldata sourceChain,
-        string calldata sourceAddress,
-        bytes calldata payload
-    ) external;
-}
-```
-
-### Wormhole
-
-```solidity
-interface IWormhole {
-    function publishMessage(
-        uint32 nonce,
-        bytes memory payload,
-        uint8 consistencyLevel
-    ) external payable returns (uint64 sequence);
-}
-```
-
-### CCIP
-
-```solidity
-interface IRouterClient {
-    function ccipSend(
-        uint64 destinationChainSelector,
-        Client.EVM2AnyMessage calldata message
-    ) external payable returns (bytes32);
-}
-
-interface CCIPReceiver {
-    function ccipReceive(
-        Client.Any2EVMMessage calldata message
-    ) external;
-}
-```
+- [ ] All 10 commits merged to feature branch
+- [ ] Wire format spec documented and reviewed
+- [ ] SVM message encoding matches spec (tested)
+- [ ] MVM message encoding matches spec (tested)
+- [ ] Cross-chain encoding test passes (both produce identical bytes)
+- [ ] All interfaces defined for SVM and MVM
+- [ ] Mock endpoint interfaces defined for both chains
+- [ ] LayerZero research documented for both Solana and Movement
+- [ ] Fee analysis complete
