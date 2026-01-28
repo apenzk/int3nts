@@ -142,13 +142,13 @@
 
 **Tasks:**
 
-- [ ] Create `gmp_common` module
-- [ ] Implement `IntentRequirements` encode/decode per wire format spec
-- [ ] Implement `EscrowConfirmation` encode/decode per wire format spec
-- [ ] Implement `FulfillmentProof` encode/decode per wire format spec
-- [ ] Define GMP endpoint addresses (LZ testnet, LZ mainnet, local)
-- [ ] Test encoding matches documented wire format exactly
-- [ ] Test decoding of known byte sequences (same test vectors as SVM)
+- [x] Create `gmp_common` module
+- [x] Implement `IntentRequirements` encode/decode per wire format spec
+- [x] Implement `EscrowConfirmation` encode/decode per wire format spec
+- [x] Implement `FulfillmentProof` encode/decode per wire format spec
+- [x] Define GMP endpoint addresses (LZ testnet, LZ mainnet, local)
+- [x] Test encoding matches documented wire format exactly
+- [x] Test decoding of known byte sequences (same test vectors as SVM)
 
 **Test:**
 
