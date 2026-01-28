@@ -52,8 +52,8 @@ fn create_test_solver_config() -> solver::config::SolverConfig {
 }
 
 /// Create a PendingDraft with specified expiry time
-fn create_test_pending_draft(expiry_time: u64) -> solver::verifier_client::PendingDraft {
-    solver::verifier_client::PendingDraft {
+fn create_test_pending_draft(expiry_time: u64) -> solver::coordinator_gmp_client::PendingDraft {
+    solver::coordinator_gmp_client::PendingDraft {
         draft_id: "test-draft-1".to_string(),
         requester_addr: DUMMY_REQUESTER_ADDR_EVM.to_string(),
         draft_data: create_default_draft_data(),

@@ -5,7 +5,7 @@ const { setupIntentEscrowTests } = require("./helpers/setup");
 describe("IntentEscrow - Initialization", function () {
   let escrow;
   let token;
-  let verifier;
+  let approver;
   let requester;
   let solver;
   let intentId;
@@ -14,17 +14,17 @@ describe("IntentEscrow - Initialization", function () {
     const fixtures = await setupIntentEscrowTests();
     escrow = fixtures.escrow;
     token = fixtures.token;
-    verifier = fixtures.verifier;
+    approver = fixtures.approver;
     requester = fixtures.requester;
     solver = fixtures.solver;
     intentId = fixtures.intentId;
   });
 
-  /// 1. Test: Verifier Address Initialization
-  /// Verifies that the escrow is deployed with the correct verifier address.
-  /// Why: The verifier address is critical for signature validation. Incorrect initialization would break security.
-  it("Should initialize escrow with verifier address", async function () {
-    expect(await escrow.verifier()).to.equal(verifier.address);
+  /// 1. Test: Approver Address Initialization
+  /// Verifies that the escrow is deployed with the correct approver address.
+  /// Why: The approver address is critical for signature validation. Incorrect initialization would break security.
+  it("Should initialize escrow with approver address", async function () {
+    expect(await escrow.approver()).to.equal(approver.address);
   });
 
   /// 2. Test: Escrow Creation

@@ -66,7 +66,8 @@ generate_solver_config_evm() {
     local usdcon_metadata_evm="0x000000000000000000000000${evm_token_lower}"
     
     # Use environment variables from test setup
-    local verifier_url="${VERIFIER_URL:-http://127.0.0.1:3333}"
+    local coordinator_url="${COORDINATOR_URL:-http://127.0.0.1:3333}"
+    local trusted_gmp_url="${TRUSTED_GMP_URL:-http://127.0.0.1:3334}"
     local hub_rpc="${CHAIN1_URL:-http://127.0.0.1:8080/v1}"
     local evm_rpc="${EVM_RPC_URL:-http://127.0.0.1:8545}"
     local hub_chain_id="${HUB_CHAIN_ID:-1}"
@@ -77,7 +78,8 @@ generate_solver_config_evm() {
     local evm_private_key_env="${EVM_PRIVATE_KEY_ENV:-SOLVER_EVM_PRIVATE_KEY}"
     
     log "   Generating solver config:"
-    log "   - Verifier URL: $verifier_url"
+    log "   - Coordinator URL: $coordinator_url"
+    log "   - Trusted GMP URL: $trusted_gmp_url"
     log "   - Hub RPC: $hub_rpc (chain ID: $hub_chain_id)"
     log "   - EVM RPC: $evm_rpc (chain ID: $evm_chain_id)"
     log "   - Hub module address: $module_addr"
@@ -91,7 +93,8 @@ generate_solver_config_evm() {
 # Generated at: $(date)
 
 [service]
-verifier_url = "$verifier_url"
+coordinator_url = "$coordinator_url"
+trusted_gmp_url = "$trusted_gmp_url"
 polling_interval_ms = 1000  # Poll frequently for tests
 e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 

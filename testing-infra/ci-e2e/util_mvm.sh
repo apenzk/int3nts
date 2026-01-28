@@ -836,9 +836,9 @@ verify_solver_registered() {
     # Auto-detect chain_addr if not provided
     if [ -z "$chain_addr" ]; then
         chain_addr="${MOVEMENT_INTENT_MODULE_ADDR:-}"
-        # Try to get from verifier config
-        if [ -z "$chain_addr" ] && [ -n "$VERIFIER_CONFIG_PATH" ] && [ -f "$VERIFIER_CONFIG_PATH" ]; then
-            chain_addr=$(grep -A5 "\[hub_chain\]" "$VERIFIER_CONFIG_PATH" | grep "intent_module_addr" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/0x//')
+        # Try to get from coordinator config
+        if [ -z "$chain_addr" ] && [ -n "$COORDINATOR_CONFIG_PATH" ] && [ -f "$COORDINATOR_CONFIG_PATH" ]; then
+            chain_addr=$(grep -A5 "\[hub_chain\]" "$COORDINATOR_CONFIG_PATH" | grep "intent_module_addr" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/0x//')
         fi
         # Try to get from intent-account-chain1 profile
         if [ -z "$chain_addr" ]; then

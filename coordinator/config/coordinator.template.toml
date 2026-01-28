@@ -1,0 +1,52 @@
+# Coordinator Configuration
+#
+# This file contains configuration for the coordinator service (monitoring and negotiation).
+# Copy this template to coordinator.toml and update the values for your environment.
+# The coordinator does NOT hold cryptographic keys.
+
+# Hub Chain Configuration
+# The hub chain is where intents are created and monitored
+[hub_chain]
+name = "Hub Chain"
+rpc_url = "http://127.0.0.1:8080"
+chain_id = 1
+intent_module_addr = "0x123"
+
+# Connected EVM Chain Configuration
+# Include this section if you have a connected EVM chain (e.g. Base Sepolia)
+[connected_chain_evm]
+name = "Connected EVM Chain"
+rpc_url = "http://127.0.0.1:8545"
+chain_id = 31337
+escrow_contract_addr = "0x123"
+
+# Connected SVM Chain Configuration
+# Include this section if you have a connected Solana chain
+[connected_chain_svm]
+name = "Connected SVM Chain"
+rpc_url = "http://127.0.0.1:8899"
+chain_id = 1001
+escrow_program_id = "<your-svm-program-id>"
+
+# Coordinator Configuration
+[coordinator]
+polling_interval_ms = 2000
+validation_timeout_ms = 30000
+
+# Acceptance Criteria (optional)
+# Token pairs for exchange rate lookups; rates are fetched live from the solver.
+[acceptance]
+solver_url = "http://localhost:4444"
+
+# Example pairs - add [[acceptance.pairs]] entries for each source/target token pair:
+# [[acceptance.pairs]]
+# source_chain_id = 250
+# source_token = "0x..."
+# target_chain_id = 84532
+# target_token = "0x..."
+
+# API Server Configuration
+[api]
+host = "127.0.0.1"
+port = 3333
+cors_origins = ["http://localhost:3000", "http://localhost:3333"]

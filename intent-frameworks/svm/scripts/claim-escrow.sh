@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SVM Intent Framework Claim Escrow Script
 #
-# Claims escrow funds using a verifier signature.
+# Claims escrow funds using a approver signature.
 
 set -e
 

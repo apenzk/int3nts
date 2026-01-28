@@ -2,7 +2,7 @@
 
 # Cleanup for E2E Tests
 # 
-# This script stops all chains and verifier processes.
+# This script stops all chains and coordinator/trusted-gmp processes.
 # Profile cleanup is handled by individual stop-chain.sh scripts.
 # Used by both Aptos and EVM e2e tests.
 
@@ -25,20 +25,23 @@ rm -rf "$PROJECT_ROOT/.tmp/e2e-tests"
 ./testing-infra/ci-e2e/chain-connected-evm/stop-chain.sh || true
 ./testing-infra/ci-e2e/chain-hub/stop-chain.sh
 ./testing-infra/ci-e2e/chain-connected-mvm/stop-chain.sh
-stop_verifier
+stop_coordinator
+stop_trusted_gmp
 stop_solver
 
 # Delete target folders to ensure fresh binaries are built
 log_and_echo "   Deleting target folders for fresh builds..."
-rm -rf "$PROJECT_ROOT/verifier/target"
+rm -rf "$PROJECT_ROOT/coordinator/target"
+rm -rf "$PROJECT_ROOT/trusted-gmp/target"
 rm -rf "$PROJECT_ROOT/solver/target"
 
 # Clean up ephemeral test config to leave clean state
-rm -f "$PROJECT_ROOT/testing-infra/ci-e2e/.verifier-keys.env"
+rm -f "$PROJECT_ROOT/testing-infra/ci-e2e/.trusted-gmp-keys.env"
 rm -f "$PROJECT_ROOT/.tmp/intent-info.env"
 rm -f "$PROJECT_ROOT/.tmp/chain-info.env"
 rm -f "$PROJECT_ROOT/.tmp/solver-e2e.toml"
-rm -f "$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
+rm -f "$PROJECT_ROOT/coordinator/config/coordinator-e2e-ci-testing.toml"
+rm -f "$PROJECT_ROOT/trusted-gmp/config/trusted-gmp-e2e-ci-testing.toml"
 rm -f "$PROJECT_ROOT/solver/config/solver-e2e-ci-testing.toml"
 
 log_and_echo "✅ Cleanup complete"

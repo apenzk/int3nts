@@ -12,7 +12,7 @@
 # Usage: run_hardhat_command <command> [env_vars]
 # Example: run_hardhat_command "npx hardhat run scripts/deploy.js --network localhost"
 #          run_hardhat_command "npm install"
-#          run_hardhat_command "npx hardhat run scripts/deploy.js --network localhost" "VERIFIER_ADDR='0x123'"
+#          run_hardhat_command "npx hardhat run scripts/deploy.js --network localhost" "APPROVER_ADDR='0x123'"
 # Executes the command inside nix develop environment
 # If env_vars are provided, they are prepended to the command
 # Returns the exit code of the command

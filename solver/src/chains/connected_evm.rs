@@ -280,7 +280,7 @@ impl ConnectedEvmClient {
     ///
     /// The calldata format is: selector (4 bytes) + recipient (32 bytes) + amount (32 bytes) + intent_id (32 bytes).
     /// The ERC20 contract ignores the extra intent_id bytes, but they remain in the transaction
-    /// data for verifier tracking.
+    /// data for trusted-gmp tracking.
     ///
     /// Calls the Hardhat script `transfer-with-intent-id.js` via `npx hardhat run`,
     /// matching the approach used in E2E test scripts. The script uses Hardhat's signer[2]
@@ -377,7 +377,7 @@ impl ConnectedEvmClient {
         anyhow::bail!("Could not extract transaction hash from Hardhat output: {}", output_str)
     }
 
-    /// Claims an escrow by releasing funds to the solver with verifier approval
+    /// Claims an escrow by releasing funds to the solver with trusted-gmp approval
     ///
     /// Calls the `claim` function on the IntentEscrow contract using Hardhat script,
     /// matching the approach used in E2E test scripts. The Hardhat script handles
@@ -387,7 +387,7 @@ impl ConnectedEvmClient {
     ///
     /// * `escrow_addr` - Address of the IntentEscrow contract
     /// * `intent_id` - Intent ID (hex string with 0x prefix, will be converted to uint256)
-    /// * `signature` - Verifier's ECDSA signature (65 bytes: r || s || v)
+    /// * `signature` - Approver's (Trusted GMP) ECDSA signature (65 bytes: r || s || v)
     ///
     /// # Returns
     ///

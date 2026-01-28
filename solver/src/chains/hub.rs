@@ -420,7 +420,7 @@ impl HubChainClient {
     /// # Arguments
     ///
     /// * `intent_addr` - Object address of the intent to fulfill
-    /// * `verifier_signature_bytes` - Verifier's Ed25519 signature as bytes
+    /// * `approval_signature_bytes` - Trusted-gmp's Ed25519 signature as bytes (on-chain approval address)
     ///
     /// # Returns
     ///
@@ -429,10 +429,10 @@ impl HubChainClient {
     pub fn fulfill_outflow_intent(
         &self,
         intent_addr: &str,
-        verifier_signature_bytes: &[u8],
+        approval_signature_bytes: &[u8],
     ) -> Result<String> {
         // Convert signature bytes to hex string
-        let signature_hex = hex::encode(verifier_signature_bytes);
+        let signature_hex = hex::encode(approval_signature_bytes);
 
         // Determine CLI based on e2e_mode flag
         let cli = if self.e2e_mode {

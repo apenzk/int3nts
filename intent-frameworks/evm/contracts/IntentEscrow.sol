@@ -6,14 +6,14 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title IntentEscrow
- * @notice Escrow that holds funds and releases them to solvers when verifier signature checks out
+ * @notice Escrow that holds funds and releases them to solvers when approver signature checks out
  * @dev Based on Solana escrow pattern with ECDSA signature verification
  */
 contract IntentEscrow {
     using SafeERC20 for IERC20;
 
-    /// @notice Authorized verifier address that can approve releases
-    address public immutable verifier;
+    /// @notice Authorized approver address that can approve releases
+    address public immutable approver;
 
     /// @notice Contract-defined expiry duration (2 minutes in seconds)
     uint256 public constant EXPIRY_DURATION = 2 minutes;
@@ -42,17 +42,17 @@ contract IntentEscrow {
     error NoDeposit();
     error UnauthorizedRequester();
     error InvalidSignature();
-    error UnauthorizedVerifier();
+    error UnauthorizedApprover();
     error EscrowExpired(); // Escrow has expired (for claim operations)
     error EscrowNotExpiredYet(); // Escrow has not expired yet (for cancel operations)
 
     /**
-     * @notice Initialize the escrow with verifier address
-     * @param _verifier Address of the authorized verifier
+     * @notice Initialize the escrow with approver address
+     * @param _approver Address of the authorized approver
      */
-    constructor(address _verifier) {
-        require(_verifier != address(0), "Invalid verifier address");
-        verifier = _verifier;
+    constructor(address _approver) {
+        require(_approver != address(0), "Invalid approver address");
+        approver = _approver;
     }
 
     /**
@@ -102,9 +102,9 @@ contract IntentEscrow {
 
 
     /**
-     * @notice Claim escrow funds (solver only, requires verifier signature)
+     * @notice Claim escrow funds (solver only, requires approver signature)
      * @param intentId Intent identifier
-     * @param signature Verifier's ECDSA signature over keccak256(intentId) - signature itself is the approval
+     * @param signature Approver's ECDSA signature over keccak256(intentId) - signature itself is the approval
      */
     function claim(
         uint256 intentId,
@@ -120,14 +120,14 @@ contract IntentEscrow {
         if (block.timestamp > escrow.expiry) revert EscrowExpired();
 
         // Verify signature
-        // Verifier signs only the intent_id (symmetric with Aptos - signature itself is the approval)
+        // Approver signs only the intent_id (symmetric with Aptos - signature itself is the approval)
         bytes32 messageHash = keccak256(abi.encodePacked(intentId));
         bytes32 ethSignedMessageHash = keccak256(
             abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
         );
         
         address signer = recoverSigner(ethSignedMessageHash, signature);
-        if (signer != verifier) revert UnauthorizedVerifier();
+        if (signer != approver) revert UnauthorizedApprover();
 
         uint256 amount = escrow.amount;
         address token = escrow.token;

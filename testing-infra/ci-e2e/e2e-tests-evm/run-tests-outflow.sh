@@ -3,8 +3,8 @@
 # E2E Integration Test Runner - OUTFLOW (EVM)
 # 
 # This script runs the outflow E2E tests with EVM connected chain.
-# It sets up chains, deploys contracts, starts verifier for negotiation routing,
-# submits outflow intents via verifier, then runs the tests.
+# It sets up chains, deploys contracts, starts coordinator and trusted-gmp for negotiation routing,
+# submits outflow intents via coordinator, then runs the tests.
 
 set -e
 
@@ -31,10 +31,15 @@ log_and_echo "=========================================================="
 log_and_echo ""
 log_and_echo " Step 1: Build bins and pre-pull docker images"
 log_and_echo "========================================"
-pushd "$PROJECT_ROOT/verifier" > /dev/null
-cargo build --bin verifier --bin generate_keys --bin get_verifier_eth_address 2>&1 | tail -5
+pushd "$PROJECT_ROOT/coordinator" > /dev/null
+cargo build --bin coordinator 2>&1 | tail -5
 popd > /dev/null
-log_and_echo "   ✅ Verifier: verifier, generate_keys, get_verifier_eth_address"
+log_and_echo "   ✅ Coordinator: coordinator"
+
+pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+cargo build --bin trusted-gmp --bin generate_keys --bin get_approver_eth_address 2>&1 | tail -5
+popd > /dev/null
+log_and_echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys, get_approver_eth_address"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
 cargo build --bin solver --bin sign_intent 2>&1 | tail -5
@@ -44,9 +49,9 @@ log_and_echo "   ✅ Solver: solver, sign_intent"
 log_and_echo ""
 docker pull "$APTOS_DOCKER_IMAGE"
 
-log_and_echo " Step 2: Generating verifier keys..."
+log_and_echo " Step 2: Generating trusted-gmp keys..."
 log_and_echo "======================================="
-generate_verifier_keys
+generate_trusted_gmp_keys
 log_and_echo ""
 
 log_and_echo " Step 3: Setting up chains and deploying contracts..."
@@ -59,9 +64,10 @@ log_and_echo "======================================================"
 ./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
 
 log_and_echo ""
-log_and_echo " Step 4: Configuring and starting verifier (for negotiation routing)..."
+log_and_echo " Step 4: Configuring and starting coordinator and trusted-gmp (for negotiation routing)..."
 log_and_echo "=========================================================================="
-./testing-infra/ci-e2e/e2e-tests-evm/start-verifier.sh
+./testing-infra/ci-e2e/e2e-tests-evm/start-coordinator.sh
+./testing-infra/ci-e2e/e2e-tests-evm/start-trusted-gmp.sh
 
 # Start solver service for automatic signing and fulfillment
 log_and_echo ""
@@ -75,7 +81,7 @@ log_and_echo "======================================="
 log_and_echo ""
 log_and_echo " Step 5: Testing OUTFLOW intents (hub chain → connected EVM chain)..."
 log_and_echo "====================================================================="
-log_and_echo "   Submitting outflow cross-chain intents via verifier negotiation routing..."
+log_and_echo "   Submitting outflow cross-chain intents via coordinator negotiation routing..."
 log_and_echo ""
 log_and_echo " Pre-Intent Balance Validation"
 log_and_echo "=========================================="
@@ -96,7 +102,7 @@ log_and_echo "==========================================================="
 log_and_echo "   The solver service is running and will:"
 log_and_echo "   1. Detect the intent on hub chain"
 log_and_echo "   2. Transfer tokens to requester on connected EVM chain"
-log_and_echo "   3. Call verifier to validate and get approval signature"
+log_and_echo "   3. Call trusted-gmp to validate and get approval signature"
 log_and_echo "   4. Fulfill the hub intent with approval"
 log_and_echo ""
 

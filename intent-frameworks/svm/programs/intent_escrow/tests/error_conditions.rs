@@ -63,7 +63,7 @@ async fn test_handle_maximum_u64_value_in_create_escrow() {
     // Create fresh accounts for this test to avoid overflow from existing balances
     let requester = solana_sdk::signature::Keypair::new();
     let solver = solana_sdk::signature::Keypair::new();
-    let verifier = solana_sdk::signature::Keypair::new();
+    let approver = solana_sdk::signature::Keypair::new();
     let mint_authority = solana_sdk::signature::Keypair::new();
 
     // Fund requester
@@ -78,8 +78,8 @@ async fn test_handle_maximum_u64_value_in_create_escrow() {
     let mint = create_mint(&mut context, &payer, &mint_authority, 6).await;
     let requester_token = create_token_account(&mut context, &payer, mint, requester.pubkey()).await;
 
-    // Initialize program with fresh verifier
-    initialize_program(&mut context, &requester, program_id, verifier.pubkey()).await;
+    // Initialize program with fresh approver
+    initialize_program(&mut context, &requester, program_id, approver.pubkey()).await;
 
     let intent_id = generate_intent_id();
     let max_amount = u64::MAX;

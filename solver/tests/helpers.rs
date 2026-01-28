@@ -124,7 +124,8 @@ pub fn create_default_token_pair() -> solver::acceptance::TokenPair {
 /// ```
 pub fn create_default_service_config() -> solver::config::ServiceConfig {
     solver::config::ServiceConfig {
-        verifier_url: "http://127.0.0.1:3333".to_string(),
+        coordinator_url: "http://127.0.0.1:3333".to_string(),
+        trusted_gmp_url: "http://127.0.0.1:3334".to_string(),
         polling_interval_ms: 2000,
         e2e_mode: false,
         acceptance_api_host: "127.0.0.1".to_string(),

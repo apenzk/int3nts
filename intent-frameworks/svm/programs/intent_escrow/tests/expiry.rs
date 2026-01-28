@@ -214,7 +214,7 @@ async fn test_verify_expiry_timestamp_is_stored_correctly() {
 }
 
 /// 3. Test: Expired Escrow Claim Prevention
-/// Verifies that expired escrows cannot be claimed, even with valid verifier signatures.
+/// Verifies that expired escrows cannot be claimed, even with valid approver signatures.
 /// Why: Expired escrows should only be cancellable by the requester, not claimable by solvers.
 #[tokio::test]
 async fn test_prevent_claim_on_expired_escrow() {
@@ -270,11 +270,11 @@ async fn test_prevent_claim_on_expired_escrow() {
     context.set_sysvar(&clock);
 
     // Claims blocked after expiry
-    let signature = env.verifier.sign_message(&intent_id);
+    let signature = env.approver.sign_message(&intent_id);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,

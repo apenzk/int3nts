@@ -1,7 +1,7 @@
 [package]
 name = "intent_escrow"
 version = "0.1.0"
-description = "Solana escrow for cross-chain intents with verifier signature verification"
+description = "Solana escrow for cross-chain intents with approver signature verification"
 edition = "2021"
 
 [lib]

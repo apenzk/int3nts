@@ -181,12 +181,12 @@ pub async fn get_token_balance(
 // PROGRAM HELPERS
 // ============================================================================
 
-/// Helper: Initialize the program state with a verifier
+/// Helper: Initialize the program state with an approver
 pub async fn initialize_program(
     context: &mut ProgramTestContext,
     payer: &Keypair,
     program_id: Pubkey,
-    verifier: Pubkey,
+    approver: Pubkey,
 ) -> Pubkey {
     let (state_pda, _state_bump) =
         Pubkey::find_program_address(&[seeds::STATE_SEED], &program_id);
@@ -198,7 +198,7 @@ pub async fn initialize_program(
             AccountMeta::new(payer.pubkey(), true),
             AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         ],
-        data: EscrowInstruction::Initialize { verifier }
+        data: EscrowInstruction::Initialize { approver }
             .try_to_vec()
             .unwrap(),
     };
@@ -318,7 +318,7 @@ pub struct TestEnv {
     pub program_id: Pubkey,
     pub requester: Keypair,
     pub solver: Keypair,
-    pub verifier: Keypair,
+    pub approver: Keypair,
     pub mint_authority: Keypair,
     pub mint: Pubkey,
     pub requester_token: Pubkey,
@@ -333,7 +333,7 @@ pub async fn setup_basic_env(context: &mut ProgramTestContext) -> TestEnv {
     let program_id = test_program_id();
     let requester = Keypair::new();
     let solver = Keypair::new();
-    let verifier = Keypair::new();
+    let approver = Keypair::new();
     let mint_authority = Keypair::new();
 
     // Fund requester and solver
@@ -363,13 +363,13 @@ pub async fn setup_basic_env(context: &mut ProgramTestContext) -> TestEnv {
     .await;
 
     // Initialize program
-    let state_pda = initialize_program(context, &requester, program_id, verifier.pubkey()).await;
+    let state_pda = initialize_program(context, &requester, program_id, approver.pubkey()).await;
 
     TestEnv {
         program_id,
         requester,
         solver,
-        verifier,
+        approver,
         mint_authority,
         mint,
         requester_token,
@@ -383,7 +383,7 @@ pub async fn setup_basic_env(context: &mut ProgramTestContext) -> TestEnv {
 // ============================================================================
 
 /// Helper: Create an Ed25519 verify instruction for signature verification
-/// The signature must be created by signing the message with the verifier's keypair
+/// The signature must be created by signing the message with the approver's keypair
 pub fn create_ed25519_instruction(
     message: &[u8],
     signature: &[u8; 64],

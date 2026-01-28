@@ -37,9 +37,9 @@ impl Processor {
             .map_err(|_| EscrowError::InvalidInstructionData)?;
 
         match instruction {
-            EscrowInstruction::Initialize { verifier } => {
+            EscrowInstruction::Initialize { approver } => {
                 msg!("Instruction: Initialize");
-                Self::process_initialize(program_id, accounts, verifier)
+                Self::process_initialize(program_id, accounts, approver)
             }
             EscrowInstruction::CreateEscrow {
                 intent_id,
@@ -63,7 +63,7 @@ impl Processor {
     fn process_initialize(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
-        verifier: Pubkey,
+        approver: Pubkey,
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let state_account = next_account_info(account_info_iter)?;
@@ -95,10 +95,10 @@ impl Processor {
         )?;
 
         // Initialize state
-        let state = EscrowState::new(verifier);
+        let state = EscrowState::new(approver);
         state.serialize(&mut &mut state_account.data.borrow_mut()[..])?;
 
-        msg!("Escrow program initialized with verifier: {}", verifier);
+        msg!("Escrow program initialized with approver: {}", approver);
         Ok(())
     }
 
@@ -283,7 +283,7 @@ impl Processor {
         // Verify Ed25519 signature via instruction introspection
         Self::verify_ed25519_signature(
             instruction_sysvar,
-            &state.verifier,
+            &state.approver,
             &intent_id,
             &signature,
         )?;
@@ -435,7 +435,7 @@ impl Processor {
         let instruction_message = &data[msg_offset..msg_offset + msg_size];
 
         if instruction_pubkey != expected_pubkey.to_bytes().as_slice() {
-            return Err(EscrowError::UnauthorizedVerifier.into());
+            return Err(EscrowError::UnauthorizedApprover.into());
         }
         if instruction_signature != expected_signature.as_slice() {
             return Err(EscrowError::InvalidSignature.into());

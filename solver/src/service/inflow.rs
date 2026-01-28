@@ -5,12 +5,12 @@
 //! Flow:
 //! 1. **Monitor Escrows**: Poll connected chain for escrow deposits matching tracked inflow intents
 //! 2. **Fulfill Intent**: Call hub chain `fulfill_inflow_intent` when escrow is detected
-//! 3. **Release Escrow**: Poll verifier for approval signature, then release escrow on connected chain
+//! 3. **Release Escrow**: Poll trusted-gmp for approval signature, then release escrow on connected chain
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient};
 use crate::config::SolverConfig;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
-use crate::verifier_client::VerifierClient;
+use crate::coordinator_gmp_client::CoordinatorGmpClient;
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::sync::Arc;
@@ -23,8 +23,8 @@ pub struct InflowService {
     config: SolverConfig,
     /// Intent tracker for tracking signed intents (shared with other services)
     tracker: Arc<IntentTracker>,
-    /// Verifier base URL (client created on-demand to avoid blocking client in async context)
-    verifier_url: String,
+    /// Trusted GMP base URL for approval polling
+    trusted_gmp_url: String,
     /// Optional connected MVM chain client
     mvm_client: Option<ConnectedMvmClient>,
     /// Optional connected EVM chain client
@@ -52,17 +52,17 @@ impl InflowService {
     /// * `Ok(InflowService)` - Successfully created service
     /// * `Err(anyhow::Error)` - Failed to create service
     pub fn new(config: SolverConfig, tracker: Arc<IntentTracker>) -> Result<Self> {
-        let verifier_url = config.service.verifier_url.clone();
+        let trusted_gmp_url = config.service.trusted_gmp_url.clone();
 
         // Create connected chain clients for all configured chains
         let mvm_client = config.get_mvm_config()
             .map(|cfg| ConnectedMvmClient::new(cfg))
             .transpose()?;
-        
+
         let evm_client = config.get_evm_config()
             .map(|cfg| ConnectedEvmClient::new(cfg))
             .transpose()?;
-        
+
         let svm_client = config.get_svm_config()
             .map(|cfg| ConnectedSvmClient::new(cfg))
             .transpose()?;
@@ -70,7 +70,7 @@ impl InflowService {
         Ok(Self {
             config,
             tracker,
-            verifier_url,
+            trusted_gmp_url,
             mvm_client,
             evm_client,
             svm_client,
@@ -179,7 +179,7 @@ impl InflowService {
         if let Some(client) = &self.evm_client {
             match client.get_block_number().await {
                 Ok(current_block) => {
-                    // Look back 200 blocks (~7 minutes on Base, same as verifier)
+                    // Look back 200 blocks (~7 minutes on Base, same as trusted-gmp)
                     let from_block = if current_block > 200 {
                         current_block - 200
                     } else {
@@ -279,10 +279,10 @@ impl InflowService {
         hub_client.fulfill_inflow_intent(intent_addr, payment_amount)
     }
 
-    /// Releases an escrow on the connected chain after getting verifier approval
+    /// Releases an escrow on the connected chain after getting trusted-gmp approval
     ///
     /// This function:
-    /// 1. Polls the verifier for an approval signature matching the intent_id (with retries)
+    /// 1. Polls the trusted-gmp for an approval signature matching the intent_id (with retries)
     /// 2. Converts the signature to the appropriate format (Ed25519 for MVM, ECDSA for EVM)
     /// 3. Calls the escrow release function on the connected chain
     ///
@@ -303,26 +303,26 @@ impl InflowService {
         intent: &TrackedIntent,
         escrow_id: &str,
     ) -> Result<String> {
-        // Poll verifier for approval until escrow expiry
-        let verifier_url = self.verifier_url.clone();
+        // Poll trusted-gmp for approval until escrow expiry
+        let trusted_gmp_url = self.trusted_gmp_url.clone();
         let intent_id_normalized = normalize_intent_id(&intent.intent_id);
         let poll_interval = Duration::from_secs(2);
         let expiry_time = intent.expiry_time;
-        
+
         let approval = loop {
             let current_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-            
+
             if current_time >= expiry_time {
                 anyhow::bail!("Escrow expired while waiting for approval (expiry: {})", expiry_time);
             }
-            
+
             let approvals = tokio::task::spawn_blocking({
-                let verifier_url = verifier_url.clone();
+                let trusted_gmp_url = trusted_gmp_url.clone();
                 move || {
-                    let client = VerifierClient::new(&verifier_url);
+                    let client = CoordinatorGmpClient::new(&trusted_gmp_url);
                     client.get_approvals()
                 }
             })
@@ -378,7 +378,7 @@ impl InflowService {
     /// This function continuously:
     /// 1. Polls for escrows matching tracked inflow intents
     /// 2. Fulfills intents on hub chain when escrows are detected
-    /// 3. Releases escrows after getting verifier approval
+    /// 3. Releases escrows after getting trusted-gmp approval
     ///
     /// The loop runs at the configured polling interval.
     pub async fn run(&self) -> Result<()> {
@@ -413,7 +413,7 @@ impl InflowService {
                             }
                         }
 
-                        // Release escrow after a delay (wait for verifier to generate approval)
+                        // Release escrow after a delay (wait for trusted-gmp to generate approval)
                         tokio::time::sleep(Duration::from_secs(2)).await;
 
                         match self

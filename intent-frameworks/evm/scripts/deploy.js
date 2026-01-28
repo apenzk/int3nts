@@ -1,59 +1,59 @@
 //! IntentEscrow contract deployment utility
 //!
-//! This script deploys the IntentEscrow contract with a specified verifier address.
-//! If no verifier address is provided via environment variable, uses the deployer account.
+//! This script deploys the IntentEscrow contract with a specified approver address.
+//! If no approver address is provided via environment variable, uses the deployer account.
 
 const hre = require("hardhat");
 
-/// Deploys IntentEscrow contract with verifier
+/// Deploys IntentEscrow contract with approver
 ///
 /// # Environment Variables
-/// - `VERIFIER_ADDR`: Optional verifier Ethereum address (defaults to deployer address)
+/// - `APPROVER_ADDR`: Optional approver Ethereum address (defaults to deployer address)
 ///
 /// # Returns
-/// Outputs contract address, verifier address, and deployment status on success.
+/// Outputs contract address, approver address, and deployment status on success.
 async function main() {
   console.log("Deploying IntentEscrow...");
 
   // Get signers
   const [deployer] = await hre.ethers.getSigners();
   
-  // Get verifier address from environment variable or use Hardhat account 1 as fallback
-  const verifierAddress = process.env.VERIFIER_ADDR;
-  let verifierAddr;
+  // Get approver address from environment variable or use deployer as fallback
+  const approverAddress = process.env.APPROVER_ADDR;
+  let approverAddr;
   
-  if (verifierAddress) {
-    verifierAddr = verifierAddress;
-    console.log("Using verifier address from config:", verifierAddr);
+  if (approverAddress) {
+    approverAddr = approverAddress;
+    console.log("Using approver address from config:", approverAddr);
   } else {
-    // Fallback to deployer as verifier
-    // Account 0 = deployer/verifier, Account 1 = requester, Account 2 = solver
-    verifierAddr = deployer.address;
-    console.log("Using deployer as verifier:", verifierAddr);
+    // Fallback to deployer as approver
+    // Account 0 = deployer/approver, Account 1 = requester, Account 2 = solver
+    approverAddr = deployer.address;
+    console.log("Using deployer as approver:", approverAddr);
   }
   
   console.log("Deploying with account:", deployer.address);
-  console.log("Verifier address:", verifierAddr);
+  console.log("Approver address:", approverAddr);
 
-  // Deploy escrow with verifier address
+  // Deploy escrow with approver address
   const IntentEscrow = await hre.ethers.getContractFactory("IntentEscrow");
-  const escrow = await IntentEscrow.deploy(verifierAddr);
+  const escrow = await IntentEscrow.deploy(approverAddr);
 
   await escrow.waitForDeployment();
 
   const escrowAddress = await escrow.getAddress();
   console.log("IntentEscrow deployed to:", escrowAddress);
-  console.log("Verifier set to:", verifierAddr);
+  console.log("Approver set to:", approverAddr);
 
   // Wait a moment for RPC indexing
   console.log("Waiting for RPC indexing...");
   await new Promise(r => setTimeout(r, 5000));
 
   // Verify deployment with retry
-  let verifierFromContract;
+  let approverFromContract;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      verifierFromContract = await escrow.verifier();
+      approverFromContract = await escrow.approver();
       break;
     } catch (err) {
       if (attempt === 3) {
@@ -66,10 +66,10 @@ async function main() {
       await new Promise(r => setTimeout(r, 3000));
     }
   }
-  console.log("Verifier from contract:", verifierFromContract);
+  console.log("Approver from contract:", approverFromContract);
   
-  if (verifierFromContract.toLowerCase() !== verifierAddr.toLowerCase()) {
-    throw new Error("Verifier address mismatch!");
+  if (approverFromContract.toLowerCase() !== approverAddr.toLowerCase()) {
+    throw new Error("Approver address mismatch!");
   }
 
   console.log("\n✅ Deployment successful!");

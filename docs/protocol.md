@@ -1,27 +1,28 @@
 # Protocol Specification
 
-This document specifies the cross-chain intent protocol: how intents, escrows, and verifiers work together across chains. For component-specific implementation details, see the component README files in the repository.
+This document specifies the cross-chain intent protocol: how intents, escrows, coordinator, and trusted-gmp services work together across chains. For component-specific implementation details, see the component README files in the repository.
 
 ## Table of Contents
 
 - [Protocol Overview](#protocol-overview)
 - [Cross-Chain Flow](#cross-chain-flow)
 - [Cross-Chain Linking Mechanism](#cross-chain-linking-mechanism)
-- [Verifier Validation Protocol](#verifier-validation-protocol)
+- [Trusted GMP Validation Protocol](#trusted-gmp-validation-protocol)
 
 ## Protocol Overview
 
-The cross-chain intent protocol enables secure asset transfers between chains using a verifier-based approval mechanism:
+The cross-chain intent protocol enables secure asset transfers between chains using a coordinator and trusted-gmp approval mechanism:
 
 1. **Hub Chain**: Intents are created and fulfilled (see [MVM Intent Framework](intent-frameworks/mvm/README.md))
-2. **Connected Chain**: Escrows lock funds awaiting verifier approval (see [Intent Frameworks](intent-frameworks/README.md) or MVM escrows)
-3. **Verifier Service**: Monitors both chains and provides approval signatures (see [Trusted Verifier](verifier/README.md))
+2. **Connected Chain**: Escrows lock funds awaiting trusted-gmp approval (see [Intent Frameworks](intent-frameworks/README.md) or MVM escrows)
+3. **Coordinator Service**: Monitors both chains and provides event caching and negotiation routing (see [Coordinator](coordinator/README.md))
+4. **Trusted GMP Service**: Validates cross-chain conditions and provides approval signatures (see [Trusted GMP](trusted-gmp/README.md))
 
 The protocol links these components using `intent_id` to correlate events across chains.
 
 ## Cross-Chain Flow
 
-The intent framework enables cross-chain escrow operations where intents are created on a hub chain and escrows are created on connected chains. The verifier monitors both chains and provides approval signatures to authorize escrow release.
+The intent framework enables cross-chain escrow operations where intents are created on a hub chain and escrows are created on connected chains. The coordinator monitors both chains and caches events; the trusted-gmp service validates conditions and provides approval signatures to authorize escrow release.
 
 ### Inflow Flow
 
@@ -29,48 +30,49 @@ The intent framework enables cross-chain escrow operations where intents are cre
 sequenceDiagram
     participant Requester
     participant Hub as Hub Chain<br/>(MVM)
-    participant Verifier as Trusted Verifier<br/>(Rust)
+    participant Coordinator as Coordinator<br/>(Rust)
+    participant TrustedGMP as Trusted GMP<br/>(Rust)
     participant Connected as Connected Chain<br/>(MVM/EVM/SVM)
     participant Solver
 
     Note over Requester,Solver: Phase 1: Intent Creation on Hub Chain
     Requester->>Requester: create_cross_chain_draft_intent()<br/>(off-chain, creates Draftintent)
-    Requester->>Verifier: POST /draftintent<br/>(submit draft, open to any solver)
-    Verifier->>Verifier: Store draft
-    Solver->>Verifier: GET /draftintents/pending<br/>(poll for drafts)
-    Verifier->>Solver: Return pending drafts
+    Requester->>Coordinator: POST /draftintent<br/>(submit draft, open to any solver)
+    Coordinator->>Coordinator: Store draft
+    Solver->>Coordinator: GET /draftintents/pending<br/>(poll for drafts)
+    Coordinator->>Solver: Return pending drafts
     Solver->>Solver: Solver signs<br/>(off-chain, returns Ed25519 signature)
-    Solver->>Verifier: POST /draftintent/:id/signature<br/>(submit signature, FCFS)
-    Requester->>Verifier: GET /draftintent/:id/signature<br/>(poll for signature)
-    Verifier->>Requester: Return signature
+    Solver->>Coordinator: POST /draftintent/:id/signature<br/>(submit signature, FCFS)
+    Requester->>Coordinator: GET /draftintent/:id/signature<br/>(poll for signature)
+    Coordinator->>Requester: Return signature
     Requester->>Hub: create_inflow_intent(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>desired_metadata, desired_amount, desired_chain_id,<br/>expiry_time, intent_id, solver, solver_signature)
-    Hub->>Verifier: LimitOrderEvent(intent_id, offered_amount,<br/>offered_chain_id, desired_amount,<br/>desired_chain_id, expiry, revocable=false)
+    Hub->>TrustedGMP: LimitOrderEvent(intent_id, offered_amount,<br/>offered_chain_id, desired_amount,<br/>desired_chain_id, expiry, revocable=false)
 
     Note over Requester,Solver: Phase 2: Escrow Creation on Connected Chain
     alt MVM Chain
-        Requester->>Connected: create_escrow_from_fa(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>verifier_public_key, expiry_time, intent_id,<br/>reserved_solver, desired_chain_id)
+        Requester->>Connected: create_escrow_from_fa(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>approver_public_key, expiry_time, intent_id,<br/>reserved_solver, desired_chain_id)
     else EVM Chain
         Requester->>Connected: createEscrow(intentId, token,<br/>amount, reservedSolver)
     else SVM Chain
         Requester->>Connected: create_escrow(intent_id, amount, reserved_solver)
     end
     Connected->>Connected: Lock assets
-    Connected->>Verifier: OracleLimitOrderEvent/EscrowInitialized(<br/>intent_id, reserved_solver, revocable=false)
+    Connected->>TrustedGMP: OracleLimitOrderEvent/EscrowInitialized(<br/>intent_id, reserved_solver, revocable=false)
 
     Note over Requester,Solver: Phase 3: Intent Fulfillment on Hub Chain
     Solver->>Hub: fulfill_inflow_intent(<br/>intent, payment_amount)
-    Hub->>Verifier: LimitOrderFulfillmentEvent(<br/>intent_id, solver, provided_amount)
+    Hub->>TrustedGMP: LimitOrderFulfillmentEvent(<br/>intent_id, solver, provided_amount)
 
-    Note over Requester,Solver: Phase 4: Verifier Validation and Approval
-    Verifier->>Verifier: Match intent_id between<br/>fulfillment and escrow
-    Verifier->>Verifier: Validate fulfillment<br/>conditions met
-    Verifier->>Solver: Generate approval signature
+    Note over Requester,Solver: Phase 4: Trusted GMP Validation and Approval
+    TrustedGMP->>TrustedGMP: Match intent_id between<br/>fulfillment and escrow
+    TrustedGMP->>TrustedGMP: Validate fulfillment<br/>conditions met
+    TrustedGMP->>Solver: Generate approval signature
 
     Note over Requester,Solver: Phase 5: Escrow Release on Connected Chain
-    Verifier->>Solver: Delivers approval signature<br/>(Ed25519 for MVM/SVM, ECDSA for EVM)<br/>Signature itself is the approval
+    TrustedGMP->>Solver: Delivers approval signature<br/>(Ed25519 for MVM/SVM, ECDSA for EVM)<br/>Signature itself is the approval
     alt MVM Chain
         Note over Solver: Anyone can call<br/>(funds go to reserved_solver)
-        Solver->>Connected: complete_escrow_from_fa(<br/>escrow_intent, payment_amount,<br/>verifier_signature_bytes)
+        Solver->>Connected: complete_escrow_from_fa(<br/>escrow_intent, payment_amount,<br/>approver_signature_bytes)
     else EVM Chain
         Note over Solver: Anyone can call<br/>(funds go to reservedSolver)
         Solver->>Connected: claim(intentId, signature)
@@ -84,21 +86,21 @@ sequenceDiagram
 
 ### Inflow Flow Steps
 
-1. **Off-chain (before Hub)**: Requester and solver negotiate using verifier-based negotiation routing:
-   - **Step 1**: Requester submits draft to verifier via `POST /draftintent` (draft is open to any solver)
-   - **Step 2**: Solvers poll verifier via `GET /draftintents/pending` to discover drafts
+1. **Off-chain (before Hub)**: Requester and solver negotiate using coordinator-based negotiation routing:
+   - **Step 1**: Requester submits draft to coordinator via `POST /draftintent` (draft is open to any solver)
+   - **Step 2**: Solvers poll coordinator via `GET /draftintents/pending` to discover drafts
    - **Step 3**: First solver to sign submits signature via `POST /draftintent/:id/signature` (FCFS)
-   - **Step 4**: Requester polls verifier via `GET /draftintent/:id/signature` to retrieve signature
+   - **Step 4**: Requester polls coordinator via `GET /draftintent/:id/signature` to retrieve signature
 
-   See [Negotiation Routing Guide](verifier/negotiation-routing.md) for details.
+   See [Negotiation Routing Guide](coordinator/negotiation-routing.md) for details.
 2. **Hub**: Requester calls `create_inflow_intent()` with `offered_amount` (amount that will be locked in escrow on connected chain), `intent_id`, `offered_chain_id`, `desired_chain_id`, `solver` address, and `solver_signature`. The function looks up the solver's public key from the on-chain solver registry, verifies the signature, and creates a reserved intent (emits `LimitOrderEvent` with `offered_amount`, `offered_chain_id`, `desired_chain_id`, `revocable=false`). The intent is **reserved** for the specified solver, ensuring solver commitment across chains.
 
    **Note**: The solver must be registered in the solver registry before calling this function. The registry stores the solver's Ed25519 public key (for signature verification) and connected chain addresses (for outflow validation). See the [Solver Registry API](../docs/intent-frameworks/mvm/api-reference.md#solver-registry-api) for registration details.
-3. **Connected Chain**: Requester creates escrow using `create_escrow_from_fa()` (MVM), `createEscrow()` (EVM), or `create_escrow()` (SVM) with `intent_id`, verifier public key, and **reserved solver address** (emits `OracleLimitOrderEvent`/`EscrowInitialized`, `revocable=false`).
+3. **Connected Chain**: Requester creates escrow using `create_escrow_from_fa()` (MVM), `createEscrow()` (EVM), or `create_escrow()` (SVM) with `intent_id`, trusted-gmp public key, and **reserved solver address** (emits `OracleLimitOrderEvent`/`EscrowInitialized`, `revocable=false`).
 4. **Solver**: Observes the intent on Hub chain (from step 2) and the escrow on Connected Chain (from step 3).
 5. **Hub**: Solver fulfills the intent using `fulfill_inflow_intent()` (emits `LimitOrderFulfillmentEvent`)
-6. **Verifier**: observes fulfillment + escrow, signs the `intent_id` to generate approval signature (signature itself is the approval)
-7. **Anyone**: submits `complete_escrow_from_fa()` (MVM), `claim()` (EVM), or `claim()` (SVM) on connected chain with verifier signature (Ed25519 for MVM/SVM, ECDSA for EVM). The transaction can be sent by anyone, but funds always transfer to the reserved solver address specified at escrow creation.
+6. **Trusted GMP**: observes fulfillment + escrow, signs the `intent_id` to generate approval signature (signature itself is the approval)
+7. **Anyone**: submits `complete_escrow_from_fa()` (MVM), `claim()` (EVM), or `claim()` (SVM) on connected chain with trusted-gmp signature (Ed25519 for MVM/SVM, ECDSA for EVM). The transaction can be sent by anyone, but funds always transfer to the reserved solver address specified at escrow creation.
 
 **Note**: All escrows must specify a reserved solver address at creation. Funds are always transferred to the reserved solver when the escrow is claimed, regardless of who sends the transaction.
 
@@ -110,60 +112,61 @@ The outflow flow is the reverse of the inflow flow: tokens are locked on the hub
 sequenceDiagram
     participant Requester
     participant Hub as Hub Chain<br/>(MVM)
-    participant Verifier as Trusted Verifier<br/>(Rust)
+    participant Coordinator as Coordinator<br/>(Rust)
+    participant TrustedGMP as Trusted GMP<br/>(Rust)
     participant Connected as Connected Chain<br/>(MVM/EVM/SVM)
     participant Solver
 
     Note over Requester,Solver: Phase 1: Intent Creation on Hub Chain
     Requester->>Requester: create_cross_chain_draft_intent()<br/>(off-chain, creates Draftintent)
-    Requester->>Verifier: POST /draftintent<br/>(submit draft, open to any solver)
-    Verifier->>Verifier: Store draft
-    Solver->>Verifier: GET /draftintents/pending<br/>(poll for drafts)
-    Verifier->>Solver: Return pending drafts
+    Requester->>Coordinator: POST /draftintent<br/>(submit draft, open to any solver)
+    Coordinator->>Coordinator: Store draft
+    Solver->>Coordinator: GET /draftintents/pending<br/>(poll for drafts)
+    Coordinator->>Solver: Return pending drafts
     Solver->>Solver: Solver signs<br/>(off-chain, returns Ed25519 signature)
-    Solver->>Verifier: POST /draftintent/:id/signature<br/>(submit signature, FCFS)
-    Requester->>Verifier: GET /draftintent/:id/signature<br/>(poll for signature)
-    Verifier->>Requester: Return signature
-    Requester->>Hub: create_outflow_intent(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>desired_metadata, desired_amount, desired_chain_id,<br/>expiry_time, intent_id, requester_addr_connected_chain,<br/>verifier_public_key, solver, solver_signature)
+    Solver->>Coordinator: POST /draftintent/:id/signature<br/>(submit signature, FCFS)
+    Requester->>Coordinator: GET /draftintent/:id/signature<br/>(poll for signature)
+    Coordinator->>Requester: Return signature
+    Requester->>Hub: create_outflow_intent(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>desired_metadata, desired_amount, desired_chain_id,<br/>expiry_time, intent_id, requester_addr_connected_chain,<br/>trusted_gmp_public_key, solver, solver_signature)
     Hub->>Hub: Lock assets on hub
-    Hub->>Verifier: OracleLimitOrderEvent(intent_id, offered_amount,<br/>offered_chain_id, desired_amount,<br/>desired_chain_id, expiry, revocable=false)
+    Hub->>TrustedGMP: OracleLimitOrderEvent(intent_id, offered_amount,<br/>offered_chain_id, desired_amount,<br/>desired_chain_id, expiry, revocable=false)
 
     Note over Requester,Solver: Phase 2: Solver Transfers on Connected Chain
     Solver->>Connected: Transfer tokens to requester_addr_connected_chain<br/>(standard token transfer, not escrow)
     Connected->>Connected: Tokens received by requester
 
-    Note over Requester,Solver: Phase 3: Verifier Validation and Approval
-    Solver->>Verifier: POST /validate-outflow-fulfillment<br/>(transaction_hash, chain_type, intent_id)
-    Verifier->>Connected: Query transaction by hash<br/>(verify transfer occurred)
-    Verifier->>Verifier: Validate transfer conditions met
-    Verifier->>Solver: Return approval signature
+    Note over Requester,Solver: Phase 3: Trusted GMP Validation and Approval
+    Solver->>TrustedGMP: POST /validate-outflow-fulfillment<br/>(transaction_hash, chain_type, intent_id)
+    TrustedGMP->>Connected: Query transaction by hash<br/>(verify transfer occurred)
+    TrustedGMP->>TrustedGMP: Validate transfer conditions met
+    TrustedGMP->>Solver: Return approval signature
 
     Note over Requester,Solver: Phase 4: Intent Fulfillment on Hub Chain
-    Solver->>Hub: fulfill_outflow_intent(<br/>intent, verifier_signature_bytes)
-    Hub->>Hub: Verify verifier signature
+    Solver->>Hub: fulfill_outflow_intent(<br/>intent, trusted_gmp_signature_bytes)
+    Hub->>Hub: Verify trusted-gmp signature
     Hub->>Hub: Unlock tokens and transfer to solver
 ```
 
 ### Outflow Flow Steps
 
-1. **Off-chain (before Hub)**: Requester and solver negotiate using verifier-based negotiation routing:
-   - **Step 1**: Requester submits draft to verifier via `POST /draftintent` (draft is open to any solver)
-   - **Step 2**: Solvers poll verifier via `GET /draftintents/pending` to discover drafts
+1. **Off-chain (before Hub)**: Requester and solver negotiate using coordinator-based negotiation routing:
+   - **Step 1**: Requester submits draft to coordinator via `POST /draftintent` (draft is open to any solver)
+   - **Step 2**: Solvers poll coordinator via `GET /draftintents/pending` to discover drafts
    - **Step 3**: First solver to sign submits signature via `POST /draftintent/:id/signature` (FCFS)
-   - **Step 4**: Requester polls verifier via `GET /draftintent/:id/signature` to retrieve signature
-   See [Negotiation Routing Guide](verifier/negotiation-routing.md) for details.
-2. **Hub**: Requester calls `create_outflow_intent()` with `offered_amount` (amount to lock on hub), `intent_id`, `offered_chain_id` (hub), `desired_chain_id` (connected), `requester_addr_connected_chain` (where solver should send tokens), `verifier_public_key`, `solver` address, and `solver_signature`. The function locks tokens on the hub and creates an oracle-guarded intent requiring verifier signature (emits `OracleLimitOrderEvent` with `revocable=false`).
-3. **Connected Chain**: Solver transfers tokens directly to `requester_addr_connected_chain` using standard token transfer (not an escrow). The transaction must include `intent_id` as metadata for verifier tracking (memo for SVM). See [Connected Chain Outflow Fulfillment Transaction Format](#connected-chain-outflow-fulfillment-transaction-format) for exact specification.
-4. **Solver**: Calls the verifier REST API endpoint `POST /validate-outflow-fulfillment` with the transaction hash, chain type, and intent ID.
-5. **Verifier**: Validates the transaction matches the hub intent requirements and generates approval signature by signing the `intent_id`.
-6. **Hub**: Solver calls `fulfill_outflow_intent()` with the verifier signature. The function verifies the signature, unlocks the tokens locked on hub, and transfers them to the solver as reward.
+   - **Step 4**: Requester polls coordinator via `GET /draftintent/:id/signature` to retrieve signature
+   See [Negotiation Routing Guide](coordinator/negotiation-routing.md) for details.
+2. **Hub**: Requester calls `create_outflow_intent()` with `offered_amount` (amount to lock on hub), `intent_id`, `offered_chain_id` (hub), `desired_chain_id` (connected), `requester_addr_connected_chain` (where solver should send tokens), `trusted_gmp_public_key`, `solver` address, and `solver_signature`. The function locks tokens on the hub and creates an oracle-guarded intent requiring trusted-gmp signature (emits `OracleLimitOrderEvent` with `revocable=false`).
+3. **Connected Chain**: Solver transfers tokens directly to `requester_addr_connected_chain` using standard token transfer (not an escrow). The transaction must include `intent_id` as metadata for trusted-gmp tracking (memo for SVM). See [Connected Chain Outflow Fulfillment Transaction Format](#connected-chain-outflow-fulfillment-transaction-format) for exact specification.
+4. **Solver**: Calls the trusted-gmp REST API endpoint `POST /validate-outflow-fulfillment` with the transaction hash, chain type, and intent ID.
+5. **Trusted GMP**: Validates the transaction matches the hub intent requirements and generates approval signature by signing the `intent_id`.
+6. **Hub**: Solver calls `fulfill_outflow_intent()` with the trusted-gmp signature. The function verifies the signature, unlocks the tokens locked on hub, and transfers them to the solver as reward.
 7. **Result**: Requester receives tokens on connected chain, solver receives locked tokens from hub as reward.
 
 **Key Differences from Inflow Flow**:
 
 - Tokens are locked on hub (not connected chain)
 - No escrow on connected chain - solver transfers directly
-- Verifier signature is required for fulfillment (oracle-guarded intent)
+- Trusted-gmp signature is required for fulfillment (oracle-guarded intent)
 - Solver receives locked tokens from hub as payment for their work
 
 ## Cross-Chain Linking Mechanism
@@ -183,11 +186,11 @@ The protocol uses `intent_id` to link intents across chains:
 
 3. **Connected Chain Escrow**:
    - `intent_id` provided at creation, linking to hub intent
-   - Must match hub chain intent's `intent_id` for verifier matching
+   - Must match hub chain intent's `intent_id` for trusted-gmp matching
 
 ### Event Correlation
 
-The verifier matches events across chains:
+The trusted-gmp service matches events across chains:
 
 ```text
 Hub Chain: LimitOrderEvent.intent_id
@@ -199,18 +202,18 @@ Connected Chain: OracleLimitOrderEvent.intent_id / EscrowInitialized.intentId
 
 **Matching Process**:
 
-1. Verifier observes `LimitOrderEvent` → stores `IntentEvent` with `intent_id`
-2. Verifier observes escrow event → stores `EscrowEvent` with `intent_id`
+1. Trusted-gmp observes `LimitOrderEvent` → stores `IntentEvent` with `intent_id`
+2. Trusted-gmp observes escrow event → stores `EscrowEvent` with `intent_id`
 3. When `LimitOrderFulfillmentEvent` observed → matches `fulfillment.intent_id` with `escrow.intent_id`
 4. If match found and validation passes → generates approval signature
 
-## Verifier Validation Protocol
+## Trusted GMP Validation Protocol
 
-The verifier performs cross-chain validation before generating approvals. The validation protocol differs between inflow and outflow intents:
+The trusted-gmp service performs cross-chain validation before generating approvals. The validation protocol differs between inflow and outflow intents:
 
 ### Inflow Validation Protocol
 
-For inflow intents (tokens locked in escrow on connected chain), the verifier validates automatically via event monitoring:
+For inflow intents (tokens locked in escrow on connected chain), the trusted-gmp service validates automatically via event monitoring:
 
 **Validation Steps:**
 
@@ -250,13 +253,13 @@ sequenceDiagram
 
 ### Outflow Validation Protocol
 
-For outflow intents (tokens locked on hub chain), the verifier validates on-demand via API endpoint:
+For outflow intents (tokens locked on hub chain), the trusted-gmp service validates on-demand via API endpoint:
 
 **Validation Steps:**
 
 1. **Intent Monitoring**: Continuously polls hub chain for `OracleLimitOrderEvent` (outflow intent creation)
 2. **Solver Transaction Submission**: Solver calls `POST /validate-outflow-fulfillment` with transaction hash, chain type, and intent ID
-3. **Transaction Query**: Verifier queries the connected chain transaction by hash
+3. **Transaction Query**: Trusted-gmp queries the connected chain transaction by hash
 4. **Transaction Parsing**: Extracts transaction parameters from MVM, EVM, or SVM transaction
 5. **Transaction Success Check**: Validates transaction was confirmed and successful
 6. **Condition Validation**: Verifies transaction matches intent requirements
@@ -267,7 +270,7 @@ For outflow intents (tokens locked on hub chain), the verifier validates on-dema
 ```mermaid
 sequenceDiagram
     participant Solver
-    participant API as Verifier API
+    participant API as Trusted GMP API
     participant Validator as Cross-Chain Validator
     participant Connected as Connected Chain
     participant Crypto as Crypto Service
@@ -296,11 +299,11 @@ sequenceDiagram
 - **Inflow**: Solver address validation via escrow `reserved_solver` field
 - **Outflow**: Solver address validation via solver registry lookup (requires connected chain address registration)
 
-For detailed validation logic, see [Trusted Verifier](verifier/README.md).
+For detailed validation logic, see [Trusted GMP](trusted-gmp/README.md).
 
 ## Connected Chain Outflow Fulfillment Transaction Format
 
-For outflow intents, solvers must transfer tokens on the connected chain using a standardized transaction format that includes `intent_id` metadata for verifier tracking.
+For outflow intents, solvers must transfer tokens on the connected chain using a standardized transaction format that includes `intent_id` metadata for trusted-gmp tracking.
 
 ### MVM Connected Chain Format
 
@@ -326,7 +329,7 @@ The on-chain `utils::transfer_with_intent_id()` function:
 - Transfers tokens from the solver's account to the recipient address
 - Includes `intent_id` as an explicit parameter in the transaction payload
 
-This guarantees that every connected-chain transaction encodes `intent_id`, making it observable via MVM RPC. The verifier later queries the transaction hash, extracts the function arguments, and matches them against the hub intent requirements.
+This guarantees that every connected-chain transaction encodes `intent_id`, making it observable via MVM RPC. The trusted-gmp service later queries the transaction hash, extracts the function arguments, and matches them against the hub intent requirements.
 
 **Note:** The intent framework module (including `utils::transfer_with_intent_id()`) must be deployed on the connected chain before solvers can use this approach.
 
@@ -348,7 +351,7 @@ The CLI prints:
 2. A `cast send` command example with the complete data payload that includes `intent_id` as extra calldata
 3. Instructions for replacing the `<token_address>` placeholder
 
-The data payload extends the standard ERC20 `transfer(to, amount)` function call with an extra 32-byte `intent_id` word. The ERC20 contract ignores these extra bytes (they don't match any function signature), but they remain in the transaction data for verifier tracking. The verifier reads the appended `intent_id` when it fetches the transaction via `eth_getTransactionByHash`, ensuring it can link the connected-chain transfer back to the hub intent.
+The data payload extends the standard ERC20 `transfer(to, amount)` function call with an extra 32-byte `intent_id` word. The ERC20 contract ignores these extra bytes (they don't match any function signature), but they remain in the transaction data for trusted-gmp tracking. The trusted-gmp service reads the appended `intent_id` when it fetches the transaction via `eth_getTransactionByHash`, ensuring it can link the connected-chain transfer back to the hub intent.
 
 ### SVM Connected Chain Format
 
@@ -357,4 +360,4 @@ For SVM outflow, the solver submits a single transaction that includes:
 - First instruction: SPL memo with `intent_id=0x...`
 - Exactly one SPL `transferChecked` instruction to the requester
 
-The verifier parses the memo and transfer details from `getTransaction` (jsonParsed) to link the transfer back to the hub intent.
+The trusted-gmp service parses the memo and transfer details from `getTransaction` (jsonParsed) to link the transfer back to the hub intent.

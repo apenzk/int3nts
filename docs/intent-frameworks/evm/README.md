@@ -1,14 +1,14 @@
 # EVM Intent Framework
 
-Escrow contract for cross-chain intents that releases funds to solvers when verifier signatures check out.
+Escrow contract for cross-chain intents that releases funds to solvers when trusted-gmp signatures check out.
 
 ## Overview
 
 The `IntentEscrow` contract implements a secure escrow system:
 
 - Requesters deposit ERC20 tokens into escrows tied to intent IDs
-- Solvers can claim funds after providing a valid verifier signature
-- Verifiers sign approval messages off-chain after verifying cross-chain conditions
+- Solvers can claim funds after providing a valid trusted-gmp signature
+- The trusted-gmp service signs approval messages off-chain after verifying cross-chain conditions
 - Requesters can cancel and reclaim funds after expiry
 
 ## Architecture
@@ -18,13 +18,13 @@ ECDSA signature verification similar to the Aptos escrow system.
 Flow:
 
 1. Requester creates escrow and deposits funds atomically (must specify solver address)
-2. Verifier monitors conditions and signs approval (off-chain)
-3. Anyone can claim with verifier signature (funds go to reserved solver)
+2. Trusted-gmp service monitors conditions and signs approval (off-chain)
+3. Anyone can claim with trusted-gmp signature (funds go to reserved solver)
 4. Requester can cancel and reclaim after expiry
 
 ## Signature Verification
 
-The verifier signs the `intent_id` - the signature itself is the approval.
+The trusted-gmp service signs the `intent_id` - the signature itself is the approval.
 
 Message format:
 
@@ -33,7 +33,7 @@ messageHash = keccak256(intentId)
 ethSignedMessage = keccak256("\x19Ethereum Signed Message:\n32" || messageHash)
 ```
 
-The contract uses `ecrecover()` to verify the signature matches the authorized verifier address.
+The contract uses `ecrecover()` to verify the signature matches the authorized trusted-gmp address.
 
 ## Contract Interface
 
@@ -44,9 +44,9 @@ The contract uses `ecrecover()` to verify the signature matches the authorized v
 // reservedSolver: Required solver address that will receive funds (must not be address(0))
 function createEscrow(uint256 intentId, address token, uint256 amount, address reservedSolver) external
 
-// Claim funds with verifier signature
+// Claim funds with approver signature
 // Funds always go to reservedSolver address (anyone can send transaction, but recipient is fixed)
-// Signature itself is the approval - verifier signs the intent_id
+// Signature itself is the approval - approver signs the intent_id
 function claim(uint256 intentId, bytes memory signature) external
 
 // Cancel escrow and reclaim funds (requester only, after expiry)
@@ -72,21 +72,21 @@ See the [component README](../../intent-frameworks/evm/README.md) for quick star
 ```javascript
 const { ethers } = require("hardhat");
 
-// Deploy escrow with verifier address
+// Deploy escrow with approver address
 const IntentEscrow = await ethers.getContractFactory("IntentEscrow");
-const escrow = await IntentEscrow.deploy(verifierAddress);
+const escrow = await IntentEscrow.deploy(approverAddress);
 
 // Requester creates escrow and deposits tokens atomically (expiry is contract-defined)
 // Must specify solver address that will receive funds:
 await token.connect(requester).approve(escrow.address, amount);
 await escrow.connect(requester).createEscrow(intentId, tokenAddress, amount, solverAddress);
 
-// Verifier signs the intent_id (off-chain) - signature itself is the approval
+// Approver signs the intent_id (off-chain) - signature itself is the approval
 const messageHash = ethers.solidityPackedKeccak256(
   ["uint256"],
   [intentId]
 );
-const signature = await verifier.signMessage(ethers.getBytes(messageHash));
+const signature = await approver.signMessage(ethers.getBytes(messageHash));
 
 // Solver claims with signature (anyone can call, but funds go to reserved solver)
 await escrow.connect(solver).claim(intentId, signature);
@@ -94,11 +94,11 @@ await escrow.connect(solver).claim(intentId, signature);
 
 ## Security Considerations
 
-- Signature verification: Only authorized verifier signatures accepted
+- Signature verification: Only authorized trusted-gmp signatures accepted
 - Intent ID binding: Prevents signature replay across escrows
 - Reentrancy protection: Uses OpenZeppelin's SafeERC20
 - Access control: Only requester can cancel (after expiry)
-- Immutable verifier: Verifier address set in constructor
+- Immutable trusted-gmp address: Trusted-gmp address set in constructor
 - Solver reservation: Required at creation, prevents unauthorized recipients
 
 ## Testing
@@ -109,4 +109,4 @@ npx hardhat test
 
 Tests cover escrow initialization, deposits, claiming, cancellation, expiry enforcement, and error cases.
 
-Test accounts: Hardhat provides 20 accounts (10000 ETH each). Account 0 is deployer/verifier, Account 1 is requester, Account 2 is solver. Private keys are deterministic from mnemonic: `test test test test test test test test test test test junk`
+Test accounts: Hardhat provides 20 accounts (10000 ETH each). Account 0 is deployer/approver, Account 1 is requester, Account 2 is solver. Private keys are deterministic from mnemonic: `test test test test test test test test test test test junk`

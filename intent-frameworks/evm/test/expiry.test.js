@@ -5,7 +5,7 @@ const { setupIntentEscrowTests, advanceTime } = require("./helpers/setup");
 describe("IntentEscrow - Expiry Handling", function () {
   let escrow;
   let token;
-  let verifierWallet;
+  let approverWallet;
   let requester;
   let solver;
   let intentId;
@@ -14,7 +14,7 @@ describe("IntentEscrow - Expiry Handling", function () {
     const fixtures = await setupIntentEscrowTests();
     escrow = fixtures.escrow;
     token = fixtures.token;
-    verifierWallet = fixtures.verifierWallet;
+    approverWallet = fixtures.approverWallet;
     requester = fixtures.requester;
     solver = fixtures.solver;
     intentId = fixtures.intentId;
@@ -75,7 +75,7 @@ describe("IntentEscrow - Expiry Handling", function () {
   });
 
   /// 3. Test: Expired Escrow Claim Prevention
-  /// Verifies that expired escrows cannot be claimed, even with valid verifier signatures.
+  /// Verifies that expired escrows cannot be claimed, even with valid approver signatures.
   /// Why: Expired escrows should only be cancellable by the requester, not claimable by solvers.
   it("Should prevent claim on expired escrow", async function () {
     const amount = ethers.parseEther("100");
@@ -93,7 +93,7 @@ describe("IntentEscrow - Expiry Handling", function () {
       ["uint256"],
       [intentId]
     );
-    const signature = await verifierWallet.signMessage(ethers.getBytes(messageHash));
+    const signature = await approverWallet.signMessage(ethers.getBytes(messageHash));
 
     await expect(
       escrow.connect(solver).claim(intentId, signature)

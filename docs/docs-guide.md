@@ -8,7 +8,7 @@ The documentation uses a three-layer structure:
 
 ### Layer 1: Component READMEs
 
-Each component directory (e.g., `intent-frameworks/mvm/`, `verifier/`) contains a README for navigation from code:
+Each component directory (e.g., `intent-frameworks/mvm/`, `coordinator/`, `trusted-gmp/`) contains a README for navigation from code:
 
 - Brief description
 - Quick start commands

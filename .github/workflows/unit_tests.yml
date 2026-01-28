@@ -27,10 +27,15 @@ jobs:
     with:
       script: "cd solver && cargo test"
 
-  verifier:
+  coordinator:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:
-      script: "cd verifier && cargo test"
+      script: "cd coordinator && cargo test"
+
+  trusted-gmp:
+    uses: ./.github/workflows/unit-tests-reusable.yml
+    with:
+      script: "cd trusted-gmp && cargo test"
 
   frontend:
     uses: ./.github/workflows/unit-tests-reusable.yml

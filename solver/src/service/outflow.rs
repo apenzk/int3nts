@@ -4,13 +4,13 @@
 //!
 //! Flow:
 //! 1. **Execute Transfer**: Transfer tokens on connected chain to requester_addr_connected_chain
-//! 2. **Get Verifier Approval**: Call verifier `/validate-outflow-fulfillment` with transaction hash
-//! 3. **Fulfill Intent**: Call hub chain `fulfill_outflow_intent` with verifier signature
+//! 2. **Get Trusted-GMP Approval**: Call trusted-gmp `/validate-outflow-fulfillment` with transaction hash
+//! 3. **Fulfill Intent**: Call hub chain `fulfill_outflow_intent` with trusted-gmp signature
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
 use crate::config::SolverConfig;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
-use crate::verifier_client::{ValidateOutflowFulfillmentRequest, VerifierClient};
+use crate::coordinator_gmp_client::{ValidateOutflowFulfillmentRequest, CoordinatorGmpClient};
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::sync::Arc;
@@ -230,7 +230,7 @@ impl OutflowService {
             .context("requester_addr_connected_chain not set. This may happen if the intent is inflow (not outflow) or the event data didn't include this field.")
     }
 
-    /// Gets verifier approval for an outflow fulfillment transaction
+    /// Gets trusted-gmp approval for an outflow fulfillment transaction
     ///
     /// # Arguments
     ///
@@ -240,9 +240,9 @@ impl OutflowService {
     ///
     /// # Returns
     ///
-    /// * `Ok(ApprovalSignature)` - Verifier approval signature
+    /// * `Ok(ApprovalSignature)` - Trusted-gmp approval signature
     /// * `Err(anyhow::Error)` - Failed to get approval
-    pub async fn get_verifier_approval(
+    pub async fn get_trusted_gmp_approval(
         &self,
         transaction_hash: &str,
         chain_type: &str,
@@ -254,21 +254,21 @@ impl OutflowService {
             intent_id: Some(intent_id.to_string()),
         };
 
-        // Call verifier API (blocking call)
+        // Call trusted-gmp API for validation (blocking call)
         let response = tokio::task::spawn_blocking({
-            let base_url = self.config.service.verifier_url.clone();
+            let base_url = self.config.service.trusted_gmp_url.clone();
             let request = request.clone();
             move || {
-                let client = VerifierClient::new(&base_url);
+                let client = CoordinatorGmpClient::new(&base_url);
                 client.validate_outflow_fulfillment(&request)
             }
         })
         .await
-        .context("Failed to spawn blocking task for verifier approval")??;
+        .context("Failed to spawn blocking task for trusted-gmp approval")??;
 
         if !response.validation.valid {
             anyhow::bail!(
-                "Verifier validation failed: {}",
+                "Trusted-gmp validation failed: {}",
                 response.validation.message
             );
         }
@@ -285,12 +285,12 @@ impl OutflowService {
         Ok(signature_bytes)
     }
 
-    /// Fulfills an outflow intent on the hub chain with verifier approval
+    /// Fulfills an outflow intent on the hub chain with trusted-gmp approval
     ///
     /// # Arguments
     ///
     /// * `intent` - Tracked intent to fulfill
-    /// * `verifier_signature_bytes` - Verifier's Ed25519 signature as bytes
+    /// * `approval_signature_bytes` - Trusted-gmp's Ed25519 signature as bytes (on-chain approval address)
     ///
     /// # Returns
     ///
@@ -299,7 +299,7 @@ impl OutflowService {
     pub async fn fulfill_outflow_intent(
         &self,
         intent: &TrackedIntent,
-        verifier_signature_bytes: &[u8],
+        approval_signature_bytes: &[u8],
     ) -> Result<String> {
         let intent_addr = intent
             .intent_addr
@@ -309,7 +309,7 @@ impl OutflowService {
         // Execute fulfillment (blocking call)
         tokio::task::spawn_blocking({
             let intent_addr = intent_addr.clone();
-            let signature = verifier_signature_bytes.to_vec();
+            let signature = approval_signature_bytes.to_vec();
             let hub_config = self.config.hub_chain.clone();
             move || {
                 let hub_client = HubChainClient::new(&hub_config)?;
@@ -324,8 +324,8 @@ impl OutflowService {
     ///
     /// This loop:
     /// 1. Polls for pending outflow intents and executes transfers
-    /// 2. Gets verifier approval for executed transfers
-    /// 3. Fulfills hub intents with verifier signatures
+    /// 2. Gets trusted-gmp approval for executed transfers
+    /// 3. Fulfills hub intents with trusted-gmp signatures
     ///
     /// # Arguments
     ///
@@ -337,7 +337,7 @@ impl OutflowService {
             match self.poll_and_execute_transfers().await {
                 Ok(executed_transfers) => {
                     for (intent, tx_hash) in executed_transfers {
-                        // Get verifier approval - determine chain type from intent's desired_chain_id
+                        // Get trusted-gmp approval - determine chain type from intent's desired_chain_id
                         let chain_type = match self.get_target_chain_for_intent(&intent) {
                             Some((ct, _)) => ct,
                             None => {
@@ -346,7 +346,7 @@ impl OutflowService {
                             }
                         };
 
-                        match self.get_verifier_approval(&tx_hash, chain_type, &intent.intent_id).await {
+                        match self.get_trusted_gmp_approval(&tx_hash, chain_type, &intent.intent_id).await {
                             Ok(signature_bytes) => {
                                 // Fulfill hub intent
                                 match self.fulfill_outflow_intent(&intent, &signature_bytes).await {
@@ -366,7 +366,7 @@ impl OutflowService {
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to get verifier approval for intent {}: {}", intent.intent_id, e);
+                                error!("Failed to get trusted-gmp approval for intent {}: {}", intent.intent_id, e);
                             }
                         }
                     }

@@ -8,24 +8,24 @@ use intent_escrow::state::seeds;
 use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
 
 // ============================================================================
-// VERIFIER INITIALIZATION TESTS
+// APPROVER INITIALIZATION TESTS
 // ============================================================================
 
-/// 1. Test: Verifier Address Initialization
-/// Verifies that the escrow is initialized with the correct verifier address.
-/// Why: The verifier address is critical for signature validation.
+/// 1. Test: Approver Address Initialization
+/// Verifies that the escrow is initialized with the correct approver address.
+/// Why: The approver address is critical for signature validation.
 #[tokio::test]
-async fn test_initialize_verifier_address() {
+async fn test_initialize_approver_address() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let payer = context.payer.insecure_clone();
-    let verifier = solana_sdk::signature::Keypair::new();
+    let approver = solana_sdk::signature::Keypair::new();
 
     let state_pda = initialize_program(
         &mut context,
         &payer,
         common::test_program_id(),
-        verifier.pubkey(),
+        approver.pubkey(),
     )
     .await;
 
@@ -36,7 +36,7 @@ async fn test_initialize_verifier_address() {
         .unwrap()
         .unwrap();
     let state = read_state(&state_account);
-    assert_eq!(state.verifier, verifier.pubkey());
+    assert_eq!(state.approver, approver.pubkey());
 }
 
 // ============================================================================

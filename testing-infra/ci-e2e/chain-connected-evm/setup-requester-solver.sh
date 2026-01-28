@@ -44,7 +44,7 @@ log "% - - - - - - - - - - - - - - - - - - - - - - - - - - - - -"
 
 log ""
 log " Hardhat Default Accounts:"
-log "   Deployer/Verifier = Account 0 (signer index 0)"
+log "   Deployer/Approver = Account 0 (signer index 0)"
 log "   Requester         = Account 1 (signer index 1)"
 log "   Solver            = Account 2 (signer index 2)"
 

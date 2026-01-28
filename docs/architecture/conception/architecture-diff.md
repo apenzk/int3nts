@@ -26,10 +26,10 @@ See [conception_inflow.md](conception_inflow.md) for the conceptual design.
 | Step | Function | Description |
 |------|----------|-------------|
 | Request-Intent Creation | `create_inflow_request_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, solver, solver_signature)` | Creates reserved intent on Hub |
-| Escrow (Move) | `create_escrow_from_fa(offered_metadata, offered_amount, offered_chain_id, verifier_public_key, expiry_time, intent_id, reserved_solver, desired_chain_id)` | Creates escrow on Move connected chain |
+| Escrow (Move) | `create_escrow_from_fa(offered_metadata, offered_amount, offered_chain_id, approver_public_key, expiry_time, intent_id, reserved_solver, desired_chain_id)` | Creates escrow on Move connected chain |
 | Escrow (EVM) | `createEscrow(intentId, token, amount, reservedSolver)` | Creates escrow on EVM connected chain |
 | Fulfillment | `fulfill_inflow_request_intent(intent, payment_amount)` | Solver fulfills intent on Hub |
-| Escrow Release (Move) | `complete_escrow_from_fa(escrow_intent, payment_amount, verifier_signature_bytes)` | Releases escrow on Move chain |
+| Escrow Release (Move) | `complete_escrow_from_fa(escrow_intent, payment_amount, approver_signature_bytes)` | Releases escrow on Move chain |
 | Escrow Release (EVM) | `claim(intentId, signature)` | Releases escrow on EVM chain |
 
 **Events:**
@@ -53,9 +53,9 @@ See [conception_outflow.md](conception_outflow.md) for the conceptual design.
 
 | Step | Function | Description |
 |------|----------|-------------|
-| Request-Intent Creation | `create_outflow_request_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, requester_addr_connected_chain, verifier_public_key, solver, solver_signature)` | Creates reserved intent with escrow on Hub |
-| Validation | `POST /validate-outflow-fulfillment(transaction_hash, chain_type, intent_id)` | Verifier validates solver transfer |
-| Fulfillment | `fulfill_outflow_request_intent(intent, verifier_signature_bytes)` | Solver claims escrow on Hub with verifier signature |
+| Request-Intent Creation | `create_outflow_request_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, requester_addr_connected_chain, approver_public_key, solver, solver_signature)` | Creates reserved intent with escrow on Hub |
+| Validation | `POST /validate-outflow-fulfillment(transaction_hash, chain_type, intent_id)` | Trusted-gmp validates solver transfer |
+| Fulfillment | `fulfill_outflow_request_intent(intent, approver_signature_bytes)` | Solver claims escrow on Hub with trusted-gmp signature |
 
 **Events:**
 
@@ -75,10 +75,10 @@ See [conception_routerflow.md](conception_routerflow.md) for the conceptual desi
 
 ## Future Enhancements (All Flows)
 
-- **Multi-RPC Quorum**: Verifier uses multiple RPC endpoints with quorum validation (≥2 matching receipts) for enhanced security
+- **Multi-RPC Quorum**: Trusted-gmp uses multiple RPC endpoints with quorum validation (≥2 matching receipts) for enhanced security
 - **Protocol Fees**: Automatic fee deduction from escrow/hub transfers to solver
 - **Solver Collateral**: Solvers lock collateral that can be slashed (0.5-1%) if validation fails or intent expires
-- **Bypass/Verifier-Gated Modes**: Alternative flow modes where verifier commits transactions on behalf of users
+- **Bypass/Trusted-gmp-gated Modes**: Alternative flow modes where trusted-gmp (or coordinator) commits transactions on behalf of users
 
 ---
 
@@ -90,7 +90,7 @@ This section contains the detailed implementation diagram for the Router Flow, w
 sequenceDiagram
     participant Requester
     participant Hub as Hub Chain<br/>(Move)
-    participant Verifier as Trusted Verifier<br/>(Rust)
+    participant TrustedGMP as Trusted-GMP<br/>(Rust)
     participant Source as Source Connected Chain<br/>(Move/EVM)
     participant Dest as Destination Connected Chain<br/>(Move/EVM)
     participant Solver
@@ -100,34 +100,34 @@ sequenceDiagram
     Requester->>Solver: Send draft
     Solver->>Solver: Solver signs<br/>(off-chain, returns Ed25519 signature)
     Solver->>Requester: Returns signature
-    Requester->>Hub: create_cross_chain_request_intent(<br/>offered_metadata, offered_amount, offered_chain_id (source),<br/>desired_metadata, desired_amount, desired_chain_id (dest),<br/>expiry_time, intent_id, requester_address_dest_chain,<br/>verifier_public_key, solver, solver_signature)
-    Hub->>Verifier: CrossChainOrderEvent(intent_id, offered_amount,<br/>offered_chain_id (source), desired_amount,<br/>desired_chain_id (dest), expiry, revocable=false)
+    Requester->>Hub: create_cross_chain_request_intent(<br/>offered_metadata, offered_amount, offered_chain_id (source),<br/>desired_metadata, desired_amount, desired_chain_id (dest),<br/>expiry_time, intent_id, requester_address_dest_chain,<br/>approver_public_key, solver, solver_signature)
+    Hub->>TrustedGMP: CrossChainOrderEvent(intent_id, offered_amount,<br/>offered_chain_id (source), desired_amount,<br/>desired_chain_id (dest), expiry, revocable=false)
 
     Note over Requester,Solver: Phase 2: Escrow Creation on Source Connected Chain
     alt Move Chain
-        Requester->>Source: create_escrow_from_fa(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>verifier_public_key, expiry_time, intent_id,<br/>reserved_solver, desired_chain_id)
+        Requester->>Source: create_escrow_from_fa(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>approver_public_key, expiry_time, intent_id,<br/>reserved_solver, desired_chain_id)
     else EVM Chain
         Requester->>Source: createEscrow(intentId, token,<br/>amount, reservedSolver)
     end
     Source->>Source: Lock assets
-    Source->>Verifier: OracleLimitOrderEvent/EscrowInitialized(<br/>intent_id, reserved_solver, revocable=false)
+    Source->>TrustedGMP: OracleLimitOrderEvent/EscrowInitialized(<br/>intent_id, reserved_solver, revocable=false)
 
     Note over Requester,Solver: Phase 3: Solver Transfers on Destination Connected Chain
     Solver->>Dest: Transfer tokens to requester_address_dest_chain<br/>(standard token transfer, not escrow)
     Dest->>Dest: Tokens received by requester
 
-    Note over Requester,Solver: Phase 4: Verifier Validation and Approval
-    Solver->>Verifier: POST /validate-cross-chain-fulfillment<br/>(source_escrow_intent_id, dest_tx_hash, chain_types, intent_id)
-    Verifier->>Source: Query escrow by intent_id<br/>(verify escrow exists and matches)
-    Verifier->>Dest: Query transaction by hash<br/>(verify transfer occurred)
-    Verifier->>Verifier: Validate fulfillment<br/>conditions met
-    Verifier->>Solver: Return approval signature
+    Note over Requester,Solver: Phase 4: Trusted-GMP Validation and Approval
+    Solver->>TrustedGMP: POST /validate-cross-chain-fulfillment<br/>(source_escrow_intent_id, dest_tx_hash, chain_types, intent_id)
+    TrustedGMP->>Source: Query escrow by intent_id<br/>(verify escrow exists and matches)
+    TrustedGMP->>Dest: Query transaction by hash<br/>(verify transfer occurred)
+    TrustedGMP->>TrustedGMP: Validate fulfillment<br/>conditions met
+    TrustedGMP->>Solver: Return approval signature
 
     Note over Requester,Solver: Phase 5: Escrow Release on Source Connected Chain
-    Verifier->>Solver: Delivers approval signature<br/>(Ed25519 for Move, ECDSA for EVM)<br/>Signature itself is the approval
+    TrustedGMP->>Solver: Delivers approval signature<br/>(Ed25519 for Move, ECDSA for EVM)<br/>Signature itself is the approval
     alt Move Chain
         Note over Solver: Anyone can call<br/>(funds go to reserved_solver)
-        Solver->>Source: complete_escrow_from_fa(<br/>escrow_intent, payment_amount,<br/>verifier_signature_bytes)
+        Solver->>Source: complete_escrow_from_fa(<br/>escrow_intent, payment_amount,<br/>approver_signature_bytes)
     else EVM Chain
         Note over Solver: Anyone can call<br/>(funds go to reservedSolver)
         Solver->>Source: claim(intentId, signature)

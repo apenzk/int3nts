@@ -61,12 +61,12 @@ async fn test_complete_full_deposit_to_claim_workflow() {
     let vault_balance_after_create = get_token_balance(&mut context, vault_pda).await;
     assert_eq!(vault_balance_after_create, amount);
 
-    // Step 2: Claim with verifier signature
-    let signature = env.verifier.sign_message(&intent_id);
+    // Step 2: Claim with approver signature
+    let signature = env.approver.sign_message(&intent_id);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,
@@ -117,7 +117,7 @@ async fn test_handle_multiple_different_spl_tokens() {
     // Create fresh accounts
     let requester = solana_sdk::signature::Keypair::new();
     let solver = solana_sdk::signature::Keypair::new();
-    let verifier = solana_sdk::signature::Keypair::new();
+    let approver = solana_sdk::signature::Keypair::new();
     let mint_authority = solana_sdk::signature::Keypair::new();
 
     // Fund requester
@@ -129,7 +129,7 @@ async fn test_handle_multiple_different_spl_tokens() {
     send_tx(&mut context, &payer, &[fund_ix], &[]).await;
 
     // Initialize program
-    initialize_program(&mut context, &requester, program_id, verifier.pubkey()).await;
+    initialize_program(&mut context, &requester, program_id, approver.pubkey()).await;
 
     // Create 3 different token mints with different decimals
     let mint1 = create_mint(&mut context, &payer, &mint_authority, 6).await;

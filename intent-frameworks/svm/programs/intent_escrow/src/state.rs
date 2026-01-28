@@ -3,23 +3,23 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::pubkey::Pubkey;
 
-/// Global escrow state containing the authorized verifier
+/// Global escrow state containing the authorized approver
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub struct EscrowState {
     /// Discriminator for account type
     pub discriminator: [u8; 8],
-    /// Authorized verifier public key that can approve releases
-    pub verifier: Pubkey,
+    /// Authorized approver public key that can approve releases
+    pub approver: Pubkey,
 }
 
 impl EscrowState {
     pub const DISCRIMINATOR: [u8; 8] = [0x45, 0x53, 0x43, 0x52, 0x4f, 0x57, 0x53, 0x54]; // "ESCROWST"
-    pub const LEN: usize = 8 + 32; // discriminator + verifier pubkey
+    pub const LEN: usize = 8 + 32; // discriminator + approver pubkey
 
-    pub fn new(verifier: Pubkey) -> Self {
+    pub fn new(approver: Pubkey) -> Self {
         Self {
             discriminator: Self::DISCRIMINATOR,
-            verifier,
+            approver,
         }
     }
 }

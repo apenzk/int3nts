@@ -20,8 +20,8 @@ pub enum EscrowError {
     #[error("Invalid signature")]
     InvalidSignature,
 
-    #[error("Unauthorized verifier")]
-    UnauthorizedVerifier,
+    #[error("Unauthorized approver")]
+    UnauthorizedApprover,
 
     #[error("Escrow expired")]
     EscrowExpired,

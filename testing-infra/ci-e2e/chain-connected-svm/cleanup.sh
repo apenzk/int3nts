@@ -13,7 +13,8 @@ cd "$PROJECT_ROOT"
 
 log_and_echo " Cleaning up SVM chain and temp files..."
 
-stop_verifier || true
+stop_coordinator || true
+stop_trusted_gmp || true
 stop_solver || true
 
 ./testing-infra/ci-e2e/chain-connected-svm/stop-chain.sh || true

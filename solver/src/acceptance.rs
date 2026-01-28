@@ -24,7 +24,7 @@ pub struct AcceptanceConfig {
     pub token_pairs: HashMap<TokenPair, f64>,
 }
 
-/// Draft-intent data from verifier API
+/// Draft-intent data from coordinator API
 #[derive(Debug, Clone)]
 pub struct DraftintentData {
     pub intent_id: String,          // Intent ID (hex string)

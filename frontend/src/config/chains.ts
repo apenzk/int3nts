@@ -29,7 +29,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     name: 'Movement Bardock Testnet',
     chainType: 'mvm',
     isHub: true,
-    intentContractAddress: '0xff9ee5d1a0fa9d4bdd4471f08cb794424c6ec6ca136fea727059951dc65631e5',
+    intentContractAddress: process.env.NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS,
   },
   'svm-devnet': {
     id: 'svm-devnet',
@@ -45,7 +45,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     rpcUrl: 'https://base-sepolia-rpc.publicnode.com',
     name: 'Base Sepolia',
     chainType: 'evm',
-    escrowContractAddress: '0x90Fb7731edE86f4B2DB37afd132732979cA90015',
+    escrowContractAddress: process.env.NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS,
   },
   'ethereum-sepolia': {
     id: 'ethereum-sepolia',

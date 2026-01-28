@@ -2,7 +2,7 @@
  * Shared test constants for frontend unit tests
  *
  * This module provides constants used across multiple test files, following
- * the same pattern as the Rust test helpers (verifier/tests/helpers.rs).
+ * the same pattern as the Rust test helpers (coordinator/tests/helpers.rs).
  *
  * Constants are numbered sequentially (0x...0001, 0x...0002, etc.) to maintain
  * consistency and make them easily identifiable in test output.
@@ -30,7 +30,7 @@ function createSequentialBytes(value: number): Uint8Array {
 
 // --------------------------------- IDs ----------------------------------
 
-/// Dummy intent ID (64 hex characters, same format as verifier tests)
+/// Dummy intent ID (64 hex characters, same format as coordinator tests)
 export const DUMMY_INTENT_ID = '0x0000000000000000000000000000000000000000000000000000000000000001';
 
 // -------------------------------- USERS ---------------------------------

@@ -3,7 +3,7 @@
 # Run Solver Locally (Against Testnets)
 #
 # This script runs the solver service locally, connecting to:
-#   - Local or remote verifier (default: localhost:3333)
+#   - Local or remote coordinator (default: localhost:3333) and trusted-gmp (default: localhost:3334)
 #   - Movement Bardock Testnet (hub chain)
 #   - Base Sepolia (connected chain)
 #
@@ -13,7 +13,7 @@
 #   - solver/config/solver_testnet.toml configured with actual deployed addresses
 #   - .env.testnet with BASE_SOLVER_PRIVATE_KEY
 #   - Movement CLI profile configured for solver (uses MOVEMENT_SOLVER_PRIVATE_KEY from .env.testnet)
-#   - Verifier running (locally or remotely)
+#   - Coordinator and trusted-gmp running (locally or remotely)
 #   - Rust toolchain installed
 #
 # Usage:
@@ -74,7 +74,7 @@ if [ ! -f "$SOLVER_CONFIG" ]; then
     echo "   - escrow_contract_addr (connected_chain_evm section)"
     echo "   - escrow_program_id (connected_chain_svm section)"
     echo "   - address (solver section)"
-    echo "   - verifier_url (service section - use localhost:3333 for local testing)"
+    echo "   - coordinator_url (service section - use localhost:3333 for local testing)"
     exit 1
 fi
 
@@ -88,14 +88,14 @@ if grep -qE "(0x123|0x\.\.\.|0x\.\.\.)" "$SOLVER_CONFIG"; then
     echo "   - escrow_contract_addr (connected_chain_evm section)"
     echo "   - escrow_program_id (connected_chain_svm section)"
     echo "   - address (solver section)"
-    echo "   - verifier_url (service section - use localhost:3333 for local testing)"
+    echo "   - coordinator_url (service section - use localhost:3333 for local testing)"
     echo ""
     echo "   Contract addresses should be read from your deployment logs."
     exit 1
 fi
 
 # Extract config values for display (skip comment lines)
-VERIFIER_URL=$(grep "^verifier_url" "$SOLVER_CONFIG" | grep -v "^#" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/#.*$//' | xargs)
+COORDINATOR_URL=$(grep "^coordinator_url" "$SOLVER_CONFIG" | grep -v "^#" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/#.*$//' | xargs)
 HUB_RPC=$(grep -A5 "\[hub_chain\]" "$SOLVER_CONFIG" | grep "^rpc_url" | grep -v "^#" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/#.*$//' | xargs)
 HUB_MODULE=$(grep -A5 "\[hub_chain\]" "$SOLVER_CONFIG" | grep "^module_addr" | grep -v "^#" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/#.*$//' | xargs)
 SOLVER_PROFILE=$(grep -A5 "\[solver\]" "$SOLVER_CONFIG" | grep "^profile" | grep -v "^#" | head -1 | sed 's/.*= *"\(.*\)".*/\1/' | sed 's/#.*$//' | xargs)
@@ -153,8 +153,8 @@ echo "   Config file: $SOLVER_CONFIG"
 echo "   Keys file:   $TESTNET_KEYS_FILE"
 echo "   Connected:   $CONNECTED_TYPES"
 echo ""
-echo "   Verifier:"
-echo "     URL:              $VERIFIER_URL"
+echo "   Coordinator:"
+echo "     URL:              $COORDINATOR_URL"
 echo ""
 echo "   Hub Chain:"
 echo "     RPC:              $HUB_RPC"
@@ -183,19 +183,19 @@ echo "     Profile:          $SOLVER_PROFILE"
 echo "     Address:          $SOLVER_ADDR"
 echo ""
 
-# Check verifier is reachable
-echo "   Checking verifier health..."
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$VERIFIER_URL/health" 2>/dev/null || echo "000")
+# Check coordinator is reachable
+echo "   Checking coordinator health..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$COORDINATOR_URL/health" 2>/dev/null || echo "000")
 
 if [ "$HTTP_CODE" = "200" ]; then
-    echo "   ✅ Verifier is healthy"
+    echo "   ✅ Coordinator is healthy"
 else
-    echo "   ️  Verifier not responding at $VERIFIER_URL (HTTP $HTTP_CODE)"
+    echo "   ️  Coordinator not responding at $COORDINATOR_URL (HTTP $HTTP_CODE)"
     echo ""
-    echo "   Make sure verifier is running first:"
-    echo "   ./testing-infra/testnet/run-verifier-local.sh"
+    echo "   Make sure coordinator is running first:"
+    echo "   ./testing-infra/testnet/run-coordinator-local.sh"
     echo ""
-    echo "   Quick check: curl $VERIFIER_URL/health"
+    echo "   Quick check: curl $COORDINATOR_URL/health"
     echo ""
     read -p "   Continue anyway? (y/N) " -n 1 -r
     echo

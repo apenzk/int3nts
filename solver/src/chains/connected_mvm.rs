@@ -292,19 +292,19 @@ impl ConnectedMvmClient {
         anyhow::bail!("Could not extract transaction hash from output: {}", output_str)
     }
 
-    /// Completes an escrow by releasing funds to the solver with verifier approval
+    /// Completes an escrow by releasing funds to the solver with trusted-gmp approval
     ///
     /// Calls the `complete_escrow_from_fa` entry function which:
     /// 1. Starts the escrow session (gets locked assets)
     /// 2. Deposits locked assets to solver
     /// 3. Withdraws payment from solver
-    /// 4. Completes escrow with verifier signature
+    /// 4. Completes escrow with trusted-gmp signature
     ///
     /// # Arguments
     ///
     /// * `escrow_intent_addr` - Object address of the escrow intent
     /// * `payment_amount` - Amount of tokens to provide as payment (typically matches desired_amount)
-    /// * `verifier_signature_bytes` - Verifier's Ed25519 signature as bytes (base64 decoded)
+    /// * `approval_signature_bytes` - Trusted-gmp's Ed25519 signature as bytes (base64 decoded)
     ///
     /// # Returns
     ///
@@ -314,10 +314,10 @@ impl ConnectedMvmClient {
         &self,
         escrow_intent_addr: &str,
         payment_amount: u64,
-        verifier_signature_bytes: &[u8],
+        approval_signature_bytes: &[u8],
     ) -> Result<String> {
         // Convert signature bytes to hex string
-        let signature_hex = hex::encode(verifier_signature_bytes);
+        let signature_hex = hex::encode(approval_signature_bytes);
 
         // Use aptos CLI for compatibility with E2E tests which create aptos profiles
         let output = Command::new("aptos")

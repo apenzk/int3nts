@@ -6,7 +6,7 @@
 # backward-incompatible module update errors. Funds are transferred from
 # the deployer account in .env.testnet to the new module address.
 #
-# The new module address must be updated in verifier and solver config
+# The new module address must be updated in coordinator and solver config
 # files after deployment.
 #
 # REQUIRES: Movement CLI (not aptos CLI)
@@ -319,26 +319,26 @@ movement move run \
 
 echo ""
 
-# Initialize verifier config for outflow intents
-echo " Step 10: Initializing verifier config..."
+# Initialize trusted-gmp config for outflow intents (on-chain approver public key)
+echo " Step 10: Initializing trusted-gmp (approver) config..."
 
-if [ -z "$VERIFIER_PUBLIC_KEY" ]; then
-    echo "❌ ERROR: VERIFIER_PUBLIC_KEY not set in .env.testnet"
+if [ -z "$TRUSTED_GMP_PUBLIC_KEY" ]; then
+    echo "❌ ERROR: TRUSTED_GMP_PUBLIC_KEY not set in .env.testnet"
     exit 1
 fi
 
-VERIFIER_PUBLIC_KEY_HEX=$(echo "$VERIFIER_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
+TRUSTED_GMP_PUBLIC_KEY_HEX=$(echo "$TRUSTED_GMP_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
 movement move run \
   --profile "$TEMP_PROFILE" \
-  --function-id "${DEPLOY_ADDR_FULL}::fa_intent_outflow::initialize_verifier" \
-  --args "hex:${VERIFIER_PUBLIC_KEY_HEX}" \
+  --function-id "${DEPLOY_ADDR_FULL}::fa_intent_outflow::initialize_approver" \
+  --args "hex:${TRUSTED_GMP_PUBLIC_KEY_HEX}" \
   --assume-yes
 
 if [ $? -ne 0 ]; then
-    echo "❌ ERROR: Failed to initialize verifier config"
+    echo "❌ ERROR: Failed to initialize trusted-gmp (approver) config"
     exit 1
 fi
-echo "   ✅ Verifier config initialized"
+echo "   ✅ Trusted-gmp (approver) config initialized"
 
 echo ""
 
@@ -354,14 +354,20 @@ echo " NEW Module Address: $DEPLOY_ADDR_FULL"
 echo ""
 echo "️  IMPORTANT: Update these files with the new module address:"
 echo ""
-echo "   1. verifier/config/verifier_testnet.toml:"
+echo "   1. coordinator/config/coordinator_testnet.toml:"
 echo "      intent_module_addr = \"$DEPLOY_ADDR_FULL\""
+echo "      (in the [hub_chain] section)"
 echo ""
-echo "   2. solver/config/solver_testnet.toml:"
+echo "   2. trusted-gmp/config/trusted-gmp_testnet.toml:"
+echo "      intent_module_addr = \"$DEPLOY_ADDR_FULL\""
+echo "      (in the [hub_chain] section)"
+echo ""
+echo "   3. solver/config/solver_testnet.toml:"
 echo "      module_addr = \"$DEPLOY_ADDR_FULL\""
+echo "      (in the [hub_chain] section)"
 echo ""
-echo "   3. frontend/src/config/chains.ts:"
-echo "      intentContractAddress: '$DEPLOY_ADDR_FULL' (in Movement chain config)"
+echo "   4. frontend/.env.local:"
+echo "      NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS=$DEPLOY_ADDR_FULL"
 echo ""
 echo " Next steps:"
 echo "   1. Update the config files above with the new module address"

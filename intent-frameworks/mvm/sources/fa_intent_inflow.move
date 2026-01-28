@@ -52,7 +52,7 @@ module mvmt_intent::fa_intent_inflow {
     ///
     /// Inflow intents have tokens locked on the connected chain (in escrow) and request tokens on the hub.
     /// The solver provides the desired tokens to the requester on the hub chain.
-    /// No verifier signature is required for inflow intents.
+    /// No approver signature is required for inflow intents.
     ///
     /// # Arguments
     /// - `solver`: Signer fulfilling the intent
@@ -186,7 +186,7 @@ module mvmt_intent::fa_intent_inflow {
             signer::address_of(account),
             reservation_result, // Reserved for specific solver
             false, // CRITICAL: All parts of a cross-chain intent MUST be non-revocable (including the hub intent)
-            // Ensures consistent safety guarantees for verifiers across chains
+            // Ensures consistent safety guarantees for approvers across chains
             option::some(intent_id), // Store the cross-chain intent_id for fulfillment event
             option::some(requester_addr_connected_chain) // Store requester address on connected chain for escrow lookup
         );

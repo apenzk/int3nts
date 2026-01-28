@@ -3,7 +3,7 @@
 //! Tracks the lifecycle of intents from draftintent to on-chain creation to fulfillment.
 //!
 //! Flow:
-//! 1. **Draft-intent (Signed state)**: Solver signs a draftintent and submits signature to verifier.
+//! 1. **Draft-intent (Signed state)**: Solver signs a draftintent and submits signature to coordinator.
 //!    The tracker stores this draftintent, waiting for the requester to create it on-chain.
 //! 2. **Request-intent (Created state)**: Requester creates the intent on-chain using the solver's signature.
 //!    The tracker detects this via `poll_for_created_intents()` and updates state to Created.
@@ -23,7 +23,7 @@ use crate::config::{ChainConfig, SolverConfig};
 /// State of a tracked intent
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IntentState {
-    /// Draft-intent has been signed and submitted to verifier, waiting for on-chain intent creation
+    /// Draft-intent has been signed and submitted to coordinator, waiting for on-chain intent creation
     Signed,
     /// Request-intent has been created on-chain, ready for fulfillment
     Created,
@@ -34,7 +34,7 @@ pub enum IntentState {
 /// A tracked intent with its state and metadata
 #[derive(Debug, Clone)]
 pub struct TrackedIntent {
-    /// Draft ID from verifier
+    /// Draft ID from coordinator
     pub draft_id: String,
     /// Intent ID (for cross-chain linking)
     pub intent_id: String,
@@ -96,14 +96,14 @@ impl IntentTracker {
 
     /// Adds a signed draftintent to tracking
     ///
-    /// Called after successfully submitting a signature to the verifier.
+    /// Called after successfully submitting a signature to the coordinator.
     /// This tracks a **draftintent** (not yet on-chain) that the solver has signed.
     /// The tracker will monitor for when the requester creates the corresponding
     /// **intent** on-chain.
     ///
     /// # Arguments
     ///
-    /// * `draft_id` - Draft ID from verifier
+    /// * `draft_id` - Draft ID from coordinator
     /// * `draft_data` - Parsed draft data
     /// * `requester_addr` - Requester address
     /// * `expiry_time` - Expiry timestamp

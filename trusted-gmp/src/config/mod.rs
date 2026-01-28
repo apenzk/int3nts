@@ -1,0 +1,312 @@
+//! Configuration Management Module
+//!
+//! This module handles loading and managing configuration for the Trusted GMP service.
+//! Configuration includes chain endpoints, cryptographic keys, API settings, and validation parameters.
+
+use serde::{Deserialize, Serialize};
+
+// ============================================================================
+// CONFIGURATION STRUCTURES
+// ============================================================================
+
+/// Main configuration structure containing all service settings.
+///
+/// This structure holds configuration for:
+/// - Hub chain connection details
+/// - Connected Move VM chain connection details (optional, for Move VM escrow chains)
+/// - Connected EVM chain configuration (optional, for EVM escrow chains)
+/// - Trusted GMP cryptographic keys and settings
+/// - API server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    /// Hub chain configuration (where intents are created)
+    pub hub_chain: ChainConfig,
+    /// Connected Move VM chain configuration (optional, where escrow events occur on Move VM)
+    #[serde(default)]
+    pub connected_chain_mvm: Option<ChainConfig>,
+    /// Connected EVM chain configuration (optional, for escrow on EVM)
+    #[serde(default)]
+    pub connected_chain_evm: Option<EvmChainConfig>,
+    /// Connected Solana chain configuration (optional, for escrow on SVM)
+    #[serde(default)]
+    pub connected_chain_svm: Option<SvmChainConfig>,
+    /// Trusted GMP configuration (keys, timeouts, etc.)
+    pub trusted_gmp: TrustedGmpConfig,
+    /// API server configuration (host, port, CORS settings)
+    pub api: ApiConfig,
+}
+
+/// Configuration for a blockchain connection.
+///
+/// Contains all necessary information to connect to and interact with a blockchain,
+/// including RPC endpoints, chain identifiers, and module addresses.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for blockchain communication
+    pub rpc_url: String,
+    /// Unique chain identifier
+    pub chain_id: u64,
+    /// Address of the intent framework module
+    pub intent_module_addr: String,
+    /// Address of the escrow module (optional for hub chain)
+    pub escrow_module_addr: Option<String>,
+}
+
+/// Configuration for an EVM-compatible chain (Ethereum, Hardhat, etc.)
+///
+/// Used when escrows are hosted on EVM chains instead of Move-based chains.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvmChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for EVM chain communication
+    pub rpc_url: String,
+    /// Address of the IntentEscrow contract (single contract, one escrow per intentId)
+    pub escrow_contract_addr: String,
+    /// Chain ID (e.g., 31337 for Hardhat, 1 for Ethereum mainnet)
+    pub chain_id: u64,
+    /// Trusted-gmp EVM public key hash (keccak256 hash of ECDSA public key, last 20 bytes).
+    /// This is the Ethereum address derived from the trusted-gmp's ECDSA public key (on-chain approver address).
+    #[serde(rename = "approver_evm_pubkey_hash")]
+    pub approver_evm_pubkey_hash: String,
+}
+
+/// Configuration for a Solana chain (SVM).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SvmChainConfig {
+    /// Human-readable name for the chain
+    pub name: String,
+    /// RPC endpoint URL for Solana chain communication
+    pub rpc_url: String,
+    /// Chain ID (arbitrary unique ID used for routing)
+    pub chain_id: u64,
+    /// Program ID of the intent escrow program
+    pub escrow_program_id: String,
+}
+
+/// Trusted GMP configuration including cryptographic keys and timing parameters.
+///
+/// This configuration is critical for the service's operation and security.
+/// The private key must be kept secure and never exposed.
+///
+/// Keys are loaded from environment variables at runtime for security.
+/// The config file contains the environment variable names, not the actual keys.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustedGmpConfig {
+    /// Environment variable name containing Ed25519 private key (base64 encoded)
+    /// Default: "TRUSTED_GMP_PRIVATE_KEY"
+    #[serde(default = "default_private_key_env")]
+    pub private_key_env: String,
+    /// Environment variable name containing Ed25519 public key (base64 encoded)
+    /// Default: "TRUSTED_GMP_PUBLIC_KEY"
+    #[serde(default = "default_public_key_env")]
+    pub public_key_env: String,
+    /// Polling interval for event monitoring in milliseconds
+    pub polling_interval_ms: u64,
+    /// Timeout for validation operations in milliseconds
+    pub validation_timeout_ms: u64,
+}
+
+fn default_private_key_env() -> String {
+    "TRUSTED_GMP_PRIVATE_KEY".to_string()
+}
+
+fn default_public_key_env() -> String {
+    "TRUSTED_GMP_PUBLIC_KEY".to_string()
+}
+
+impl TrustedGmpConfig {
+    /// Loads the private key from the environment variable.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - The private key (base64 encoded)
+    /// * `Err(anyhow::Error)` - Failed to load from environment
+    pub fn get_private_key(&self) -> anyhow::Result<String> {
+        std::env::var(&self.private_key_env)
+            .map_err(|_| anyhow::anyhow!(
+                "Environment variable '{}' not set. Please set it with your Ed25519 private key (base64 encoded).",
+                self.private_key_env
+            ))
+    }
+
+    /// Loads the public key from the environment variable.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - The public key (base64 encoded)
+    /// * `Err(anyhow::Error)` - Failed to load from environment
+    pub fn get_public_key(&self) -> anyhow::Result<String> {
+        std::env::var(&self.public_key_env)
+            .map_err(|_| anyhow::anyhow!(
+                "Environment variable '{}' not set. Please set it with your Ed25519 public key (base64 encoded).",
+                self.public_key_env
+            ))
+    }
+}
+
+/// API server configuration for external communication.
+///
+/// Controls how the trusted-gmp service exposes its REST API endpoints
+/// and handles cross-origin requests.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiConfig {
+    /// Host address to bind the API server to
+    pub host: String,
+    /// Port number to bind the API server to
+    pub port: u16,
+    /// Allowed CORS origins for cross-origin requests
+    pub cors_origins: Vec<String>,
+}
+
+// ============================================================================
+// CONFIGURATION LOADING AND MANAGEMENT
+// ============================================================================
+
+impl Config {
+    /// Validates the configuration for duplicate chain IDs.
+    ///
+    /// This function ensures that:
+    /// - Hub chain ID is unique
+    /// - Connected MVM chain ID (if present) is unique
+    /// - Connected EVM chain ID (if present) is unique
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(())` - Configuration is valid
+    /// - `Err(anyhow::Error)` - Duplicate chain IDs detected
+    pub fn validate(&self) -> anyhow::Result<()> {
+        let hub_chain_id = self.hub_chain.chain_id;
+
+        // Check hub vs connected_chain_mvm
+        if let Some(ref mvm_config) = self.connected_chain_mvm {
+            if hub_chain_id == mvm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Hub chain and connected MVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    hub_chain_id
+                ));
+            }
+        }
+
+        // Check hub vs connected_chain_evm
+        if let Some(ref evm_config) = self.connected_chain_evm {
+            if hub_chain_id == evm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Hub chain and connected EVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    hub_chain_id
+                ));
+            }
+        }
+
+        // Check hub vs connected_chain_svm
+        if let Some(ref svm_config) = self.connected_chain_svm {
+            if hub_chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Hub chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    hub_chain_id
+                ));
+            }
+        }
+
+        // Check connected_chain_mvm vs connected_chain_evm
+        if let (Some(ref mvm_config), Some(ref evm_config)) = (&self.connected_chain_mvm, &self.connected_chain_evm) {
+            if mvm_config.chain_id == evm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Connected MVM chain and connected EVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    mvm_config.chain_id
+                ));
+            }
+        }
+
+        // Check connected_chain_mvm vs connected_chain_svm
+        if let (Some(ref mvm_config), Some(ref svm_config)) = (&self.connected_chain_mvm, &self.connected_chain_svm) {
+            if mvm_config.chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Connected MVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    mvm_config.chain_id
+                ));
+            }
+        }
+
+        // Check connected_chain_evm vs connected_chain_svm
+        if let (Some(ref evm_config), Some(ref svm_config)) = (&self.connected_chain_evm, &self.connected_chain_svm) {
+            if evm_config.chain_id == svm_config.chain_id {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: Connected EVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                    evm_config.chain_id
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Loads configuration from the TOML file.
+    ///
+    /// This function:
+    /// 1. Checks if config/trusted-gmp.toml exists
+    /// 2. If it exists, loads and parses the configuration
+    /// 3. Validates the configuration for duplicate chain IDs
+    /// 4. If it doesn't exist, returns an error asking user to copy template
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(Config)` - Successfully loaded and validated configuration
+    /// - `Err(anyhow::Error)` - Failed to load configuration, file doesn't exist, or validation failed
+    pub fn load() -> anyhow::Result<Self> {
+        // Check for custom config path via environment variable (for tests)
+        let config_path = std::env::var("TRUSTED_GMP_CONFIG_PATH")
+            .unwrap_or_else(|_| "config/trusted-gmp.toml".to_string());
+
+        if std::path::Path::new(&config_path).exists() {
+            // Load existing configuration
+            let content = std::fs::read_to_string(&config_path)?;
+            let config: Config = toml::from_str(&content)?;
+            // Validate configuration
+            config.validate()?;
+            Ok(config)
+        } else {
+            // Configuration file doesn't exist - user needs to copy template
+            Err(anyhow::anyhow!(
+                "Configuration file '{}' not found. Please copy the template:\n\
+                cp config/trusted-gmp.template.toml config/trusted-gmp.toml\n\
+                Then edit config/trusted-gmp.toml with your actual values.",
+                config_path
+            ))
+        }
+    }
+
+    /// Creates a default configuration with placeholder values.
+    ///
+    /// This configuration is suitable for local development and testing.
+    /// For production use, all placeholder values must be replaced with
+    /// actual chain URLs, module addresses, and cryptographic keys.
+    #[allow(dead_code)]
+    pub fn default() -> Self {
+        Self {
+            hub_chain: ChainConfig {
+                name: "Hub Chain".to_string(),
+                rpc_url: "http://127.0.0.1:8080".to_string(),
+                chain_id: 1,
+                intent_module_addr: "0x123".to_string(),
+                escrow_module_addr: None,
+            },
+            connected_chain_mvm: None, // Optional connected Move VM chain configuration
+            trusted_gmp: TrustedGmpConfig {
+                private_key_env: "TRUSTED_GMP_PRIVATE_KEY".to_string(),
+                public_key_env: "TRUSTED_GMP_PUBLIC_KEY".to_string(),
+                polling_interval_ms: 2000,
+                validation_timeout_ms: 30000,
+            },
+            api: ApiConfig {
+                host: "127.0.0.1".to_string(),
+                port: 3333,
+                cors_origins: vec!["http://localhost:3333".to_string()],
+            },
+            connected_chain_evm: None, // Optional connected EVM chain configuration
+            connected_chain_svm: None, // Optional connected SVM chain configuration
+        }
+    }
+}

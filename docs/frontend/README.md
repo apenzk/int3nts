@@ -8,7 +8,7 @@ The frontend provides a user-friendly interface for:
 
 - Connecting Nightly wallet (for MVM chains), MetaMask (for EVM chains), and Phantom (for SVM chains)
 - Creating inflow and outflow intents
-- Submitting draft intents to the verifier and polling for solver signatures
+- Submitting draft intents to the coordinator and polling for solver signatures
 - Tracking intent lifecycle from creation to fulfillment
 - Managing escrow creation for inflow intents
 
@@ -29,7 +29,7 @@ The frontend is built with:
 - `app/page.tsx` - Main intent creation page
 - `components/intent/IntentBuilder.tsx` - Intent creation form and status tracking
 - `components/wallet/` - Wallet connection UI components
-- `lib/verifier.ts` - Verifier API client with polling
+- `lib/coordinator.ts` - Coordinator and trusted-gmp API client with polling
 - `lib/types.ts` - Protocol types (DraftIntent, IntentStatus, etc.)
 - `config/chains.ts` - Chain configurations and contract addresses
 - `config/tokens.ts` - Supported token definitions
@@ -42,7 +42,7 @@ For detailed protocol flows, see [Protocol Specification](../protocol.md).
 
 1. User connects Nightly (MVM) plus MetaMask (EVM) or Phantom (SVM) wallet
 2. User selects tokens and amounts (Send on connected chain, Receive on Movement)
-3. Frontend submits draft intent to verifier
+3. Frontend submits draft intent to coordinator
 4. Frontend polls for solver signature
 5. User commits intent on Movement hub chain (via Nightly)
 6. User creates escrow on connected chain:
@@ -55,7 +55,7 @@ For detailed protocol flows, see [Protocol Specification](../protocol.md).
 
 1. User connects Nightly (MVM) plus MetaMask (EVM) or Phantom (SVM) wallet
 2. User selects tokens and amounts (Send on Movement, Receive on connected chain)
-3. Frontend submits draft intent to verifier
+3. Frontend submits draft intent to coordinator
 4. Frontend polls for solver signature
 5. User commits intent on Movement hub chain (via Nightly) - tokens sent immediately
 6. Frontend uses the connected-chain wallet address for outflow intents (MetaMask for EVM, Phantom for SVM)
@@ -69,7 +69,8 @@ See the [component README](../../frontend/README.md) for installation and develo
 ## Environment Variables
 
 ```bash
-NEXT_PUBLIC_VERIFIER_URL=http://localhost:3333
+NEXT_PUBLIC_COORDINATOR_URL=http://localhost:3333
+NEXT_PUBLIC_TRUSTED_GMP_URL=http://localhost:3334
 NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz/v1
 NEXT_PUBLIC_SVM_RPC_URL=https://api.devnet.solana.com
 NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
@@ -87,11 +88,11 @@ NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
 
 ## API Integration
 
-The frontend communicates with the verifier service for:
+The frontend communicates with the coordinator service for:
 
 - Draft intent submission (`POST /draftintent`)
 - Signature polling (`GET /draftintent/:id/signature`)
 - Exchange rate queries (`GET /acceptance`)
 - Approval status checks (`GET /approved/:intent_id`)
 
-For detailed API documentation, see [Trusted Verifier API](../verifier/api.md).
+For detailed API documentation, see the [Coordinator API](../coordinator/README.md) and [Trusted GMP API](../trusted-gmp/api.md).

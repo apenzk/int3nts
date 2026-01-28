@@ -1,6 +1,6 @@
 //! Solver HTTP API
 //!
-//! Provides acceptance ratio lookup for the verifier.
+//! Provides acceptance ratio lookup for the coordinator.
 
 use crate::config::SolverConfig;
 use serde::Serialize;
@@ -32,7 +32,7 @@ pub struct ExchangeRateResponse {
 
 /// Start the solver acceptance API server.
 ///
-/// Exposes `GET /acceptance` for live ratio lookups by the verifier.
+/// Exposes `GET /acceptance` for live ratio lookups by the coordinator.
 ///
 /// # Arguments
 ///
@@ -61,7 +61,7 @@ pub async fn run_acceptance_server(config: Arc<SolverConfig>, host: String, port
     warp::serve(routes).run((ip, port)).await;
 }
 
-/// Handle `/acceptance` ratio queries from the verifier.
+/// Handle `/acceptance` ratio queries from the coordinator.
 ///
 /// Returns the exchange rate for a specific token pair, or the first
 /// match for a given offered token when no desired token is supplied.

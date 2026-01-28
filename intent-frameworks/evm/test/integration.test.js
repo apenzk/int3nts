@@ -5,7 +5,7 @@ const { setupIntentEscrowTests, advanceTime } = require("./helpers/setup");
 describe("IntentEscrow - Integration Tests", function () {
   let escrow;
   let token;
-  let verifierWallet;
+  let approverWallet;
   let requester;
   let solver;
   let intentId;
@@ -14,7 +14,7 @@ describe("IntentEscrow - Integration Tests", function () {
     const fixtures = await setupIntentEscrowTests();
     escrow = fixtures.escrow;
     token = fixtures.token;
-    verifierWallet = fixtures.verifierWallet;
+    approverWallet = fixtures.approverWallet;
     requester = fixtures.requester;
     solver = fixtures.solver;
     intentId = fixtures.intentId;
@@ -51,13 +51,13 @@ describe("IntentEscrow - Integration Tests", function () {
     expect(escrowDataBefore.isClaimed).to.equal(false);
     expect(await token.balanceOf(escrow.target)).to.equal(amount);
     
-    // Step 4: Generate verifier signature for claim
+    // Step 4: Generate approver signature for claim
     // Signature is over intentId only (signature itself is the approval)
     const messageHash = ethers.solidityPackedKeccak256(
       ["uint256"],
       [intentId]
     );
-    const signature = await verifierWallet.signMessage(ethers.getBytes(messageHash));
+    const signature = await approverWallet.signMessage(ethers.getBytes(messageHash));
     
     // Step 5: Claim escrow and verify EscrowClaimed event
     expect(await token.balanceOf(solver.address)).to.equal(0);
@@ -149,7 +149,7 @@ describe("IntentEscrow - Integration Tests", function () {
       ["uint256"],
       [intentId]
     );
-    const signature = await verifierWallet.signMessage(ethers.getBytes(messageHash));
+    const signature = await approverWallet.signMessage(ethers.getBytes(messageHash));
     
     await expect(escrow.connect(solver).claim(intentId, signature))
       .to.emit(escrow, "EscrowClaimed")

@@ -234,7 +234,7 @@ describe("EVM Scripts - Utility Functions", function () {
 
     /// Test: ERC20 Transfer with Intent ID
     /// Verifies that the transfer-with-intent-id.js script performs ERC20 transfers with intent_id appended to calldata.
-    /// Why: The verifier needs to extract intent_id from transaction calldata to validate outflow fulfillments. The script must format calldata correctly (100 bytes: selector + recipient + amount + intent_id).
+    /// Why: The approver needs to extract intent_id from transaction calldata to validate outflow fulfillments. The script must format calldata correctly (100 bytes: selector + recipient + amount + intent_id).
     it("Should perform ERC20 transfer with intent_id in calldata", async function () {
       const transferAmount = ethers.parseEther("1000");
       const intentId = DUMMY_INTENT_ID_1;
@@ -379,7 +379,7 @@ describe("EVM Scripts - Utility Functions", function () {
 
     /// Test: Calldata Length Validation
     /// Verifies that the transfer-with-intent-id.js script generates calldata of exactly 100 bytes (4 + 32 + 32 + 32).
-    /// Why: The verifier expects a specific calldata format. Incorrect length would cause parsing failures. This ensures the script matches the expected format.
+    /// Why: The approver expects a specific calldata format. Incorrect length would cause parsing failures. This ensures the script matches the expected format.
     it("Should verify calldata length is 100 bytes", async function () {
       const transferAmount = ethers.parseEther("1000");
       const intentId = DUMMY_INTENT_ID_1;

@@ -3,17 +3,17 @@ const { ethers } = require("hardhat");
 /// Shared test setup for IntentEscrow tests
 /// Provides common fixtures and helper functions
 async function setupIntentEscrowTests() {
-  const [verifier, requester, solver] = await ethers.getSigners();
-  const verifierWallet = verifier;
+  const [approver, requester, solver] = await ethers.getSigners();
+  const approverWallet = approver;
 
   // Deploy mock ERC20 token
   const MockERC20 = await ethers.getContractFactory("MockERC20");
   const token = await MockERC20.deploy("Test Token", "TEST", 18);
   await token.waitForDeployment();
 
-  // Deploy escrow with verifier address
+  // Deploy escrow with approver address
   const IntentEscrow = await ethers.getContractFactory("IntentEscrow");
-  const escrow = await IntentEscrow.deploy(verifier.address);
+  const escrow = await IntentEscrow.deploy(approver.address);
   await escrow.waitForDeployment();
 
   const intentId = ethers.parseUnits("1", 0); // Simple intent ID
@@ -21,11 +21,11 @@ async function setupIntentEscrowTests() {
   return {
     escrow,
     token,
-    verifier,
+    approver,
     requester,
     solver,
     intentId,
-    verifierWallet
+    approverWallet
   };
 }
 

@@ -33,7 +33,7 @@ module mvmt_intent::intent_registry_tests {
         requester = @0xcafe
     )]
     /// What is tested: register_intent adds intent and unregister_intent removes it
-    /// Why: Ensure intent lifecycle is tracked accurately for verifier polling
+    /// Why: Ensure intent lifecycle is tracked accurately for approver polling
     fun test_register_unregister_lifecycle(
         aptos_framework: &signer,
         mvmt_intent: &signer,

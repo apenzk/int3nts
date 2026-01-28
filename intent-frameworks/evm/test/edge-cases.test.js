@@ -5,7 +5,7 @@ const { setupIntentEscrowTests } = require("./helpers/setup");
 describe("IntentEscrow - Edge Cases", function () {
   let escrow;
   let token;
-  let verifierWallet;
+  let approverWallet;
   let requester;
   let solver;
   let intentId;
@@ -14,7 +14,7 @@ describe("IntentEscrow - Edge Cases", function () {
     const fixtures = await setupIntentEscrowTests();
     escrow = fixtures.escrow;
     token = fixtures.token;
-    verifierWallet = fixtures.verifierWallet;
+    approverWallet = fixtures.approverWallet;
     requester = fixtures.requester;
     solver = fixtures.solver;
     intentId = fixtures.intentId;

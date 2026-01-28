@@ -14,7 +14,7 @@ The solver provides both **command-line utilities** and a **continuous service**
 
 A continuous service that automatically:
 
-1. **Polls verifier** for pending draft intents
+1. **Polls coordinator** for pending draft intents
 2. **Evaluates acceptance** based on configured token pairs and exchange rates
 3. **Signs and submits** signatures for accepted drafts (FCFS - first solver to sign wins)
 4. **Tracks signed intents** and monitors for their on-chain creation
@@ -28,13 +28,13 @@ A continuous service that automatically:
 
 ## Architecture
 
-Solvers interact through verifier-based negotiation routing: Creator submits draft to verifier → solvers poll verifier for drafts → first solver to sign wins (FCFS) → creator retrieves signature from verifier.
+Solvers interact through coordinator-based negotiation routing: Creator submits draft to coordinator → solvers poll coordinator for drafts → first solver to sign wins (FCFS) → creator retrieves signature from coordinator.
 
-See [Negotiation Routing Guide](../docs/verifier/negotiation-routing.md) for details.
+See [Negotiation Routing Guide](../coordinator/negotiation-routing.md) for details.
 
 Components:
 
-- **Signing Service**: Continuous service that polls verifier and signs accepted drafts
+- **Signing Service**: Continuous service that polls coordinator and signs accepted drafts
 - **Intent Tracker**: Monitors signed intents and tracks their lifecycle from draft to on-chain creation
 - **Inflow Fulfillment Service**: Monitors escrow deposits on connected chains and fulfills inflow intents on hub chain
 - **Outflow Fulfillment Service**: Executes transfers on connected chains and fulfills outflow intents on hub chain
@@ -50,7 +50,7 @@ solver/
 ├── src/
 │   ├── bin/              # Binaries (solver service, sign_intent, connected_chain_tx_template)
 │   ├── service/          # Service modules
-│   │   ├── signing.rs    # Signing service loop (polls verifier, signs drafts)
+│   │   ├── signing.rs    # Signing service loop (polls coordinator, signs drafts)
 │   │   ├── tracker.rs    # Intent tracker (monitors signed intents)
 │   │   ├── inflow.rs     # Inflow fulfillment service (monitors escrows, fulfills intents)
 │   │   └── outflow.rs    # Outflow fulfillment service (executes transfers, fulfills intents)
@@ -62,14 +62,14 @@ solver/
 │   ├── acceptance.rs      # Token pair acceptance logic
 │   ├── config.rs          # Configuration management
 │   ├── crypto/            # Cryptographic operations (hashing, signing)
-│   └── verifier_client.rs # HTTP client for verifier API
+│   └── coordinator_gmp_client.rs # HTTP client for coordinator (drafts) and trusted-gmp (approvals) APIs
 ├── config/               # Configuration templates
 └── Cargo.toml
 ```
 
 ## Solver Service
 
-The solver service runs continuously, polling the verifier for pending drafts and automatically signing accepted intents.
+The solver service runs continuously, polling the coordinator for pending drafts and automatically signing accepted intents.
 
 ### Configuration
 
@@ -100,9 +100,9 @@ cargo run --bin solver
 The service will:
 
 1. Load configuration from the specified file or `SOLVER_CONFIG_PATH` environment variable
-2. Initialize logging and connect to the verifier
+2. Initialize logging and connect to the coordinator
 3. Start multiple concurrent service loops:
-   - **Signing loop**: Polls verifier for pending drafts, evaluates acceptance, signs and submits
+   - **Signing loop**: Polls coordinator for pending drafts, evaluates acceptance, signs and submits
    - **Tracking loop**: Monitors hub chain for intent creation events
    - **Inflow loop**: Monitors connected chains for escrow deposits and fulfills inflow intents
    - **Outflow loop**: Executes transfers on connected chains and fulfills outflow intents
@@ -124,7 +124,7 @@ The solver automatically fulfills **inflow intents** (tokens locked on connected
 
 1. **Monitor Escrows**: Polls connected chain for escrow deposits matching tracked inflow intents
 2. **Fulfill Intent**: Calls hub chain `fulfill_inflow_intent` when escrow is detected
-3. **Release Escrow**: Polls verifier for approval signature, then releases escrow on connected chain
+3. **Release Escrow**: Polls trusted-gmp for approval signature, then releases escrow on connected chain
 
 ### Supported Chains (Inflow)
 
@@ -139,8 +139,8 @@ The solver automatically fulfills **inflow intents** (tokens locked on connected
 The solver automatically fulfills **outflow intents** (tokens locked on hub, desired on connected chain):
 
 1. **Execute Transfer**: Transfers tokens on connected chain to requester's address
-2. **Get Verifier Approval**: Calls verifier `/validate-outflow-fulfillment` with transaction hash
-3. **Fulfill Intent**: Calls hub chain `fulfill_outflow_intent` with verifier signature
+2. **Get Trusted GMP Approval**: Calls trusted-gmp `/validate-outflow-fulfillment` with transaction hash
+3. **Fulfill Intent**: Calls hub chain `fulfill_outflow_intent` with trusted-gmp signature
 
 ### Supported Chains (Outflow)
 
@@ -154,7 +154,7 @@ The solver automatically fulfills **outflow intents** (tokens locked on hub, des
 
 The solver tracks the lifecycle of intents:
 
-1. **Signed**: Draftintent has been signed and submitted to verifier
+1. **Signed**: Draftintent has been signed and submitted to coordinator
 2. **Created**: Intent has been created on-chain by requester
 3. **Fulfilled**: Intent has been fulfilled by the solver
 
@@ -170,7 +170,7 @@ Reserved intents require off-chain negotiation:
 
 This ensures only the authorized solver can fulfill the intent, providing commitment guarantees for cross-chain scenarios.
 
-**Negotiation**: Creator submits draft to verifier, solvers poll for drafts (FCFS). See [Negotiation Routing Guide](../docs/verifier/negotiation-routing.md) for details.
+**Negotiation**: Creator submits draft to coordinator, solvers poll for drafts (FCFS). See [Negotiation Routing Guide](../coordinator/negotiation-routing.md) for details.
 
 Signature generation process:
 
@@ -255,7 +255,7 @@ The solver includes chain clients for interacting with different blockchain type
 
 - **Query Escrow Events**: `get_escrow_events()` - Queries connected MVM chain for escrow creation events
 - **Transfer with Intent ID**: `transfer_with_intent_id()` - Executes token transfer with embedded `intent_id`
-- **Complete Escrow**: `complete_escrow_from_fa()` - Releases escrow with verifier signature
+- **Complete Escrow**: `complete_escrow_from_fa()` - Releases escrow with trusted-gmp signature
 
 ### Connected EVM Client (`chains/connected_evm.rs`)
 

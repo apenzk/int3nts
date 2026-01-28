@@ -1,7 +1,7 @@
 //! Solver Service
 //!
 //! Main service binary that runs all solver services concurrently:
-//! - Signing service: polls verifier and signs accepted drafts
+//! - Signing service: polls coordinator and signs accepted drafts
 //! - Intent tracker: monitors hub chain for intent creation
 //! - Inflow service: monitors escrows and fulfills inflow intents
 //! - Outflow service: executes transfers and fulfills outflow intents
@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
     };
 
     info!("Configuration loaded successfully");
-    info!("Verifier URL: {}", config.service.verifier_url);
+    info!("Coordinator URL: {}", config.service.coordinator_url);
     info!("Polling interval: {}ms", config.service.polling_interval_ms);
     info!("Hub chain: {} (chain ID: {})", config.hub_chain.name, config.hub_chain.chain_id);
     info!("Solver address: {}", config.solver.address);

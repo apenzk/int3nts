@@ -7,7 +7,8 @@
 
 # Service Configuration
 [service]
-verifier_url = "http://127.0.0.1:3333"  # Verifier API base URL
+coordinator_url = "http://127.0.0.1:3333"  # Coordinator API base URL (draft negotiation)
+trusted_gmp_url = "http://127.0.0.1:3334"  # Trusted GMP API base URL (approvals and validation)
 polling_interval_ms = 2000               # Polling interval for checking pending drafts (milliseconds)
 e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 acceptance_api_host = "127.0.0.1"         # Solver acceptance API host

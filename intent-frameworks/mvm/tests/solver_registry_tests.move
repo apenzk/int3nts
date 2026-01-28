@@ -29,7 +29,7 @@ module mvmt_intent::solver_registry_tests {
 
     #[test(aptos_framework = @0x1, mvmt_intent = @0x123, solver = @0xcafe)]
     /// What is tested: register_solver stores solver public key and EVM address correctly
-    /// Why: Verifier relies on accurate registry entries for signature and address checks
+    /// Why: Trusted GMP relies on accurate registry entries for signature and address checks
     fun test_register_solver(
         aptos_framework: &signer,
         mvmt_intent: &signer,

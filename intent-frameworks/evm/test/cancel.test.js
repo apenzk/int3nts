@@ -5,7 +5,7 @@ const { setupIntentEscrowTests, advanceTime } = require("./helpers/setup");
 describe("IntentEscrow - Cancel", function () {
   let escrow;
   let token;
-  let verifierWallet;
+  let approverWallet;
   let requester;
   let solver;
   let intentId;
@@ -15,7 +15,7 @@ describe("IntentEscrow - Cancel", function () {
     const fixtures = await setupIntentEscrowTests();
     escrow = fixtures.escrow;
     token = fixtures.token;
-    verifierWallet = fixtures.verifierWallet;
+    approverWallet = fixtures.approverWallet;
     requester = fixtures.requester;
     solver = fixtures.solver;
     intentId = fixtures.intentId;
@@ -75,7 +75,7 @@ describe("IntentEscrow - Cancel", function () {
       ["uint256"],
       [intentId]
     );
-    const signature = await verifierWallet.signMessage(ethers.getBytes(messageHash));
+    const signature = await approverWallet.signMessage(ethers.getBytes(messageHash));
     
     await escrow.connect(solver).claim(intentId, signature);
 

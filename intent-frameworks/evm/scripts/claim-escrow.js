@@ -1,16 +1,16 @@
 //! Escrow claim utility
 //!
-//! This script claims an escrow on the IntentEscrow contract using a verifier signature.
+//! This script claims an escrow on the IntentEscrow contract using an approver signature.
 //! The solver (Account 2) calls claim() to release the escrowed funds.
 
 const hre = require("hardhat");
 
-/// Claims an escrow with verifier signature
+/// Claims an escrow with approver signature
 ///
 /// # Environment Variables
 /// - `ESCROW_ADDR`: IntentEscrow contract address
 /// - `INTENT_ID_EVM`: Intent ID in EVM format (uint256, hex with 0x prefix)
-/// - `SIGNATURE_HEX`: Verifier ECDSA signature (hex string without 0x prefix)
+/// - `SIGNATURE_HEX`: Approver ECDSA signature (hex string without 0x prefix)
 ///
 /// # Returns
 /// Outputs transaction hash and success message on success.
@@ -80,8 +80,8 @@ async function main() {
   
   try {
     // Debug: Show what the contract expects vs what we're providing
-    const verifierAddr = await escrow.verifier();
-    console.log("Contract verifier address:", verifierAddr);
+    const approverAddr = await escrow.approver();
+    console.log("Contract approver address:", approverAddr);
     
     // Compute message hash the same way the contract does
     const { ethers } = require("ethers");
@@ -100,14 +100,14 @@ async function main() {
     try {
       const recoveredAddr = ethers.recoverAddress(ethSignedMessageHash, signature);
       console.log("Recovered signer from signature:", recoveredAddr);
-      console.log("Signature matches verifier:", recoveredAddr.toLowerCase() === verifierAddr.toLowerCase());
+      console.log("Signature matches approver:", recoveredAddr.toLowerCase() === approverAddr.toLowerCase());
       
-      if (recoveredAddr.toLowerCase() !== verifierAddr.toLowerCase()) {
-        console.error("❌ MISMATCH: Contract expects verifier:", verifierAddr);
+      if (recoveredAddr.toLowerCase() !== approverAddr.toLowerCase()) {
+        console.error("❌ MISMATCH: Contract expects approver:", approverAddr);
         console.error("   But signature recovers to:", recoveredAddr);
-        console.error("   Action: Either redeploy contract with correct verifier address,");
-        console.error("   or verify the verifier's EVM address matches the contract.");
-        console.error("   Get verifier EVM address: cargo run --bin get_verifier_eth_address --manifest-path verifier/Cargo.toml");
+        console.error("   Action: Either redeploy contract with correct approver address,");
+        console.error("   or verify the approver's EVM address matches the contract.");
+        console.error("   Get approver EVM address: cargo run --bin get_approver_eth_address --manifest-path trusted-gmp/Cargo.toml");
       }
     } catch (e) {
       console.log("Failed to recover address:", e.message);

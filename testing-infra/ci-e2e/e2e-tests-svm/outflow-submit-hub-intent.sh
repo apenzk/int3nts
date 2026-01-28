@@ -11,7 +11,8 @@ setup_project_root
 setup_logging "submit-hub-intent-svm-outflow"
 cd "$PROJECT_ROOT"
 
-verify_verifier_running
+verify_coordinator_running
+verify_trusted_gmp_running
 verify_solver_running
 verify_solver_registered
 
@@ -76,11 +77,11 @@ display_balances_hub "0x$TEST_TOKENS_HUB"
 log_and_echo ""
 
 log ""
-log " Starting verifier-based negotiation routing..."
-log "   Flow: Requester → Verifier → Solver → Verifier → Requester"
+log " Starting coordinator-based negotiation routing..."
+log "   Flow: Requester → Coordinator/Trusted-GMP → Solver → Coordinator/Trusted-GMP → Requester"
 
 log ""
-log "   Step 1: Requester submits draft intent to verifier..."
+log "   Step 1: Requester submits draft intent to coordinator..."
 DRAFT_DATA=$(build_draft_data \
     "$OFFERED_METADATA_HUB" \
     "$OFFERED_AMOUNT" \
@@ -103,7 +104,7 @@ RETRIEVED_SIGNATURE=$(echo "$SIGNATURE_DATA" | jq -r '.signature')
 RETRIEVED_SOLVER=$(echo "$SIGNATURE_DATA" | jq -r '.solver_hub_addr')
 
 if [ -z "$RETRIEVED_SIGNATURE" ] || [ "$RETRIEVED_SIGNATURE" = "null" ]; then
-    log_and_echo "❌ ERROR: Failed to retrieve signature from verifier"
+    log_and_echo "❌ ERROR: Failed to retrieve signature from coordinator/trusted-gmp"
     display_service_logs "SVM outflow draft signature missing"
     exit 1
 fi
@@ -129,7 +130,7 @@ if [ $? -eq 0 ]; then
         jq -r '.[0].events[] | select(.type | contains("LimitOrderEvent")) | .data.intent_addr' | head -n 1)
     if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then
         log "     ✅ Hub intent stored at: $HUB_INTENT_ADDR"
-        log_and_echo "✅ Request-intent created (via verifier negotiation)"
+        log_and_echo "✅ Request-intent created (via coordinator/trusted-gmp negotiation)"
     else
         log_and_echo "❌ ERROR: Could not verify hub intent address"
         exit 1
@@ -147,11 +148,11 @@ log ""
 log " OUTFLOW - HUB CHAIN INTENT CREATION COMPLETE!"
 log "================================================"
 log ""
-log "✅ Steps completed successfully (via verifier-based negotiation):"
+log "✅ Steps completed successfully (via coordinator-based negotiation):"
 log "   1. Solver registered on-chain"
-log "   2. Requester submitted draft intent to verifier"
+log "   2. Requester submitted draft intent to coordinator"
 log "   3. Solver service signed draft automatically (FCFS)"
-log "   4. Requester polled verifier and retrieved signature"
+log "   4. Requester polled coordinator and retrieved signature"
 log "   5. Requester created intent on-chain with retrieved signature"
 log ""
 log " Request-intent Details:"

@@ -3,8 +3,8 @@
 # E2E Integration Test Runner - OUTFLOW
 # 
 # This script runs the outflow E2E tests that require Docker chains.
-# It sets up chains, deploys contracts, starts verifier for negotiation routing,
-# submits outflow intents via verifier, then runs the tests.
+# It sets up chains, deploys contracts, starts coordinator and trusted-gmp for negotiation routing,
+# submits outflow intents via coordinator, then runs the tests.
 
 set -e
 
@@ -28,10 +28,15 @@ echo "================================================================"
 echo ""
 echo " Step 1: Build bins and pre-pull docker images"
 echo "========================================"
-pushd "$PROJECT_ROOT/verifier" > /dev/null
-cargo build --bin verifier --bin generate_keys 2>&1 | tail -5
+pushd "$PROJECT_ROOT/coordinator" > /dev/null
+cargo build --bin coordinator 2>&1 | tail -5
 popd > /dev/null
-echo "   ✅ Verifier: verifier, generate_keys"
+echo "   ✅ Coordinator: coordinator"
+
+pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
+popd > /dev/null
+echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
 cargo build --bin solver --bin sign_intent 2>&1 | tail -5
@@ -41,9 +46,9 @@ echo "   ✅ Solver: solver, sign_intent"
 echo ""
 docker pull "$APTOS_DOCKER_IMAGE"
 
-echo " Step 2: Generating verifier keys..."
+echo " Step 2: Generating trusted-gmp keys..."
 echo "======================================="
-generate_verifier_keys
+generate_trusted_gmp_keys
 echo ""
 
 echo " Step 3: Setting up chains, deploying contracts, funding accounts"
@@ -59,9 +64,10 @@ echo "===================================================================="
 source "$PROJECT_ROOT/.tmp/chain-info.env"
 
 echo ""
-echo " Step 4: Configuring and starting verifier (for negotiation routing)..."
+echo " Step 4: Configuring and starting coordinator and trusted-gmp (for negotiation routing)..."
 echo "=========================================================================="
-./testing-infra/ci-e2e/e2e-tests-mvm/start-verifier.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-coordinator.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-trusted-gmp.sh
 
 # Assert solver has USDcon before starting (should have 1 USDcon from deploy)
 assert_usdxyz_balance "solver-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "1000000" "pre-solver-start"
@@ -79,7 +85,7 @@ echo "======================================="
 echo ""
 echo " Step 5: Testing OUTFLOW intents (hub chain → connected chain)..."
 echo "===================================================================="
-echo "   Submitting outflow cross-chain intents via verifier negotiation routing..."
+echo "   Submitting outflow cross-chain intents via coordinator negotiation routing..."
 echo ""
 echo " Pre-Intent Balance Validation"
 echo "=========================================="
@@ -100,7 +106,7 @@ echo "==========================================================="
 echo "   The solver service is running and will:"
 echo "   1. Detect the intent on hub chain"
 echo "   2. Transfer tokens to requester on connected MVM chain"
-echo "   3. Call verifier to validate and get approval signature"
+echo "   3. Call trusted-gmp to validate and get approval signature"
 echo "   4. Fulfill the hub intent with approval"
 echo ""
 

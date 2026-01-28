@@ -1,4 +1,4 @@
-/// Tracks active intents for discovery by verifiers and solvers.
+/// Tracks active intents for discovery by approvers and solvers.
 ///
 /// Security: Stores actual intent IDs (not just counts) to prevent malicious
 /// cleanup. Only truly expired or fulfilled intents can be removed.
@@ -192,7 +192,7 @@ module mvmt_intent::intent_registry {
 
     #[view]
     /// Return list of all requester addresses with active intents.
-    /// Used by the verifier/solver to know which accounts to poll for events.
+    /// Used by the approver/solver to know which accounts to poll for events.
     public fun get_active_requesters(): vector<address> acquires IntentRegistry {
         if (!exists<IntentRegistry>(@mvmt_intent)) {
             return vector::empty()

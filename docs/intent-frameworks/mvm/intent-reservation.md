@@ -45,11 +45,11 @@ graph TD
    - Offerer creates an `Draftintent` using `create_draft_intent` (without solver information).
 3. **Negotiation** (two options):
    - **Direct**: Offerer sends draft directly to solver
-   - **Verifier-Based**: Offerer submits draft to verifier via `POST /draftintent`, solvers poll via `GET /draftintents/pending` (FCFS)
+   - **Coordinator-Based**: Offerer submits draft to coordinator via `POST /draftintent`, solvers poll coordinator via `GET /draftintents/pending` (FCFS)
 4. `intent_reservation.move`
    - Solver creates an `IntentToSign` by calling `add_solver_to_draft_intent` to add the solver address to the draft.
 5. Solver signature:
-   - Solver signs the `IntentToSign` data and returns the signature to the offerer (direct) or submits to verifier via `POST /draftintent/:id/signature` (verifier-based).
+   - Solver signs the `IntentToSign` data and returns the signature to the offerer (direct) or submits to coordinator via `POST /draftintent/:id/signature` (coordinator-based).
 5. `fa_intent.move`, `fa_intent_inflow.move`, or `fa_intent_outflow.move`
    - **Offerer** submits transaction calling `create_fa_to_fa_intent_entry` (or `create_inflow_intent` / `create_outflow_intent` for cross-chain) with the solver address and **solver's signature**
    - **Contract** verifies the signature:

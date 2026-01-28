@@ -10,6 +10,11 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 export PROJECT_ROOT
 
+# Re-exec inside nix develop if not already in a nix shell
+if [ -z "${IN_NIX_SHELL:-}" ]; then
+    exec nix develop "$PROJECT_ROOT/nix" --command bash "$SCRIPT_DIR/deploy-to-solana-devnet.sh" "$@"
+fi
+
 echo " Deploying IntentEscrow to Solana Devnet"
 echo "=========================================="
 echo ""
@@ -105,7 +110,14 @@ fi
 echo "✅ Deployer keypair created"
 
 # Verify the keypair address matches
-DERIVED_ADDR=$(solana-keygen pubkey "$DEPLOYER_KEYPAIR" 2>/dev/null || echo "")
+DERIVED_ADDR=$(solana-keygen pubkey "$DEPLOYER_KEYPAIR" 2>&1) || {
+    echo "❌ ERROR: solana-keygen pubkey failed:"
+    echo "   $DERIVED_ADDR"
+    echo ""
+    echo "   Make sure you are running inside nix develop ./nix"
+    rm -rf "$TEMP_KEYPAIR_DIR"
+    exit 1
+}
 if [ "$DERIVED_ADDR" != "$SOLANA_DEPLOYER_ADDR" ]; then
     echo "❌ ERROR: Derived address does not match SOLANA_DEPLOYER_ADDR"
     echo "   Derived:  $DERIVED_ADDR"
@@ -121,11 +133,16 @@ echo " Checking deployer balance..."
 BALANCE=$(solana balance "$SOLANA_DEPLOYER_ADDR" --url "$SOLANA_RPC_URL" 2>/dev/null | awk '{print $1}' || echo "0")
 echo "   Balance: $BALANCE SOL"
 
-# Warn if balance is low (need ~2-3 SOL for deployment)
+# Abort if balance is too low (need ~2-3 SOL for deployment)
 if (( $(echo "$BALANCE < 2" | bc -l) )); then
-    echo "⚠️  WARNING: Balance may be insufficient for deployment"
-    echo "   Recommended: at least 2-3 SOL"
+    echo "❌ ERROR: Insufficient balance for deployment"
+    echo "   Current balance: $BALANCE SOL"
+    echo "   Required: at least 2 SOL (recommended 3+ SOL)"
+    echo ""
+    echo "   Fund this wallet: $SOLANA_DEPLOYER_ADDR"
     echo "   Get devnet SOL from: https://faucet.solana.com/"
+    rm -rf "$TEMP_KEYPAIR_DIR"
+    exit 1
 fi
 echo ""
 
@@ -178,21 +195,21 @@ echo " Deployed program ID: $PROGRAM_ID"
 echo ""
 
 # =============================================================================
-# Initialize the program with verifier public key
+# Initialize the program with approver public key
 # =============================================================================
 
 echo ""
-echo " Initializing program with verifier..."
+echo " Initializing program with approver..."
 echo ""
 
-# Check for verifier public key
-if [ -z "$VERIFIER_PUBLIC_KEY" ]; then
-    echo "⚠️  WARNING: VERIFIER_PUBLIC_KEY not set in .env.testnet"
+# Check for trusted-gmp public key (used as on-chain approver)
+if [ -z "$TRUSTED_GMP_PUBLIC_KEY" ]; then
+    echo "⚠️  WARNING: TRUSTED_GMP_PUBLIC_KEY not set in .env.testnet"
     echo "   Skipping initialization - you'll need to run it manually later"
     echo ""
 else
-    # Convert verifier public key from base64 to base58 (Solana format)
-    VERIFIER_PUBKEY_BASE58=$(node -e "
+    # Convert trusted-gmp public key from base64 to base58 (Solana format)
+    TRUSTED_GMP_PUBKEY_BASE58=$(node -e "
 // Inline base58 encoder
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 function b58encode(bytes) {
@@ -215,16 +232,16 @@ function b58encode(bytes) {
     }
     return digits.reverse().map(d => ALPHABET[d]).join('');
 }
-const base64Key = '$VERIFIER_PUBLIC_KEY';
+const base64Key = '$TRUSTED_GMP_PUBLIC_KEY';
 const keyBytes = Buffer.from(base64Key, 'base64');
 console.log(b58encode(Array.from(keyBytes)));
 ")
 
-    if [ -z "$VERIFIER_PUBKEY_BASE58" ]; then
-        echo "❌ ERROR: Failed to convert verifier public key to base58"
+    if [ -z "$TRUSTED_GMP_PUBKEY_BASE58" ]; then
+        echo "❌ ERROR: Failed to convert trusted-gmp public key to base58"
         echo "   Skipping initialization - you'll need to run it manually"
     else
-        echo " Verifier public key (base58): $VERIFIER_PUBKEY_BASE58"
+        echo " Trusted-GMP public key (base58): $TRUSTED_GMP_PUBKEY_BASE58"
         
         # Recreate deployer keypair for initialization
         TEMP_KEYPAIR_DIR=$(mktemp -d)
@@ -269,13 +286,13 @@ console.log(JSON.stringify(b58decode('$SOLANA_DEPLOYER_PRIVATE_KEY')));
             "$CLI_BIN" initialize \
                 --program-id "$PROGRAM_ID" \
                 --payer "$DEPLOYER_KEYPAIR" \
-                --verifier "$VERIFIER_PUBKEY_BASE58" \
+                --approver "$TRUSTED_GMP_PUBKEY_BASE58" \
                 --rpc "$SOLANA_RPC_URL" && {
-                echo "✅ Program initialized with verifier"
+                echo "✅ Program initialized with approver"
             } || {
                 INIT_EXIT=$?
                 if [ $INIT_EXIT -eq 0 ]; then
-                    echo "✅ Program initialized with verifier"
+                    echo "✅ Program initialized with approver"
                 else
                     echo "⚠️  Initialization returned exit code $INIT_EXIT"
                     echo "   This may be OK if the program was already initialized"
@@ -296,12 +313,17 @@ echo ""
 echo "   1. .env.testnet"
 echo "      SOLANA_PROGRAM_ID=$PROGRAM_ID"
 echo ""
-echo "   2. verifier/config/verifier_testnet.toml"
-echo "      Add [connected_chain_svm] section with:"
+echo "   2. coordinator/config/coordinator_testnet.toml"
 echo "      escrow_program_id = \"$PROGRAM_ID\""
+echo "      (in the [connected_chain_svm] section)"
 echo ""
-echo "   3. solver/config/solver_testnet.toml"
-echo "      Add SVM connected chain section with program ID"
+echo "   3. trusted-gmp/config/trusted-gmp_testnet.toml"
+echo "      escrow_program_id = \"$PROGRAM_ID\""
+echo "      (in the [connected_chain_svm] section)"
 echo ""
-echo "   4. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
+echo "   4. solver/config/solver_testnet.toml"
+echo "      escrow_program_id = \"$PROGRAM_ID\""
+echo "      (in the [[connected_chain]] SVM section)"
+echo ""
+echo "   5. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
 echo ""

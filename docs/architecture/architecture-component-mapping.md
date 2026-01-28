@@ -25,7 +25,7 @@ graph TB
     
     subgraph Layer2["Layer 2 (Depends on Foundation + Layer 1)"]
         SM[Settlement Domain<br/>Fulfillment Functions<br/>Completion Functions<br/>Claim Functions]
-        VM[Verification Domain<br/>monitor/, validator/<br/>crypto/mod.rs, api/]
+        VM[Validation Domain<br/>coordinator: monitor/, api/<br/>trusted-gmp: validator/, crypto/, api/]
     end
     
     IM -->|Provides reservation &<br/>oracle-intent systems| EM
@@ -33,22 +33,22 @@ graph TB
     IM -->|Emits events| VM
     EM -->|Provides completion<br/>functions| SM
     EM -->|Emits escrow events| VM
-    VM -->|Validates & approves| SM
+    VM -->|Validates & approves<br/>via trusted-gmp| SM
     
-    style IM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
-    style EM fill:#fff4e1,stroke:#cc6600,stroke-width:2px
-    style SM fill:#e8f5e9,stroke:#006600,stroke-width:2px
-    style VM fill:#f3e5f5,stroke:#6600cc,stroke-width:2px
-    style Foundation fill:#f0f0f0,stroke:#333,stroke-width:2px
-    style Layer1 fill:#f5f5f5,stroke:#666,stroke-width:1px
-    style Layer2 fill:#fafafa,stroke:#999,stroke-width:1px
+    style IM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px,color:#333
+    style EM fill:#fff4e1,stroke:#cc6600,stroke-width:2px,color:#333
+    style SM fill:#e8f5e9,stroke:#006600,stroke-width:2px,color:#333
+    style VM fill:#f3e5f5,stroke:#6600cc,stroke-width:2px,color:#333
+    style Foundation fill:#f0f0f0,stroke:#333,stroke-width:2px,color:#333
+    style Layer1 fill:#f5f5f5,stroke:#666,stroke-width:1px,color:#333
+    style Layer2 fill:#fafafa,stroke:#999,stroke-width:1px,color:#333
 ```
 
 **Build Order**:
 
 1. **Foundation**: Intent Management (implement first - no dependencies)
 2. **Layer 1**: Escrow (depends on Intent Management)
-3. **Layer 2**: Settlement and Verification (depend on Foundation + Layer 1)
+3. **Layer 2**: Settlement and Validation (Coordinator/Trusted GMP) (depend on Foundation + Layer 1)
 
 ## Domain Architecture Overview
 
@@ -68,8 +68,8 @@ graph TB
         SM[Fulfillment Functions<br/>Completion Functions<br/>Claim Functions]
     end
     
-    subgraph "Verification Domain"
-        VM[monitor/<br/>validator/<br/>crypto/mod.rs<br/>api/]
+    subgraph "Validation Domain (Coordinator + Trusted GMP)"
+        VM[coordinator: monitor/, api/<br/>trusted-gmp: validator/, crypto/, api/]
     end
     
     IM -->|Creates intents<br/>Emits events| VM
@@ -78,14 +78,14 @@ graph TB
     SM -.->|Fulfillment functions<br/>in fa_intent.move| IM
     SM -.->|Completion functions<br/>in intent_as_escrow.move| EM
     SM -.->|Claim functions<br/>in IntentEscrow.sol| EM
-    VM -->|Validates & approves| SM
-    VM -->|Monitors events| IM
-    VM -->|Monitors events| EM
+    VM -->|Validates & approves<br/>via trusted-gmp| SM
+    VM -->|Monitors events<br/>via coordinator| IM
+    VM -->|Monitors events<br/>via coordinator| EM
     
-    style IM fill:#e1f5ff
-    style EM fill:#fff4e1
-    style SM fill:#e8f5e9
-    style VM fill:#f3e5f5
+    style IM fill:#e1f5ff,color:#333
+    style EM fill:#fff4e1,color:#333
+    style SM fill:#e8f5e9,color:#333
+    style VM fill:#f3e5f5,color:#333
 ```
 
 ## Domain Definitions
@@ -103,11 +103,11 @@ graph TB
 
 ### 2. Escrow Domain
 
-**Responsibility**: Asset custody and conditional release mechanisms on connected chains. Handles fund locking on individual chains, verifier integration, and escrow-specific security requirements. The cross-chain aspect comes from escrows being created on chains different from where intents are created (hub chain).
+**Responsibility**: Asset custody and conditional release mechanisms on connected chains. Handles fund locking on individual chains, trusted-gmp integration, and escrow-specific security requirements. The cross-chain aspect comes from escrows being created on chains different from where intents are created (hub chain).
 
 **Key Characteristics**:
 
-- Locks assets awaiting verifier approval
+- Locks assets awaiting trusted-gmp approval
 - Enforces non-revocable requirement (CRITICAL security constraint)
 - Supports both Move and EVM implementations
 - Manages reserved solver addresses
@@ -121,20 +121,20 @@ graph TB
 **Key Characteristics**:
 
 - Processes intent fulfillment by solvers
-- Releases escrowed funds upon verifier approval
+- Releases escrowed funds upon trusted-gmp approval
 - Coordinates cross-chain asset transfers
 - Handles expiry and cancellation scenarios
 
-### 4. Verification Domain
+### 4. Validation Domain (Coordinator + Trusted GMP)
 
-**Responsibility**: Trusted verifier service that monitors chain events, validates cross-chain state, and provides cryptographic approvals for escrow releases.
+**Responsibility**: Two services that together handle event monitoring, cross-chain validation, and cryptographic approvals for escrow releases. The **Coordinator** handles read-only event monitoring, event caching, and negotiation routing (no private keys). The **Trusted GMP** handles cross-chain validation, approval signature generation, and crypto operations (has private keys).
 
 **Key Characteristics**:
 
-- Monitors events from multiple chains
-- Validates cross-chain state consistency
-- Generates cryptographic approval signatures
-- Provides REST API for external integration
+- Coordinator monitors events from multiple chains
+- Trusted GMP validates cross-chain state consistency
+- Trusted GMP generates cryptographic approval signatures
+- Both services provide REST APIs for external integration
 
 ---
 
@@ -208,7 +208,7 @@ graph TB
   - **Key Structures**: `EscrowConfig`
   - **Key Functions**: `create_escrow()`, `start_escrow_session()`, `complete_escrow()`
   - **Security**: **CRITICAL** - Enforces non-revocable requirement (`revocable = false`)
-  - **Responsibilities**: Escrow creation, session management, verifier approval handling
+  - **Responsibilities**: Escrow creation, session management, trusted-gmp approval handling
 
 - **`intent-frameworks/mvm/sources/intent_as_escrow_entry.move`**
   - **Purpose**: Entry function wrappers for CLI convenience
@@ -223,7 +223,7 @@ graph TB
   - **Key Functions**: `createEscrow()`, `deposit()`, `claim()`, `cancel()`
   - **Key Events**: `EscrowInitialized`, `DepositMade`, `EscrowClaimed`, `EscrowCancelled`
   - **Security**: Enforces reserved solver addresses, expiry-based cancellation
-  - **Responsibilities**: EVM escrow creation, fund locking, verifier signature verification, fund release
+  - **Responsibilities**: EVM escrow creation, fund locking, trusted-gmp signature verification, fund release
 
 #### Mock Contracts (Testing)
 
@@ -245,13 +245,13 @@ graph TB
 
 - **`intent-frameworks/mvm/sources/intent_as_escrow.move`** (completion functions)
   - **Key Functions**: `complete_escrow()`
-  - **Responsibilities**: Verifies verifier approval, releases escrowed funds to solver
+  - **Responsibilities**: Verifies trusted-gmp approval, releases escrowed funds to solver
 
 #### Escrow Claim (EVM)
 
 - **`intent-frameworks/evm/contracts/IntentEscrow.sol`** (claim function)
   - **Key Functions**: `claim()`
-  - **Responsibilities**: Verifies verifier signature, transfers funds to reserved solver
+  - **Responsibilities**: Verifies trusted-gmp signature, transfers funds to reserved solver
 
 #### Escrow Cancellation
 
@@ -261,11 +261,15 @@ graph TB
 
 ---
 
-### Verification Domain
+### Validation Domain (Coordinator + Trusted GMP)
 
-#### Event Monitoring
+The former monolithic signer service has been split into two services:
+- **Coordinator** (`coordinator/src/`): Read-only event monitoring, event caching, negotiation routing. No private keys.
+- **Trusted GMP** (`trusted-gmp/src/`): Cross-chain validation, approval signature generation, crypto operations. Has private keys.
 
-- **`verifier/src/monitor/`**
+#### Event Monitoring (Coordinator)
+
+- **`coordinator/src/monitor/`**
   - **`mod.rs`**: Main monitor module with `EventMonitor` struct, shared types, and generic monitoring logic
   - **`inflow_mvm.rs`**: Move VM-specific escrow event polling (`poll_mvm_escrow_events()`)
   - **`inflow_evm.rs`**: EVM-specific escrow event polling (`poll_evm_escrow_events()`)
@@ -274,9 +278,9 @@ graph TB
   - **Key Functions**: `poll_hub_events()`, `poll_connected_events()`, `poll_evm_events()`, `monitor_hub_chain()`, `monitor_connected_chain()`, `monitor_evm_chain()`, `get_cached_events()`
   - **Responsibilities**: Event polling from multiple chains, caching (both Move VM and EVM escrows), cross-chain event correlation, symmetrical handling of Move VM and EVM escrows
 
-#### Cross-Chain Validation
+#### Cross-Chain Validation (Trusted GMP)
 
-- **`verifier/src/validator/`**
+- **`trusted-gmp/src/validator/`**
   - **`mod.rs`**: Module declarations and re-exports of public types and functions
   - **`generic.rs`**: Shared structures (`ValidationResult`, `FulfillmentTransactionParams`) and `CrossChainValidator` struct definition and implementation
   - **`inflow_generic.rs`**: Chain-agnostic inflow validation logic (`validate_request_intent_fulfillment()`)
@@ -291,65 +295,90 @@ graph TB
   - **Security**: **CRITICAL** - Validates `revocable = false` requirement
   - **Responsibilities**: Intent safety checks, fulfillment validation, approval decision logic
 
-#### Cryptographic Operations
+#### Cryptographic Operations (Trusted GMP)
 
-- **`verifier/src/crypto/mod.rs`**
+- **`trusted-gmp/src/crypto/mod.rs`**
   - **Purpose**: Cryptographic operations for approval signatures
   - **Key Structures**: `ApprovalSignature`, `CryptoService`
   - **Key Functions**: `create_mvm_approval_signature(intent_id)`, `create_evm_approval_signature(intent_id)`, `verify_signature()`, `get_public_key()`
-  - **Responsibilities**: Ed25519 (Move VM) and ECDSA (EVM) signature generation/verification - verifier signs the `intent_id`, signature itself is the approval
+  - **Responsibilities**: Ed25519 (Move VM) and ECDSA (EVM) signature generation/verification - trusted-gmp signs the `intent_id`, signature itself is the approval
 
-#### REST API Server
+#### REST API Servers
 
-- **`verifier/src/api/`**
+- **`coordinator/src/api/`** (Coordinator API - negotiation endpoints, event queries)
+  - **`mod.rs`**: Main API module with route definitions, shared handlers, and `ApiServer` struct
+  - **Purpose**: REST API for event queries and negotiation routing
+  - **Key Endpoints**: `/health`, `/events`
+  - **Key Structures**: `ApiServer`, `ApiResponse<T>`
+  - **Responsibilities**: HTTP request handling, event retrieval, negotiation routing
+
+- **`trusted-gmp/src/api/`** (Trusted GMP API - validation and approval endpoints)
   - **`mod.rs`**: Main API module with route definitions, shared handlers, and `ApiServer` struct
   - **`outflow_mvm.rs`**: Move VM-specific transaction querying (`query_mvm_fulfillment_transaction()`)
   - **`outflow_evm.rs`**: EVM-specific transaction querying (`query_evm_fulfillment_transaction()`)
-  - **Purpose**: REST API for external system integration
-  - **Key Endpoints**: `/health`, `/public-key`, `/events`, `/approvals`, `/approval`, `/validate-outflow-fulfillment`, `/validate-inflow-escrow`
+  - **Purpose**: REST API for validation and approval operations
+  - **Key Endpoints**: `/health`, `/public-key`, `/approvals`, `/approval`, `/validate-outflow-fulfillment`, `/validate-inflow-escrow`
   - **Key Structures**: `ApiServer`, `ApiResponse<T>`
-  - **Responsibilities**: HTTP request handling, event/approval retrieval, manual approval creation, fulfillment validation
+  - **Responsibilities**: HTTP request handling, approval retrieval, manual approval creation, fulfillment validation
 
 #### Configuration Management
 
-- **`verifier/src/config/mod.rs`**
-  - **Purpose**: Service configuration management
-  - **Key Structures**: `Config`, `ChainConfig`, `EvmChainConfig`, `VerifierConfig`, `ApiConfig`
-  - **Responsibilities**: Configuration loading, validation, chain-specific settings
+- **`coordinator/src/config/mod.rs`** (monitoring and routing configuration)
+  - **Purpose**: Coordinator service configuration management
+  - **Key Structures**: `Config`, `ChainConfig`, `EvmChainConfig`, `ApiConfig`
+  - **Responsibilities**: Configuration loading, validation, chain-specific settings for monitoring
+
+- **`trusted-gmp/src/config/mod.rs`** (key-related and validation configuration)
+  - **Purpose**: Trusted GMP service configuration management
+  - **Key Structures**: `Config`, `ChainConfig`, `EvmChainConfig`, `ApproverConfig`, `ApiConfig`
+  - **Responsibilities**: Configuration loading, validation, chain-specific settings, key management configuration
 
 #### Move VM Client
 
-- **`verifier/src/mvm_client.rs`**
+- **`coordinator/src/mvm_client.rs`** (event monitoring context)
   - **Purpose**: Move VM blockchain client for event querying
-  - **Key Functions**: `get_events()`, `get_limit_order_events()`, `get_escrow_events()`, `get_intent_solver()`, `get_solver_evm_address()`, `call_view_function()`
-  - **Responsibilities**: Blockchain RPC communication, event parsing, solver registry queries
+  - **Key Functions**: `get_events()`, `get_limit_order_events()`, `get_escrow_events()`
+  - **Responsibilities**: Blockchain RPC communication, event parsing
 
-#### EVM Client
+- **`trusted-gmp/src/mvm_client.rs`** (validation context)
+  - **Purpose**: Move VM blockchain client for validation queries
+  - **Key Functions**: `get_intent_solver()`, `get_solver_evm_address()`, `call_view_function()`
+  - **Responsibilities**: Blockchain RPC communication, solver registry queries
 
-- **`verifier/src/evm_client.rs`**
+#### EVM Client (Trusted GMP)
+
+- **`trusted-gmp/src/evm_client.rs`**
   - **Purpose**: EVM blockchain client for event querying via JSON-RPC
   - **Key Functions**: `get_escrow_initialized_events()`, `get_block_number()`
   - **Responsibilities**: EVM JSON-RPC communication, event log parsing, EscrowInitialized event extraction
 
-#### Core Library
+#### Core Libraries
 
-- **`verifier/src/lib.rs`**
-  - **Purpose**: Library root, re-exports common types
+- **`coordinator/src/lib.rs`**
+  - **Purpose**: Coordinator library root, re-exports common types
   - **Responsibilities**: Module organization, public API definition
 
-#### Main Entry Point
+- **`trusted-gmp/src/lib.rs`**
+  - **Purpose**: Trusted GMP library root, re-exports common types
+  - **Responsibilities**: Module organization, public API definition
 
-- **`verifier/src/main.rs`**
-  - **Purpose**: Application entry point
-  - **Responsibilities**: Service initialization, event loop orchestration
+#### Main Entry Points
 
-#### Utility Binaries
+- **`coordinator/src/main.rs`**
+  - **Purpose**: Coordinator application entry point
+  - **Responsibilities**: Service initialization, event monitoring loop orchestration
 
-- **`verifier/src/bin/generate_keys.rs`**
+- **`trusted-gmp/src/main.rs`**
+  - **Purpose**: Trusted GMP application entry point
+  - **Responsibilities**: Service initialization, validation and approval loop orchestration
+
+#### Utility Binaries (Trusted GMP)
+
+- **`trusted-gmp/src/bin/generate_keys.rs`**
   - **Purpose**: Key pair generation utility
   - **Domain**: Development tooling
 
-- **`verifier/src/bin/get_verifier_eth_address.rs`**
+- **`trusted-gmp/src/bin/get_approver_eth_address.rs`**
   - **Purpose**: Derive Ethereum address from Ed25519 key
   - **Domain**: Development tooling
 
@@ -361,36 +390,36 @@ This section documents comprehensive communication patterns between domains, inc
 
 ### Event Flow Patterns
 
-**Intent Management → Verification** (Event Emission):
+**Intent Management → Validation Domain** (Event Emission):
 
 - `LimitOrderEvent`: Emitted when intent is created (`fa_intent.move`)
   - Contains: `intent_id`, `offered_metadata`, `offered_amount`, `desired_metadata`, `desired_amount`, `expiry_time`, `revocable`
-  - Purpose: Verifier monitors for new intents requiring validation
+  - Purpose: Coordinator monitors for new intents; trusted-gmp validates them
 - `LimitOrderFulfillmentEvent`: Emitted when intent is fulfilled (`fa_intent.move`)
   - Contains: `intent_id`, `solver`, `provided_metadata`, `provided_amount`, `timestamp`
-  - Purpose: Verifier validates fulfillment before approving escrow release
+  - Purpose: Trusted-gmp validates fulfillment before approving escrow release
 - `OracleLimitOrderEvent`: Emitted for oracle-guarded intents (`fa_intent_with_oracle.move`)
   - Contains: Same as `LimitOrderEvent` plus `min_reported_value`
-  - Purpose: Used by escrow system and monitored by verifier
+  - Purpose: Used by escrow system and monitored by coordinator
 
-**Escrow → Verification** (Event Emission):
+**Escrow → Validation Domain** (Event Emission):
 
 - `OracleLimitOrderEvent` (Move): Emitted when escrow is created (`intent_as_escrow.move`)
   - Contains: Escrow details with `intent_id` for cross-chain correlation, `reserved_solver`
-  - Purpose: Verifier monitors Move VM escrow creation and validates safety
-  - Monitoring: Verifier actively polls Move VM connected chain and caches escrows when created
+  - Purpose: Coordinator monitors Move VM escrow creation; trusted-gmp validates safety
+  - Monitoring: Coordinator actively polls Move VM connected chain and caches escrows when created
 - `EscrowInitialized` (EVM): Emitted when escrow is created (`IntentEscrow.sol`)
   - Contains: `intentId`, `requester`, `token`, `reservedSolver`
-  - Purpose: Verifier monitors EVM escrow creation and validates safety
-  - Monitoring: Verifier actively polls EVM connected chain and caches escrows when created (symmetrical with Move VM)
+  - Purpose: Coordinator monitors EVM escrow creation; trusted-gmp validates safety
+  - Monitoring: Coordinator actively polls EVM connected chain and caches escrows when created (symmetrical with Move VM)
 - `EscrowClaimed`, `EscrowCancelled` (EVM): Emitted on escrow completion/cancellation
-  - Purpose: Verifier tracks escrow lifecycle
+  - Purpose: Coordinator tracks escrow lifecycle
 
-**Verification → Settlement** (Approval Provision):
+**Trusted GMP → Settlement** (Approval Provision):
 
-- Approval signatures provided via REST API (`/approvals/:escrow_id`) or direct function calls
+- Approval signatures provided via trusted-gmp REST API (`/approvals/:escrow_id`) or direct function calls
 - Contains: Cryptographic signature (Ed25519 for Move, ECDSA for EVM) - signature itself is the approval
-- Purpose: Settlement uses signatures to authorize escrow release (verifier signs the `intent_id`)
+- Purpose: Settlement uses signatures to authorize escrow release (trusted-gmp signs the `intent_id`)
 
 ### Functional Dependencies
 
@@ -409,58 +438,61 @@ This section documents comprehensive communication patterns between domains, inc
 **Settlement → Escrow** (Layer 2 → Layer 1):
 
 - **Completion Functions**: Settlement calls `complete_escrow()` (Move) or `claim()` (EVM) to release escrowed funds
-- **Approval Verification**: Settlement verifies verifier signatures before releasing funds
+- **Approval Verification**: Settlement verifies trusted-gmp signatures before releasing funds
 - **Reserved Solver Enforcement**: Settlement ensures funds go to reserved solver regardless of transaction sender
 
-**Verification → Intent Management** (Layer 2 → Foundation):
+**Validation Domain → Intent Management** (Layer 2 → Foundation):
 
-- **Event Monitoring**: Verifier polls `LimitOrderEvent` and `LimitOrderFulfillmentEvent` via blockchain RPC
-- **Safety Validation**: Verifier calls `validate_intent_safety()` to check intent requirements (expiry, revocability)
-- **Fulfillment Validation**: Verifier calls `validate_fulfillment()` to verify fulfillment conditions match intent
+- **Event Monitoring**: Coordinator polls `LimitOrderEvent` and `LimitOrderFulfillmentEvent` via blockchain RPC
+- **Safety Validation**: Trusted-gmp calls `validate_intent_safety()` to check intent requirements (expiry, revocability)
+- **Fulfillment Validation**: Trusted-gmp calls `validate_fulfillment()` to verify fulfillment conditions match intent
 
-**Verification → Escrow** (Layer 2 → Layer 1):
+**Validation Domain → Escrow** (Layer 2 → Layer 1):
 
-- **Event Monitoring**: Verifier polls `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM) actively
+- **Event Monitoring**: Coordinator polls `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM) actively
 - **Symmetrical Monitoring**: Both Move VM and EVM escrows are monitored, cached, and validated when created (not retroactively)
-- **Safety Validation**: Verifier calls `validate_intent_fulfillment()` to ensure `revocable = false` (CRITICAL) and validates solver addresses match
-- **Chain Type Detection**: Each `EscrowEvent` includes a `chain_type` field (Mvm, Evm, Svm) set by the verifier based on which monitor discovered the event. This is trusted because it comes from the verifier's configuration, not from untrusted event data.
+- **Safety Validation**: Trusted-gmp calls `validate_intent_fulfillment()` to ensure `revocable = false` (CRITICAL) and validates solver addresses match
+- **Chain Type Detection**: Each `EscrowEvent` includes a `chain_type` field (Mvm, Evm, Svm) set by the coordinator based on which monitor discovered the event. This is trusted because it comes from the coordinator's configuration, not from untrusted event data.
 - **Solver Validation**: For Move VM escrows, compares Move VM addresses directly; for EVM escrows, queries solver registry for EVM address and compares. Chain type is determined from `EscrowEvent.chain_type` enum field.
-- **Chain ID Validation**: Verifier validates that escrow `chain_id` matches intent `offered_chain_id`
-- **Approval Generation**: Verifier calls `create_mvm_approval_signature(intent_id)` (Ed25519) or `create_evm_approval_signature(intent_id)` (ECDSA) to generate cryptographic signatures for escrow release. The signature itself is the approval - verifier signs the `intent_id`.
+- **Chain ID Validation**: Trusted-gmp validates that escrow `chain_id` matches intent `offered_chain_id`
+- **Approval Generation**: Trusted-gmp calls `create_mvm_approval_signature(intent_id)` (Ed25519) or `create_evm_approval_signature(intent_id)` (ECDSA) to generate cryptographic signatures for escrow release. The signature itself is the approval - trusted-gmp signs the `intent_id`.
 
 ### Data Flow Patterns
 
 **Cross-Chain Correlation**:
 
 - `intent_id` field links intents on hub chain to escrows on connected chains
-- Verifier uses `intent_id` to match events across chains via `match_events_by_intent_id()`
-- Data flows: Hub Intent → `intent_id` → Connected Escrow → Verifier Correlation → Approval
+- Coordinator uses `intent_id` to match events across chains via `match_events_by_intent_id()`; trusted-gmp uses correlated data for validation
+- Data flows: Hub Intent → `intent_id` → Connected Escrow → Coordinator Correlation → Trusted GMP Validation → Approval
 
 **Reserved Solver Flow**:
 
 - Intent Management: Provides `IntentReserved` structure with solver address
 - Escrow: Stores `reserved_solver` / `reservedSolver` at creation (immutable)
 - Settlement: Transfers funds to reserved solver regardless of transaction sender
-- Verification: Validates reserved solver matches intent fulfillment
+- Trusted GMP: Validates reserved solver matches intent fulfillment
 
 **Approval Signature Flow**:
 
-- Verification: Generates approval signature using Ed25519 (Move) or ECDSA (EVM)
-- Settlement: Retrieves signature via REST API (`/approvals/:escrow_id`) or cached events
-- Escrow: Verifies signature matches verifier public key before releasing funds
+- Trusted GMP: Generates approval signature using Ed25519 (Move) or ECDSA (EVM)
+- Settlement: Retrieves signature via trusted-gmp REST API (`/approvals/:escrow_id`) or cached events
+- Escrow: Verifies signature matches approver public key before releasing funds (on-chain parameter name `approver_public_key`)
 
 ### API Call Patterns
 
-**External Systems → Verification**:
+**External Systems → Coordinator**:
 
 - `GET /events`: Retrieve cached events (intents, escrows, fulfillments)
+
+**External Systems → Trusted GMP**:
+
 - `GET /approvals/:escrow_id`: Retrieve approval signature for specific escrow
 - `POST /approval`: Manually trigger approval generation (for testing/debugging)
 
-**Settlement → Verification**:
+**Settlement → Trusted GMP**:
 
-- Settlement queries `/approvals/:escrow_id` to retrieve approval signatures
-- Settlement validates signature format and verifier public key before use
+- Settlement queries trusted-gmp `/approvals/:escrow_id` to retrieve approval signatures
+- Settlement validates signature format and approver public key before use (on-chain parameter name kept as-is)
 
 ### Error Handling and Rollback Scenarios
 
@@ -470,29 +502,29 @@ This section documents comprehensive communication patterns between domains, inc
 - Settlement: Cannot fulfill expired intents
 - Escrow: Can be cancelled after expiry (EVM only), returns funds to requester
 
-**Invalid Verifier Signature**:
+**Invalid Trusted GMP Signature**:
 
 - Escrow: Rejects `complete_escrow()` / `claim()` calls with invalid signatures
-- Settlement: Must retry with valid signature or wait for verifier approval
-- Verification: Signature validation failures logged but don't prevent retry
+- Settlement: Must retry with valid signature or wait for trusted-gmp approval
+- Trusted GMP: Signature validation failures logged but don't prevent retry
 
 **Escrow Safety Validation Failure**:
 
-- Verification: Rejects escrows with `revocable = true` (CRITICAL security check)
-- Escrow: Creation fails if verifier validation rejects (pre-creation validation)
-- Settlement: Cannot proceed if verifier hasn't approved
+- Trusted GMP: Rejects escrows with `revocable = true` (CRITICAL security check)
+- Escrow: Creation fails if trusted-gmp validation rejects (pre-creation validation)
+- Settlement: Cannot proceed if trusted-gmp hasn't approved
 
 **Cross-Chain Correlation Failure**:
 
-- Verification: Cannot match events if `intent_id` mismatch or missing
-- Settlement: Cannot proceed without verifier approval (requires correlation)
+- Coordinator/Trusted GMP: Cannot match events if `intent_id` mismatch or missing
+- Settlement: Cannot proceed without trusted-gmp approval (requires correlation)
 - Error: Escrow remains locked until manual intervention or expiry
 
 **Reserved Solver Mismatch**:
 
 - Escrow: Rejects completion if reserved solver doesn't match (Move: session validation, EVM: enforced in `claim()`)
 - Settlement: Funds always go to reserved solver, transaction sender irrelevant
-- Verification: Validates reserved solver matches fulfillment before approval
+- Trusted GMP: Validates reserved solver matches fulfillment before approval
 
 ---
 
@@ -509,6 +541,6 @@ This table provides a concise overview of domain boundaries, listing the primary
 | Domain | Primary Files | Key Responsibility |
 |--------|--------------|-------------------|
 | **Intent Management** | `intent.move`, `fa_intent.move`, `fa_intent_with_oracle.move`, `fa_intent_cross_chain.move`, `intent_reservation.move` | Intent lifecycle, creation, validation, event emission |
-| **Escrow** | `intent_as_escrow.move`, `intent_as_escrow_entry.move`, `IntentEscrow.sol` | Asset custody, fund locking, verifier integration |
+| **Escrow** | `intent_as_escrow.move`, `intent_as_escrow_entry.move`, `IntentEscrow.sol` | Asset custody, fund locking, trusted-gmp integration |
 | **Settlement** | Functions in `fa_intent.move`, `intent_as_escrow.move`, `IntentEscrow.sol` | Intent fulfillment, escrow completion, asset transfers |
-| **Verification** | `monitor/` (mod.rs, mvm.rs, evm.rs), `validator/` (mod.rs, mvm.rs, evm.rs), `crypto/mod.rs`, `api/` (mod.rs, mvm.rs, evm.rs), `config/mod.rs`, `mvm_client.rs`, `evm_client.rs` | Event monitoring (hub, Move VM, EVM), cross-chain validation, approval signatures (Ed25519 & ECDSA) |
+| **Validation (Coordinator + Trusted GMP)** | Coordinator: `monitor/`, `api/`, `config/`, `mvm_client.rs`, `storage/`; Trusted GMP: `validator/`, `crypto/`, `api/`, `config/`, `mvm_client.rs`, `evm_client.rs` | Coordinator: event monitoring (hub, Move VM, EVM), caching, negotiation routing; Trusted GMP: cross-chain validation, approval signatures (Ed25519 & ECDSA) |

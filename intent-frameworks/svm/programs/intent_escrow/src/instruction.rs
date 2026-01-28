@@ -5,13 +5,13 @@ use solana_program::pubkey::Pubkey;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub enum EscrowInstruction {
-    /// Initialize the escrow program with verifier pubkey
+    /// Initialize the escrow program with approver pubkey
     ///
     /// Accounts expected:
     /// 0. `[writable]` State account (PDA)
     /// 1. `[signer]` Payer
     /// 2. `[]` System program
-    Initialize { verifier: Pubkey },
+    Initialize { approver: Pubkey },
 
     /// Create a new escrow and deposit funds atomically
     ///
@@ -31,7 +31,7 @@ pub enum EscrowInstruction {
         expiry_duration: Option<i64>,
     },
 
-    /// Claim escrow funds with verifier signature
+    /// Claim escrow funds with approver signature
     ///
     /// Accounts expected:
     /// 0. `[writable]` Escrow account (PDA)

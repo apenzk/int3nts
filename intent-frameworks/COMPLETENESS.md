@@ -19,7 +19,7 @@ Each test file uses independent numbering starting from 1. At the end of the imp
 
 | # | Test | EVM | SVM |
 | --- | ------ | ----- | ----- |
-| 1 | Should initialize escrow with verifier address | ✅ | ✅ |
+| 1 | Should initialize escrow with approver address | ✅ | ✅ |
 | 2 | Should allow requester to create an escrow | ✅ | ✅ |
 | 3 | Should revert if escrow already exists | ✅ | ✅ |
 | 4 | Should revert if amount is zero | ✅ | ✅ |
@@ -37,7 +37,7 @@ Each test file uses independent numbering starting from 1. At the end of the imp
 
 | # | Test | EVM | SVM |
 | --- | ------ | ----- | ----- |
-| 1 | Should allow solver to claim with valid verifier signature | ✅ | ✅ |
+| 1 | Should allow solver to claim with valid approver signature | ✅ | ✅ |
 | 2 | Should revert with invalid signature | ✅ | ✅ |
 | 3 | Should prevent signature replay across different intent_ids | ✅ | ✅ |
 | 4 | Should revert if escrow already claimed | ✅ | ✅ |

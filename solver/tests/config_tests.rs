@@ -273,7 +273,7 @@ fn test_config_toml_roundtrip() {
     let deserialized: SolverConfig = toml::from_str(&toml_str).unwrap();
     
     // Verify key fields match
-    assert_eq!(deserialized.service.verifier_url, config.service.verifier_url);
+    assert_eq!(deserialized.service.coordinator_url, config.service.coordinator_url);
     assert_eq!(deserialized.hub_chain.chain_id, config.hub_chain.chain_id);
     assert_eq!(deserialized.acceptance.token_pairs.len(), config.acceptance.token_pairs.len());
 }
@@ -362,7 +362,8 @@ fn test_config_load_from_file() {
     let toml_content = format!(
         r#"
 [service]
-verifier_url = "http://127.0.0.1:3333"
+coordinator_url = "http://127.0.0.1:3333"
+trusted_gmp_url = "http://127.0.0.1:3334"
 polling_interval_ms = 2000
 
 [hub_chain]
@@ -404,7 +405,7 @@ address = "0xccc"
     let config = SolverConfig::load().unwrap();
     
     // Verify loaded values
-    assert_eq!(config.service.verifier_url, "http://127.0.0.1:3333");
+    assert_eq!(config.service.coordinator_url, "http://127.0.0.1:3333");
     assert_eq!(config.hub_chain.chain_id, 1);
     assert_eq!(config.acceptance.token_pairs.len(), 1);
     

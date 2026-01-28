@@ -73,110 +73,6 @@ log() {
     return 0  # Prevent set -e from exiting on [ -n "$LOG_FILE" ] returning false
 }
 
-# Setup verifier configuration
-# Usage: generate_verifier_keys
-# Generates fresh ephemeral keys for E2E/CI testing and exports them as env vars.
-# Also creates a minimal config file so get_verifier_eth_address can read the keys.
-# Keys are saved to testing-infra/ci-e2e/.verifier-keys.env during the test run,
-# but cleanup deletes this file at the start of each test run, ensuring fresh keys every time.
-# If keys already exist (from a previous call in same test run), loads them instead.
-generate_verifier_keys() {
-    if [ -z "$PROJECT_ROOT" ]; then
-        setup_project_root
-    fi
-
-    VERIFIER_KEYS_FILE="$PROJECT_ROOT/testing-infra/ci-e2e/.verifier-keys.env"
-    VERIFIER_CONFIG_FILE="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
-
-    # If keys already exist, just load them
-    if [ -f "$VERIFIER_KEYS_FILE" ]; then
-        source "$VERIFIER_KEYS_FILE"
-        export E2E_VERIFIER_PRIVATE_KEY
-        export E2E_VERIFIER_PUBLIC_KEY
-        log_and_echo "   ✅ Loaded existing ephemeral keys"
-        return
-    fi
-
-    log_and_echo "   Generating ephemeral test keys..."
-    cd "$PROJECT_ROOT/verifier"
-    
-    # Use pre-built binary (must be built in Step 1)
-    local generate_keys_bin="$PROJECT_ROOT/verifier/target/debug/generate_keys"
-    if [ ! -x "$generate_keys_bin" ]; then
-        log_and_echo "❌ PANIC: generate_keys not built. Step 1 (build binaries) failed."
-        exit 1
-    fi
-    KEYS_OUTPUT=$("$generate_keys_bin" 2>/dev/null)
-    
-    # Extract keys from output
-    PRIVATE_KEY=$(echo "$KEYS_OUTPUT" | grep "Private Key (base64):" | sed 's/.*: //')
-    PUBLIC_KEY=$(echo "$KEYS_OUTPUT" | grep "Public Key (base64):" | sed 's/.*: //')
-    
-    if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
-        log_and_echo "❌ ERROR: Failed to generate test keys"
-        exit 1
-    fi
-    
-    # Export keys as environment variables (E2E prefix to avoid collision)
-    export E2E_VERIFIER_PRIVATE_KEY="$PRIVATE_KEY"
-    export E2E_VERIFIER_PUBLIC_KEY="$PUBLIC_KEY"
-    
-    # Save keys to file for reuse within the same test run (cleanup deletes it at start of next run)
-    cat > "$VERIFIER_KEYS_FILE" << EOF
-# Ephemeral verifier keys for E2E/CI testing
-# Generated at: $(date)
-# WARNING: These keys are for testing only. Do not use in production.
-E2E_VERIFIER_PRIVATE_KEY="$PRIVATE_KEY"
-E2E_VERIFIER_PUBLIC_KEY="$PUBLIC_KEY"
-EOF
-
-    # Create minimal config file so get_verifier_eth_address can read keys
-    # This will be overwritten by configure-verifier.sh with full config
-    cat > "$VERIFIER_CONFIG_FILE" << EOF
-# Minimal config for key access - will be overwritten by configure-verifier.sh
-
-[hub_chain]
-name = "Hub Chain"
-rpc_url = "http://127.0.0.1:8080"
-chain_id = 1
-intent_module_addr = "0x123"
-
-[verifier]
-private_key_env = "E2E_VERIFIER_PRIVATE_KEY"
-public_key_env = "E2E_VERIFIER_PUBLIC_KEY"
-polling_interval_ms = 2000
-validation_timeout_ms = 30000
-
-[api]
-host = "127.0.0.1"
-port = 3333
-cors_origins = []
-EOF
-    
-    cd "$PROJECT_ROOT"
-    log_and_echo "   ✅ Generated fresh ephemeral keys"
-}
-
-# Usage: load_verifier_keys
-# Loads previously generated keys from the keys file.
-load_verifier_keys() {
-    if [ -z "$PROJECT_ROOT" ]; then
-        setup_project_root
-    fi
-
-    VERIFIER_KEYS_FILE="$PROJECT_ROOT/testing-infra/ci-e2e/.verifier-keys.env"
-
-    if [ -f "$VERIFIER_KEYS_FILE" ]; then
-        source "$VERIFIER_KEYS_FILE"
-        export E2E_VERIFIER_PRIVATE_KEY
-        export E2E_VERIFIER_PUBLIC_KEY
-    else
-        log_and_echo "❌ ERROR: Verifier keys file not found at $VERIFIER_KEYS_FILE"
-        log_and_echo "   Run generate_verifier_keys first."
-        exit 1
-    fi
-}
-
 # Setup solver configuration for E2E/CI testing
 # Usage: setup_solver_config
 # Always creates config from template (overwrites any existing config)
@@ -299,23 +195,6 @@ load_intent_info() {
     return 0
 }
 
-# Stop verifier processes
-# Usage: stop_verifier
-# Stops any running verifier processes
-stop_verifier() {
-    log "   Checking for existing verifiers..."
-    
-    if pgrep -f "cargo.*verifier" > /dev/null || pgrep -f "target/debug/verifier" > /dev/null; then
-        log "   ️  Found existing verifier processes, stopping them..."
-        pkill -f "cargo.*verifier" || true
-        pkill -f "target/debug/verifier" || true
-        sleep 2
-        log "   ✅ Verifier processes stopped"
-    else
-        log "   ✅ No existing verifier processes"
-    fi
-}
-
 # Check if port is listening
 # Usage: check_port_listening [port]
 # Returns 0 if port is listening, 1 if not
@@ -337,68 +216,6 @@ check_port_listening() {
     fi
     
     return 1
-}
-
-# Check verifier health
-# Usage: check_verifier_health [port]
-# Checks if verifier health endpoint responds
-# Returns 0 if healthy, 1 if not
-check_verifier_health() {
-    local port="${1:-3333}"
-    
-    if curl -s -f "http://127.0.0.1:${port}/health" > /dev/null 2>&1; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Verify verifier is running
-# Usage: verify_verifier_running
-# Checks verifier process, port, and health endpoint
-# Exits with error if verifier is not running
-verify_verifier_running() {
-    # Ensure LOG_DIR is set (for reading PID files)
-    if [ -z "$LOG_DIR" ] && [ -n "$PROJECT_ROOT" ]; then
-        LOG_DIR="$PROJECT_ROOT/.tmp/e2e-tests"
-    fi
-    
-    log ""
-    log " Verifying verifier is running..."
-    
-    # Try to load VERIFIER_PID from file if not set
-    if [ -z "$VERIFIER_PID" ] && [ -n "$LOG_DIR" ] && [ -f "$LOG_DIR/verifier.pid" ]; then
-        VERIFIER_PID=$(cat "$LOG_DIR/verifier.pid" 2>/dev/null || echo "")
-        export VERIFIER_PID
-    fi
-    
-    # Check verifier process
-    if [ -z "$VERIFIER_PID" ] || ! ps -p "$VERIFIER_PID" > /dev/null 2>&1; then
-        log_and_echo "❌ ERROR: Verifier process is not running"
-        log_and_echo "   Expected PID: ${VERIFIER_PID:-<not set>}"
-        log_and_echo "   Please start verifier first using start-verifier.sh"
-        exit 1
-    fi
-    
-    # Check if verifier port is listening
-    VERIFIER_PORT="${VERIFIER_PORT:-3333}"
-    if ! check_port_listening "$VERIFIER_PORT"; then
-        log_and_echo "❌ ERROR: Verifier is not listening on port $VERIFIER_PORT"
-        log_and_echo "   Verifier PID: $VERIFIER_PID"
-        log_and_echo "   Process exists but port is not accessible"
-        log_and_echo "   Check logs: ${VERIFIER_LOG:-<not set>}"
-        exit 1
-    fi
-    
-    # Check verifier health endpoint
-    if ! check_verifier_health "$VERIFIER_PORT"; then
-        log_and_echo "❌ ERROR: Verifier health check failed"
-        log_and_echo "   Verifier PID: $VERIFIER_PID"
-        log_and_echo "   Port $VERIFIER_PORT is listening but /health endpoint failed"
-        log_and_echo "   Check logs: ${VERIFIER_LOG:-<not set>}"
-        exit 1
-    fi
-    log "   ✅ Verifier is running and healthy (PID: $VERIFIER_PID, port: $VERIFIER_PORT)"
 }
 
 # Verify solver is running
@@ -433,9 +250,9 @@ verify_solver_running() {
 # Note: verify_solver_registered() is defined in util_mvm.sh with auto-detection
 # Both MVM and EVM E2E tests source util_mvm.sh since the hub chain is always MVM
 
-# Display solver and verifier logs for debugging
+# Display solver, coordinator, and trusted-gmp logs for debugging
 # Usage: display_service_logs [context_message]
-# Shows last 100 lines of solver.log and verifier.log if they exist
+# Shows last 100 lines of solver.log, coordinator.log, and trusted-gmp.log if they exist
 display_service_logs() {
     local context="${1:-Error occurred}"
     
@@ -445,7 +262,8 @@ display_service_logs() {
     
     local log_dir="$PROJECT_ROOT/.tmp/e2e-tests"
     local solver_log="$log_dir/solver.log"
-    local verifier_log="$log_dir/verifier.log"
+    local coordinator_log="$log_dir/coordinator.log"
+    local trusted_gmp_log="$log_dir/trusted-gmp.log"
     
     # Get current timestamp in ISO format (matches Rust log format)
     local error_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -456,14 +274,24 @@ display_service_logs() {
     log_and_echo "⏰ Error occurred at: $error_timestamp"
     log_and_echo ""
     
-    if [ -f "$verifier_log" ]; then
+    if [ -f "$coordinator_log" ]; then
         log_and_echo ""
-        log_and_echo " Verifier logs:"
+        log_and_echo " Coordinator logs:"
         log_and_echo "-----------------------------------"
-        cat "$verifier_log" | sed 's/^/   /'
+        tail -100 "$coordinator_log" | sed 's/^/   /'
     else
         log_and_echo ""
-        log_and_echo "️  Verifier log not found: $verifier_log"
+        log_and_echo "️  Coordinator log not found: $coordinator_log"
+    fi
+    
+    if [ -f "$trusted_gmp_log" ]; then
+        log_and_echo ""
+        log_and_echo " Trusted-GMP logs:"
+        log_and_echo "-----------------------------------"
+        tail -100 "$trusted_gmp_log" | sed 's/^/   /'
+    else
+        log_and_echo ""
+        log_and_echo "️  Trusted-GMP log not found: $trusted_gmp_log"
     fi
     
     if [ -f "$solver_log" ]; then
@@ -477,112 +305,6 @@ display_service_logs() {
     fi
     
     log_and_echo ""
-}
-
-# Start verifier service
-# Usage: start_verifier [log_file] [rust_log_level]
-# Starts verifier in background and waits for it to be ready
-# Sets VERIFIER_PID and VERIFIER_LOG global variables
-# Exits with error if verifier fails to start
-start_verifier() {
-    if [ -z "$PROJECT_ROOT" ]; then
-        setup_project_root
-    fi
-
-    if [ -z "$VERIFIER_CONFIG_PATH" ]; then
-        export VERIFIER_CONFIG_PATH="$PROJECT_ROOT/verifier/config/verifier-e2e-ci-testing.toml"
-    fi
-    
-    # Load keys
-    load_verifier_keys
-
-    local log_file="${1:-$LOG_DIR/verifier.log}"
-    local rust_log="${2:-info}"
-    
-    # Ensure log directory exists
-    mkdir -p "$(dirname "$log_file")"
-    
-    # Delete existing log file to start fresh for this test run
-    if [ -f "$log_file" ]; then
-        rm -f "$log_file"
-    fi
-    
-    # Stop any existing verifier first
-    stop_verifier
-    
-    log "   Starting verifier service..."
-    log "   Using config: $VERIFIER_CONFIG_PATH"
-    log "   Log file: $log_file"
-    
-    # Use pre-built binary (must be built in Step 1)
-    local verifier_binary="$PROJECT_ROOT/verifier/target/debug/verifier"
-    if [ ! -f "$verifier_binary" ]; then
-        log_and_echo "   ❌ PANIC: verifier not built. Step 1 (build binaries) failed."
-        exit 1
-    fi
-    
-    log "   Using binary: $verifier_binary"
-    VERIFIER_CONFIG_PATH="$VERIFIER_CONFIG_PATH" RUST_LOG="$rust_log" "$verifier_binary" >> "$log_file" 2>&1 &
-    VERIFIER_PID=$!
-    
-    # Export PID so it persists across subshells
-    export VERIFIER_PID
-    
-    # Save PID to file for cross-script persistence
-    if [ -n "$LOG_DIR" ]; then
-        echo "$VERIFIER_PID" > "$LOG_DIR/verifier.pid"
-    fi
-    
-    log "   ✅ Verifier started with PID: $VERIFIER_PID"
-    
-    # Wait for verifier to be ready
-    log "   - Waiting for verifier to initialize..."
-    RETRY_COUNT=0
-    MAX_RETRIES=180
-    
-    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        # Check if process is still running
-        if ! ps -p "$VERIFIER_PID" > /dev/null 2>&1; then
-            log_and_echo "   ❌ Verifier process died"
-            log_and_echo "   Verifier log:"
-            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-            if [ -f "$log_file" ]; then
-                log_and_echo "   $(cat "$log_file")"
-            else
-                log_and_echo "   Log file not found at: $log_file"
-            fi
-            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-            exit 1
-        fi
-        
-        # Check health endpoint
-        if check_verifier_health; then
-            log "   ✅ Verifier is ready!"
-            
-            # Give verifier time to start polling and collect initial events
-            log "   - Waiting for verifier to poll and collect events (30 seconds)..."
-            sleep 30
-            
-            VERIFIER_LOG="$log_file"
-            export VERIFIER_PID VERIFIER_LOG
-            return 0
-        fi
-        
-        sleep 1
-        RETRY_COUNT=$((RETRY_COUNT + 1))
-    done
-    
-    # If we get here, verifier didn't become healthy
-    log_and_echo "   ❌ Verifier failed to start after $MAX_RETRIES seconds"
-    log_and_echo "   Verifier log:"
-    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-    if [ -f "$log_file" ]; then
-        log_and_echo "   $(cat "$log_file")"
-    else
-        log_and_echo "   Log file not found at: $log_file"
-    fi
-    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-    exit 1
 }
 
 # Stop solver processes
@@ -732,19 +454,472 @@ start_solver() {
 }
 
 # ============================================================================
-# VERIFIER NEGOTIATION ROUTING HELPERS
+# COORDINATOR SERVICE FUNCTIONS (Phase 0 - No Keys, Read-Only)
 # ============================================================================
 
-# Get verifier API base URL
-# Usage: get_verifier_url [port]
-# Returns the base URL for verifier API calls
-get_verifier_url() {
+# Stop coordinator processes
+# Usage: stop_coordinator
+# Stops any running coordinator processes
+stop_coordinator() {
+    log "   Checking for existing coordinators..."
+
+    if pgrep -f "cargo.*coordinator" > /dev/null || pgrep -f "target/debug/coordinator" > /dev/null; then
+        log "   ️  Found existing coordinator processes, stopping them..."
+        pkill -f "cargo.*coordinator" || true
+        pkill -f "target/debug/coordinator" || true
+        sleep 2
+        log "   ✅ Coordinator processes stopped"
+    else
+        log "   ✅ No existing coordinator processes"
+    fi
+}
+
+# Check coordinator health
+# Usage: check_coordinator_health [port]
+# Checks if coordinator health endpoint responds
+# Returns 0 if healthy, 1 if not
+check_coordinator_health() {
+    local port="${1:-3333}"
+
+    if curl -s -f "http://127.0.0.1:${port}/health" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Verify coordinator is running
+# Usage: verify_coordinator_running
+# Checks coordinator process, port, and health endpoint
+# Exits with error if coordinator is not running
+verify_coordinator_running() {
+    # Ensure LOG_DIR is set (for reading PID files)
+    if [ -z "$LOG_DIR" ] && [ -n "$PROJECT_ROOT" ]; then
+        LOG_DIR="$PROJECT_ROOT/.tmp/e2e-tests"
+    fi
+
+    log ""
+    log " Verifying coordinator is running..."
+
+    # Try to load COORDINATOR_PID from file if not set
+    if [ -z "$COORDINATOR_PID" ] && [ -n "$LOG_DIR" ] && [ -f "$LOG_DIR/coordinator.pid" ]; then
+        COORDINATOR_PID=$(cat "$LOG_DIR/coordinator.pid" 2>/dev/null || echo "")
+        export COORDINATOR_PID
+    fi
+
+    # Check coordinator process
+    if [ -z "$COORDINATOR_PID" ] || ! ps -p "$COORDINATOR_PID" > /dev/null 2>&1; then
+        log_and_echo "❌ ERROR: Coordinator process is not running"
+        log_and_echo "   Expected PID: ${COORDINATOR_PID:-<not set>}"
+        log_and_echo "   Please start coordinator first using start-coordinator.sh"
+        exit 1
+    fi
+
+    # Check if coordinator port is listening
+    COORDINATOR_PORT="${COORDINATOR_PORT:-3333}"
+    if ! check_port_listening "$COORDINATOR_PORT"; then
+        log_and_echo "❌ ERROR: Coordinator is not listening on port $COORDINATOR_PORT"
+        log_and_echo "   Coordinator PID: $COORDINATOR_PID"
+        log_and_echo "   Process exists but port is not accessible"
+        log_and_echo "   Check logs: ${COORDINATOR_LOG:-<not set>}"
+        exit 1
+    fi
+
+    # Check coordinator health endpoint
+    if ! check_coordinator_health "$COORDINATOR_PORT"; then
+        log_and_echo "❌ ERROR: Coordinator health check failed"
+        log_and_echo "   Coordinator PID: $COORDINATOR_PID"
+        log_and_echo "   Port $COORDINATOR_PORT is listening but /health endpoint failed"
+        log_and_echo "   Check logs: ${COORDINATOR_LOG:-<not set>}"
+        exit 1
+    fi
+    log "   ✅ Coordinator is running and healthy (PID: $COORDINATOR_PID, port: $COORDINATOR_PORT)"
+}
+
+# Start coordinator service
+# Usage: start_coordinator [log_file] [rust_log_level]
+# Starts coordinator in background and waits for it to be ready
+# Sets COORDINATOR_PID and COORDINATOR_LOG global variables
+# Exits with error if coordinator fails to start
+start_coordinator() {
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+
+    if [ -z "$COORDINATOR_CONFIG_PATH" ]; then
+        export COORDINATOR_CONFIG_PATH="$PROJECT_ROOT/coordinator/config/coordinator-e2e-ci-testing.toml"
+    fi
+
+    local log_file="${1:-$LOG_DIR/coordinator.log}"
+    local rust_log="${2:-info}"
+
+    # Ensure log directory exists
+    mkdir -p "$(dirname "$log_file")"
+
+    # Delete existing log file to start fresh for this test run
+    if [ -f "$log_file" ]; then
+        rm -f "$log_file"
+    fi
+
+    # Stop any existing coordinator first
+    stop_coordinator
+
+    log "   Starting coordinator service..."
+    log "   Using config: $COORDINATOR_CONFIG_PATH"
+    log "   Log file: $log_file"
+
+    # Use pre-built binary (must be built in Step 1)
+    local coordinator_binary="$PROJECT_ROOT/coordinator/target/debug/coordinator"
+    if [ ! -f "$coordinator_binary" ]; then
+        log_and_echo "   ❌ PANIC: coordinator not built. Step 1 (build binaries) failed."
+        exit 1
+    fi
+
+    log "   Using binary: $coordinator_binary"
+    COORDINATOR_CONFIG_PATH="$COORDINATOR_CONFIG_PATH" RUST_LOG="$rust_log" "$coordinator_binary" >> "$log_file" 2>&1 &
+    COORDINATOR_PID=$!
+
+    # Export PID so it persists across subshells
+    export COORDINATOR_PID
+
+    # Save PID to file for cross-script persistence
+    if [ -n "$LOG_DIR" ]; then
+        echo "$COORDINATOR_PID" > "$LOG_DIR/coordinator.pid"
+    fi
+
+    log "   ✅ Coordinator started with PID: $COORDINATOR_PID"
+
+    # Wait for coordinator to be ready
+    log "   - Waiting for coordinator to initialize..."
+    RETRY_COUNT=0
+    MAX_RETRIES=180
+
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Check if process is still running
+        if ! ps -p "$COORDINATOR_PID" > /dev/null 2>&1; then
+            log_and_echo "   ❌ Coordinator process died"
+            log_and_echo "   Coordinator log:"
+            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+            if [ -f "$log_file" ]; then
+                log_and_echo "   $(cat "$log_file")"
+            else
+                log_and_echo "   Log file not found at: $log_file"
+            fi
+            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+            exit 1
+        fi
+
+        # Check health endpoint
+        if check_coordinator_health; then
+            log "   ✅ Coordinator is ready!"
+
+            # Give coordinator time to start polling and collect initial events
+            log "   - Waiting for coordinator to poll and collect events (30 seconds)..."
+            sleep 30
+
+            COORDINATOR_LOG="$log_file"
+            export COORDINATOR_PID COORDINATOR_LOG
+            return 0
+        fi
+
+        sleep 1
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+    done
+
+    # If we get here, coordinator didn't become healthy
+    log_and_echo "   ❌ Coordinator failed to start after $MAX_RETRIES seconds"
+    log_and_echo "   Coordinator log:"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    if [ -f "$log_file" ]; then
+        log_and_echo "   $(cat "$log_file")"
+    else
+        log_and_echo "   Log file not found at: $log_file"
+    fi
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    exit 1
+}
+
+# ============================================================================
+# TRUSTED GMP SERVICE FUNCTIONS (Phase 0 - Has Keys, Validation)
+# ============================================================================
+
+# Stop trusted-gmp processes
+# Usage: stop_trusted_gmp
+# Stops any running trusted-gmp processes
+stop_trusted_gmp() {
+    log "   Checking for existing trusted-gmp..."
+
+    if pgrep -f "cargo.*trusted.gmp" > /dev/null || pgrep -f "target/debug/trusted.gmp" > /dev/null; then
+        log "   ️  Found existing trusted-gmp processes, stopping them..."
+        pkill -f "cargo.*trusted.gmp" || true
+        pkill -f "target/debug/trusted.gmp" || true
+        sleep 2
+        log "   ✅ Trusted-GMP processes stopped"
+    else
+        log "   ✅ No existing trusted-gmp processes"
+    fi
+}
+
+# Check trusted-gmp health
+# Usage: check_trusted_gmp_health [port]
+# Checks if trusted-gmp health endpoint responds
+# Returns 0 if healthy, 1 if not
+check_trusted_gmp_health() {
+    local port="${1:-3334}"
+
+    if curl -s -f "http://127.0.0.1:${port}/health" > /dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Verify trusted-gmp is running
+# Usage: verify_trusted_gmp_running
+# Checks trusted-gmp process, port, and health endpoint
+# Exits with error if trusted-gmp is not running
+verify_trusted_gmp_running() {
+    # Ensure LOG_DIR is set (for reading PID files)
+    if [ -z "$LOG_DIR" ] && [ -n "$PROJECT_ROOT" ]; then
+        LOG_DIR="$PROJECT_ROOT/.tmp/e2e-tests"
+    fi
+
+    log ""
+    log " Verifying trusted-gmp is running..."
+
+    # Try to load TRUSTED_GMP_PID from file if not set
+    if [ -z "$TRUSTED_GMP_PID" ] && [ -n "$LOG_DIR" ] && [ -f "$LOG_DIR/trusted-gmp.pid" ]; then
+        TRUSTED_GMP_PID=$(cat "$LOG_DIR/trusted-gmp.pid" 2>/dev/null || echo "")
+        export TRUSTED_GMP_PID
+    fi
+
+    # Check trusted-gmp process
+    if [ -z "$TRUSTED_GMP_PID" ] || ! ps -p "$TRUSTED_GMP_PID" > /dev/null 2>&1; then
+        log_and_echo "❌ ERROR: Trusted-GMP process is not running"
+        log_and_echo "   Expected PID: ${TRUSTED_GMP_PID:-<not set>}"
+        log_and_echo "   Please start trusted-gmp first using start-trusted-gmp.sh"
+        exit 1
+    fi
+
+    # Check if trusted-gmp port is listening
+    TRUSTED_GMP_PORT="${TRUSTED_GMP_PORT:-3334}"
+    if ! check_port_listening "$TRUSTED_GMP_PORT"; then
+        log_and_echo "❌ ERROR: Trusted-GMP is not listening on port $TRUSTED_GMP_PORT"
+        log_and_echo "   Trusted-GMP PID: $TRUSTED_GMP_PID"
+        log_and_echo "   Process exists but port is not accessible"
+        log_and_echo "   Check logs: ${TRUSTED_GMP_LOG:-<not set>}"
+        exit 1
+    fi
+
+    # Check trusted-gmp health endpoint
+    if ! check_trusted_gmp_health "$TRUSTED_GMP_PORT"; then
+        log_and_echo "❌ ERROR: Trusted-GMP health check failed"
+        log_and_echo "   Trusted-GMP PID: $TRUSTED_GMP_PID"
+        log_and_echo "   Port $TRUSTED_GMP_PORT is listening but /health endpoint failed"
+        log_and_echo "   Check logs: ${TRUSTED_GMP_LOG:-<not set>}"
+        exit 1
+    fi
+    log "   ✅ Trusted-GMP is running and healthy (PID: $TRUSTED_GMP_PID, port: $TRUSTED_GMP_PORT)"
+}
+
+# Generate trusted-gmp keys for E2E/CI testing
+# Usage: generate_trusted_gmp_keys
+# Generates fresh ephemeral keys for E2E/CI testing and exports them as env vars.
+generate_trusted_gmp_keys() {
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+
+    TRUSTED_GMP_KEYS_FILE="$PROJECT_ROOT/testing-infra/ci-e2e/.trusted-gmp-keys.env"
+    TRUSTED_GMP_CONFIG_FILE="$PROJECT_ROOT/trusted-gmp/config/trusted-gmp-e2e-ci-testing.toml"
+
+    # If keys already exist, just load them
+    if [ -f "$TRUSTED_GMP_KEYS_FILE" ]; then
+        source "$TRUSTED_GMP_KEYS_FILE"
+        export E2E_TRUSTED_GMP_PRIVATE_KEY
+        export E2E_TRUSTED_GMP_PUBLIC_KEY
+        log_and_echo "   ✅ Loaded existing trusted-gmp ephemeral keys"
+        return
+    fi
+
+    log_and_echo "   Generating trusted-gmp ephemeral test keys..."
+    cd "$PROJECT_ROOT/trusted-gmp"
+
+    # Use pre-built binary (must be built in Step 1)
+    local generate_keys_bin="$PROJECT_ROOT/trusted-gmp/target/debug/generate_keys"
+    if [ ! -x "$generate_keys_bin" ]; then
+        log_and_echo "❌ PANIC: trusted-gmp generate_keys not built. Step 1 (build binaries) failed."
+        exit 1
+    fi
+    KEYS_OUTPUT=$("$generate_keys_bin" 2>/dev/null)
+
+    # Extract keys from output
+    PRIVATE_KEY=$(echo "$KEYS_OUTPUT" | grep "Private Key (base64):" | sed 's/.*: //')
+    PUBLIC_KEY=$(echo "$KEYS_OUTPUT" | grep "Public Key (base64):" | sed 's/.*: //')
+
+    if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
+        log_and_echo "❌ ERROR: Failed to generate trusted-gmp test keys"
+        exit 1
+    fi
+
+    # Export keys as environment variables (E2E prefix to avoid collision)
+    export E2E_TRUSTED_GMP_PRIVATE_KEY="$PRIVATE_KEY"
+    export E2E_TRUSTED_GMP_PUBLIC_KEY="$PUBLIC_KEY"
+
+    # Save keys to file for reuse within the same test run
+    cat > "$TRUSTED_GMP_KEYS_FILE" << EOF
+# Ephemeral trusted-gmp keys for E2E/CI testing
+# Generated at: $(date)
+# WARNING: These keys are for testing only. Do not use in production.
+E2E_TRUSTED_GMP_PRIVATE_KEY="$PRIVATE_KEY"
+E2E_TRUSTED_GMP_PUBLIC_KEY="$PUBLIC_KEY"
+EOF
+
+    cd "$PROJECT_ROOT"
+    log_and_echo "   ✅ Generated fresh trusted-gmp ephemeral keys"
+}
+
+# Load trusted-gmp keys
+# Usage: load_trusted_gmp_keys
+# Loads previously generated keys from the keys file.
+load_trusted_gmp_keys() {
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+
+    TRUSTED_GMP_KEYS_FILE="$PROJECT_ROOT/testing-infra/ci-e2e/.trusted-gmp-keys.env"
+
+    if [ -f "$TRUSTED_GMP_KEYS_FILE" ]; then
+        source "$TRUSTED_GMP_KEYS_FILE"
+        export E2E_TRUSTED_GMP_PRIVATE_KEY
+        export E2E_TRUSTED_GMP_PUBLIC_KEY
+    else
+        log_and_echo "❌ ERROR: Trusted-GMP keys file not found at $TRUSTED_GMP_KEYS_FILE"
+        log_and_echo "   Run generate_trusted_gmp_keys first."
+        exit 1
+    fi
+}
+
+# Start trusted-gmp service
+# Usage: start_trusted_gmp [log_file] [rust_log_level]
+# Starts trusted-gmp in background and waits for it to be ready
+# Sets TRUSTED_GMP_PID and TRUSTED_GMP_LOG global variables
+# Exits with error if trusted-gmp fails to start
+start_trusted_gmp() {
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+
+    if [ -z "$TRUSTED_GMP_CONFIG_PATH" ]; then
+        export TRUSTED_GMP_CONFIG_PATH="$PROJECT_ROOT/trusted-gmp/config/trusted-gmp-e2e-ci-testing.toml"
+    fi
+
+    # Load keys
+    load_trusted_gmp_keys
+
+    local log_file="${1:-$LOG_DIR/trusted-gmp.log}"
+    local rust_log="${2:-info}"
+
+    # Ensure log directory exists
+    mkdir -p "$(dirname "$log_file")"
+
+    # Delete existing log file to start fresh for this test run
+    if [ -f "$log_file" ]; then
+        rm -f "$log_file"
+    fi
+
+    # Stop any existing trusted-gmp first
+    stop_trusted_gmp
+
+    log "   Starting trusted-gmp service..."
+    log "   Using config: $TRUSTED_GMP_CONFIG_PATH"
+    log "   Log file: $log_file"
+
+    # Use pre-built binary (must be built in Step 1)
+    local trusted_gmp_binary="$PROJECT_ROOT/trusted-gmp/target/debug/trusted-gmp"
+    if [ ! -f "$trusted_gmp_binary" ]; then
+        log_and_echo "   ❌ PANIC: trusted-gmp not built. Step 1 (build binaries) failed."
+        exit 1
+    fi
+
+    log "   Using binary: $trusted_gmp_binary"
+    TRUSTED_GMP_CONFIG_PATH="$TRUSTED_GMP_CONFIG_PATH" RUST_LOG="$rust_log" "$trusted_gmp_binary" >> "$log_file" 2>&1 &
+    TRUSTED_GMP_PID=$!
+
+    # Export PID so it persists across subshells
+    export TRUSTED_GMP_PID
+
+    # Save PID to file for cross-script persistence
+    if [ -n "$LOG_DIR" ]; then
+        echo "$TRUSTED_GMP_PID" > "$LOG_DIR/trusted-gmp.pid"
+    fi
+
+    log "   ✅ Trusted-GMP started with PID: $TRUSTED_GMP_PID"
+
+    # Wait for trusted-gmp to be ready
+    log "   - Waiting for trusted-gmp to initialize..."
+    RETRY_COUNT=0
+    MAX_RETRIES=180
+
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Check if process is still running
+        if ! ps -p "$TRUSTED_GMP_PID" > /dev/null 2>&1; then
+            log_and_echo "   ❌ Trusted-GMP process died"
+            log_and_echo "   Trusted-GMP log:"
+            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+            if [ -f "$log_file" ]; then
+                log_and_echo "   $(cat "$log_file")"
+            else
+                log_and_echo "   Log file not found at: $log_file"
+            fi
+            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+            exit 1
+        fi
+
+        # Check health endpoint
+        if check_trusted_gmp_health; then
+            log "   ✅ Trusted-GMP is ready!"
+
+            # Give trusted-gmp time to start polling and collect initial events
+            log "   - Waiting for trusted-gmp to poll and collect events (30 seconds)..."
+            sleep 30
+
+            TRUSTED_GMP_LOG="$log_file"
+            export TRUSTED_GMP_PID TRUSTED_GMP_LOG
+            return 0
+        fi
+
+        sleep 1
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+    done
+
+    # If we get here, trusted-gmp didn't become healthy
+    log_and_echo "   ❌ Trusted-GMP failed to start after $MAX_RETRIES seconds"
+    log_and_echo "   Trusted-GMP log:"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    if [ -f "$log_file" ]; then
+        log_and_echo "   $(cat "$log_file")"
+    else
+        log_and_echo "   Log file not found at: $log_file"
+    fi
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    exit 1
+}
+
+# ============================================================================
+# COORDINATOR NEGOTIATION ROUTING HELPERS
+# ============================================================================
+
+# Get coordinator API base URL (drafts, negotiation - port 3333)
+# Usage: get_coordinator_url [port]
+# Returns the base URL for coordinator API calls
+get_coordinator_url() {
     local port="${1:-3333}"
     echo "http://127.0.0.1:${port}"
 }
 
-# Submit draft intent to verifier
-# Usage: submit_draft_intent <requester_addr> <draft_data_json> <expiry_time> [verifier_port]
+# Submit draft intent to coordinator
+# Usage: submit_draft_intent <requester_addr> <draft_data_json> <expiry_time> [coordinator_port]
 # Returns the draft_id on success, exits on error
 # draft_data_json should be a JSON object with intent details
 # Note: Cannot use log/log_and_echo for success path because this function's output
@@ -753,19 +928,19 @@ submit_draft_intent() {
     local requester_addr="$1"
     local draft_data_json="$2"
     local expiry_time="$3"
-    local verifier_port="${4:-3333}"
+    local coordinator_port="${4:-3333}"
     
     if [ -z "$requester_addr" ] || [ -z "$draft_data_json" ] || [ -z "$expiry_time" ]; then
         log_and_echo "❌ ERROR: submit_draft_intent() requires requester_addr, draft_data_json, and expiry_time"
         exit 1
     fi
     
-    local verifier_url=$(get_verifier_url "$verifier_port")
+    local coordinator_url=$(get_coordinator_url "$coordinator_port")
     
     # Log to stderr so it doesn't contaminate the return value
-    echo "   Submitting draft intent to verifier..." >&2
+    echo "   Submitting draft intent to coordinator..." >&2
     echo "     Requester: $requester_addr" >&2
-    [ -n "$LOG_FILE" ] && echo "   Submitting draft intent to verifier..." >> "$LOG_FILE"
+    [ -n "$LOG_FILE" ] && echo "   Submitting draft intent to coordinator..." >> "$LOG_FILE"
     [ -n "$LOG_FILE" ] && echo "     Requester: $requester_addr" >> "$LOG_FILE"
     
     # Build request body using jq to ensure valid JSON
@@ -787,13 +962,13 @@ submit_draft_intent() {
     [ -n "$LOG_FILE" ] && echo "$request_body" >> "$LOG_FILE"
     
     local response
-    response=$(curl -s -X POST "${verifier_url}/draftintent" \
+    response=$(curl -s -X POST "${coordinator_url}/draftintent" \
         -H "Content-Type: application/json" \
         -d "$request_body" 2>&1)
     
     local curl_exit=$?
     if [ $curl_exit -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to connect to verifier at ${verifier_url}"
+        log_and_echo "❌ ERROR: Failed to connect to coordinator at ${coordinator_url}"
         log_and_echo "   curl exit code: $curl_exit"
         exit 1
     fi
@@ -821,22 +996,22 @@ submit_draft_intent() {
     echo "$draft_id"
 }
 
-# Poll verifier for pending drafts (solver perspective)
-# Usage: poll_pending_drafts [verifier_port]
+# Poll coordinator for pending drafts (solver perspective)
+# Usage: poll_pending_drafts [coordinator_port]
 # Returns JSON array of pending drafts
 # Note: Cannot use log/log_and_echo for success path because this function's output
 # is captured via command substitution (e.g., PENDING_DRAFTS=$(poll_pending_drafts)),
 # and log functions write to stdout which would contaminate the JSON output.
 poll_pending_drafts() {
-    local verifier_port="${1:-3333}"
-    local verifier_url=$(get_verifier_url "$verifier_port")
+    local coordinator_port="${1:-3333}"
+    local coordinator_url=$(get_coordinator_url "$coordinator_port")
     
     local response
-    response=$(curl -s -X GET "${verifier_url}/draftintents/pending" 2>&1)
+    response=$(curl -s -X GET "${coordinator_url}/draftintents/pending" 2>&1)
     
     local curl_exit=$?
     if [ $curl_exit -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to connect to verifier at ${verifier_url}"
+        log_and_echo "❌ ERROR: Failed to connect to coordinator at ${coordinator_url}"
         exit 1
     fi
     
@@ -853,25 +1028,25 @@ poll_pending_drafts() {
 }
 
 # Get draft intent by ID
-# Usage: get_draft_intent <draft_id> [verifier_port]
+# Usage: get_draft_intent <draft_id> [coordinator_port]
 # Returns the draft data JSON
 get_draft_intent() {
     local draft_id="$1"
-    local verifier_port="${2:-3333}"
+    local coordinator_port="${2:-3333}"
     
     if [ -z "$draft_id" ]; then
         log_and_echo "❌ ERROR: get_draft_intent() requires draft_id"
         exit 1
     fi
     
-    local verifier_url=$(get_verifier_url "$verifier_port")
+    local coordinator_url=$(get_coordinator_url "$coordinator_port")
     
     local response
-    response=$(curl -s -X GET "${verifier_url}/draftintent/${draft_id}" 2>&1)
+    response=$(curl -s -X GET "${coordinator_url}/draftintent/${draft_id}" 2>&1)
     
     local curl_exit=$?
     if [ $curl_exit -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to connect to verifier at ${verifier_url}"
+        log_and_echo "❌ ERROR: Failed to connect to coordinator at ${coordinator_url}"
         exit 1
     fi
     
@@ -886,18 +1061,18 @@ get_draft_intent() {
     echo "$response" | jq -r '.data'
 }
 
-# Submit signature to verifier (solver submits after signing)
-# Usage: submit_signature_to_verifier <draft_id> <solver_addr> <signature_hex> <public_key_hex> [verifier_port]
+# Submit signature to coordinator (solver submits after signing)
+# Usage: submit_signature_to_coordinator <draft_id> <solver_addr> <signature_hex> <public_key_hex> [coordinator_port]
 # Returns success/failure, exits on error
-submit_signature_to_verifier() {
+submit_signature_to_coordinator() {
     local draft_id="$1"
     local solver_addr="$2"
     local signature_hex="$3"
     local public_key_hex="$4"
-    local verifier_port="${5:-3333}"
+    local coordinator_port="${5:-3333}"
     
     if [ -z "$draft_id" ] || [ -z "$solver_addr" ] || [ -z "$signature_hex" ] || [ -z "$public_key_hex" ]; then
-        log_and_echo "❌ ERROR: submit_signature_to_verifier() requires draft_id, solver_addr, signature_hex, public_key_hex"
+        log_and_echo "❌ ERROR: submit_signature_to_coordinator() requires draft_id, solver_addr, signature_hex, public_key_hex"
         exit 1
     fi
     
@@ -911,14 +1086,14 @@ submit_signature_to_verifier() {
         normalized_solver_addr="0x$solver_addr"
     fi
     
-    local verifier_url=$(get_verifier_url "$verifier_port")
+    local coordinator_url=$(get_coordinator_url "$coordinator_port")
     
-    log "   Submitting signature to verifier..."
+    log "   Submitting signature to coordinator..."
     log "     Draft ID: $draft_id"
     log "     Solver: $normalized_solver_addr"
     
     local response
-    response=$(curl -s -X POST "${verifier_url}/draftintent/${draft_id}/signature" \
+    response=$(curl -s -X POST "${coordinator_url}/draftintent/${draft_id}/signature" \
         -H "Content-Type: application/json" \
         -d "{
             \"solver_hub_addr\": \"$normalized_solver_addr\",
@@ -928,7 +1103,7 @@ submit_signature_to_verifier() {
     
     local curl_exit=$?
     if [ $curl_exit -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to connect to verifier at ${verifier_url}"
+        log_and_echo "❌ ERROR: Failed to connect to coordinator at ${coordinator_url}"
         exit 1
     fi
     
@@ -950,34 +1125,34 @@ submit_signature_to_verifier() {
     return 0
 }
 
-# Poll verifier for signature (requester polls after submitting draft)
-# Usage: poll_for_signature <draft_id> [max_attempts] [sleep_seconds] [verifier_port]
+# Poll coordinator for signature (requester polls after submitting draft)
+# Usage: poll_for_signature <draft_id> [max_attempts] [sleep_seconds] [coordinator_port]
 # Returns signature JSON on success, exits on timeout
 poll_for_signature() {
     local draft_id="$1"
     local max_attempts="${2:-60}"
     local sleep_seconds="${3:-2}"
-    local verifier_port="${4:-3333}"
+    local coordinator_port="${4:-3333}"
     
     if [ -z "$draft_id" ]; then
         log_and_echo "❌ ERROR: poll_for_signature() requires draft_id"
         exit 1
     fi
     
-    local verifier_url=$(get_verifier_url "$verifier_port")
+    local coordinator_url=$(get_coordinator_url "$coordinator_port")
     
     # Use >&2 for all logs to avoid capturing them in command substitution
-    echo "   Polling verifier for signature..." >&2
+    echo "   Polling coordinator for signature..." >&2
     echo "     Draft ID: $draft_id" >&2
     echo "     Max attempts: $max_attempts, interval: ${sleep_seconds}s" >&2
-    [ -n "$LOG_FILE" ] && echo "   Polling verifier for signature..." >> "$LOG_FILE"
+    [ -n "$LOG_FILE" ] && echo "   Polling coordinator for signature..." >> "$LOG_FILE"
     [ -n "$LOG_FILE" ] && echo "     Draft ID: $draft_id" >> "$LOG_FILE"
     [ -n "$LOG_FILE" ] && echo "     Max attempts: $max_attempts, interval: ${sleep_seconds}s" >> "$LOG_FILE"
     
     local attempt=0
     while [ $attempt -lt $max_attempts ]; do
         local response
-        response=$(curl -s -X GET "${verifier_url}/draftintent/${draft_id}/signature" 2>/dev/null)
+        response=$(curl -s -X GET "${coordinator_url}/draftintent/${draft_id}/signature" 2>/dev/null)
         
         local curl_exit=$?
         if [ $curl_exit -ne 0 ] || [ -z "$response" ]; then
@@ -1079,7 +1254,7 @@ build_draft_data() {
 }
 
 # Wait for solver to automatically fulfill an intent
-# Polls the verifier's /events endpoint for fulfillment events matching the intent
+# Polls the coordinator's /events endpoint for fulfillment events matching the intent
 # Usage: wait_for_solver_fulfillment <intent_id> <flow_type> [timeout_seconds]
 #   intent_id: The intent ID to wait for
 #   flow_type: "inflow" or "outflow"
@@ -1092,7 +1267,7 @@ wait_for_solver_fulfillment() {
     local poll_interval=3
     local elapsed=0
     
-    local verifier_url="${VERIFIER_URL:-http://127.0.0.1:3333}"
+    local coordinator_url="${COORDINATOR_URL:-http://127.0.0.1:3333}"
     
     log ""
     log "⏳ Waiting for solver to automatically fulfill $flow_type intent..."
@@ -1108,9 +1283,9 @@ wait_for_solver_fulfillment() {
     local solver_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/solver.log"
     
     while [ $elapsed -lt $timeout_seconds ]; do
-        # Check for fulfillment event in verifier (works for inflow)
+        # Check for fulfillment event in coordinator (works for inflow)
         local events_response
-        events_response=$(curl -s "${verifier_url}/events" 2>/dev/null)
+        events_response=$(curl -s "${coordinator_url}/events" 2>/dev/null)
         
         if [ $? -eq 0 ]; then
             # Check if fulfillment event exists for this intent
@@ -1120,7 +1295,7 @@ wait_for_solver_fulfillment() {
                 2>/dev/null | head -1)
             
             if [ -n "$fulfillment_found" ]; then
-                log "   ✅ Solver fulfilled the intent! (detected via verifier after ${elapsed}s)"
+                log "   ✅ Solver fulfilled the intent! (detected via coordinator after ${elapsed}s)"
                 log "   Fulfillment event found for intent: $fulfillment_found"
                 return 0
             fi
@@ -1161,24 +1336,28 @@ wait_for_solver_fulfillment() {
         log "   Solver log file not found at: $solver_log_file"
     fi
     
-    # Show verifier logs
-    local verifier_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/verifier.log"
-    if [ -f "$verifier_log_file" ]; then
-        log ""
-        log "   Verifier logs (last 100 lines):"
-        log "   + + + + + + + + + + + + + + + + + + + +"
-        tail -100 "$verifier_log_file" | while IFS= read -r line; do log "   $line"; done
-        log "   + + + + + + + + + + + + + + + + + + + +"
-    else
-        log ""
-        log "   Verifier log file not found (checked: $verifier_log_file)"
-    fi
+    # Show coordinator and trusted-gmp logs
+    local coordinator_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/coordinator.log"
+    local trusted_gmp_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/trusted-gmp.log"
+    for log_label in "Coordinator" "Trusted-GMP"; do
+        local f; [ "$log_label" = "Coordinator" ] && f="$coordinator_log_file" || f="$trusted_gmp_log_file"
+        if [ -f "$f" ]; then
+            log ""
+            log "   $log_label logs (last 100 lines):"
+            log "   + + + + + + + + + + + + + + + + + + + +"
+            tail -100 "$f" | while IFS= read -r line; do log "   $line"; done
+            log "   + + + + + + + + + + + + + + + + + + + +"
+        else
+            log ""
+            log "   $log_label log file not found (checked: $f)"
+        fi
+    done
     
-    # Show verifier events
+    # Show coordinator events
     log ""
-    log "   Verifier events:"
+    log "   Coordinator events:"
     local events_response
-    events_response=$(curl -s "${verifier_url}/events" 2>/dev/null)
+    events_response=$(curl -s "${coordinator_url}/events" 2>/dev/null)
     if [ $? -eq 0 ]; then
         local escrow_count fulfillment_count intent_count
         escrow_count=$(echo "$events_response" | jq -r '.data.escrow_events | length' 2>/dev/null || echo "0")
@@ -1195,7 +1374,7 @@ wait_for_solver_fulfillment() {
             echo "$events_response" | jq -r '.data.escrow_events[] | "         \(.intent_id) - amount: \(.offered_amount)"' 2>/dev/null || log "         (parse error)"
         fi
     else
-        log "      Failed to query verifier events"
+        log "      Failed to query coordinator events"
     fi
     
     return 1

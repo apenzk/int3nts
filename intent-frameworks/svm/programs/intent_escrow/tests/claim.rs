@@ -15,11 +15,11 @@ use solana_sdk::{
 // CLAIM TESTS
 // ============================================================================
 
-/// 1. Test: Valid Claim with Verifier Signature
-/// Verifies that solvers can claim escrow funds when provided with a valid verifier signature.
-/// Why: Claiming is the core fulfillment mechanism. Solvers must be able to receive funds after verifier approval.
+/// 1. Test: Valid Claim with Approver Signature
+/// Verifies that solvers can claim escrow funds when provided with a valid approver signature.
+/// Why: Claiming is the core fulfillment mechanism. Solvers must be able to receive funds after approver approval.
 #[tokio::test]
-async fn test_claim_with_valid_verifier_signature() {
+async fn test_claim_with_valid_approver_signature() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -51,12 +51,12 @@ async fn test_claim_with_valid_verifier_signature() {
     let (vault_pda, _) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
-    // Sign the intent_id with verifier's keypair
-    let signature = env.verifier.sign_message(&intent_id);
+    // Sign the intent_id with approver's keypair
+    let signature = env.approver.sign_message(&intent_id);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,
@@ -94,8 +94,8 @@ async fn test_claim_with_valid_verifier_signature() {
 }
 
 /// 2. Test: Invalid Signature Rejection
-/// Verifies that claims with invalid signatures are rejected with UnauthorizedVerifier error.
-/// Why: Security requirement - only verifier-approved fulfillments should allow fund release.
+/// Verifies that claims with invalid signatures are rejected with UnauthorizedApprover error.
+/// Why: Security requirement - only approver-approved fulfillments should allow fund release.
 #[tokio::test]
 async fn test_revert_with_invalid_signature() {
     let program_test = program_test();
@@ -130,7 +130,7 @@ async fn test_revert_with_invalid_signature() {
     let (vault_pda, _) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
-    // Sign with wrong keypair (solver instead of verifier)
+    // Sign with wrong keypair (solver instead of approver)
     let wrong_signature = env.solver.sign_message(&intent_id);
     let mut wrong_signature_bytes = [0u8; 64];
     wrong_signature_bytes.copy_from_slice(wrong_signature.as_ref());
@@ -238,12 +238,12 @@ async fn test_prevent_signature_replay_across_different_intent_ids() {
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id_b], &env.program_id);
 
     // Create a VALID signature for intent_id A (the first escrow)
-    let signature_for_a = env.verifier.sign_message(&intent_id_a);
+    let signature_for_a = env.approver.sign_message(&intent_id_a);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature_for_a.as_ref());
 
     // Create Ed25519 instruction for intent A signature
-    let ed25519_ix = create_ed25519_instruction(&intent_id_a, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id_a, &signature_bytes, &env.approver.pubkey());
 
     // Try to use the signature for intent_id A on escrow B (which has intent_id B)
     // This should fail because the signature is bound to intent_id A, not intent_id B
@@ -307,11 +307,11 @@ async fn test_revert_if_escrow_already_claimed() {
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
     // First claim
-    let signature = env.verifier.sign_message(&intent_id);
+    let signature = env.approver.sign_message(&intent_id);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,
@@ -351,11 +351,11 @@ async fn test_revert_if_escrow_already_claimed() {
 
     // Second claim should fail - create fresh instructions
     // Note: Even though vault is empty, the is_claimed check should catch this first
-    let signature2 = env.verifier.sign_message(&intent_id);
+    let signature2 = env.approver.sign_message(&intent_id);
     let mut signature_bytes2 = [0u8; 64];
     signature_bytes2.copy_from_slice(signature2.as_ref());
 
-    let ed25519_ix2 = create_ed25519_instruction(&intent_id, &signature_bytes2, &env.verifier.pubkey());
+    let ed25519_ix2 = create_ed25519_instruction(&intent_id, &signature_bytes2, &env.approver.pubkey());
 
     let claim_ix2 = create_claim_ix(
         env.program_id,
@@ -400,11 +400,11 @@ async fn test_revert_if_escrow_does_not_exist() {
     );
 
     let message = non_existent_intent_id;
-    let signature = env.verifier.sign_message(&message);
+    let signature = env.approver.sign_message(&message);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&message, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&message, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,

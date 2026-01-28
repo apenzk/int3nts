@@ -4,13 +4,21 @@
 
 # Don't use set -e so we can capture all test results even if some fail
 
-echo "Running Verifier tests..."
-VERIFIER_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd verifier && cargo test --quiet 2>&1") || {
-    echo "Verifier tests failed:"
-    echo "$VERIFIER_TEST_OUTPUT"
+echo "Running Coordinator tests..."
+COORDINATOR_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd coordinator && cargo test --quiet 2>&1") || {
+    echo "Coordinator tests failed:"
+    echo "$COORDINATOR_TEST_OUTPUT"
 }
-VERIFIER_PASSED=$(echo "$VERIFIER_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
-VERIFIER_FAILED=$(echo "$VERIFIER_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
+COORDINATOR_PASSED=$(echo "$COORDINATOR_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
+COORDINATOR_FAILED=$(echo "$COORDINATOR_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
+
+echo "Running Trusted-GMP tests..."
+TRUSTED_GMP_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet 2>&1") || {
+    echo "Trusted-GMP tests failed:"
+    echo "$TRUSTED_GMP_TEST_OUTPUT"
+}
+TRUSTED_GMP_PASSED=$(echo "$TRUSTED_GMP_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
+TRUSTED_GMP_FAILED=$(echo "$TRUSTED_GMP_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
 echo "Running Solver tests..."
 SOLVER_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd solver && cargo test --quiet 2>&1") || {
@@ -31,7 +39,7 @@ MOVE_PASSED=${MOVE_PASSED:-0}
 MOVE_FAILED=${MOVE_FAILED:-0}
 
 echo "Running EVM tests..."
-EVM_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm test" 2>&1) || {
+EVM_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm install && npm test" 2>&1) || {
     echo "EVM tests failed:"
     echo "$EVM_TEST_OUTPUT"
 }
@@ -51,7 +59,7 @@ SVM_PASSED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $
 SVM_FAILED=$(echo "$SVM_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
 echo "Running Frontend tests..."
-FRONTEND_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd frontend && npm test" 2>&1) || {
+FRONTEND_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd frontend && npm install --legacy-peer-deps && npm test" 2>&1) || {
     echo "Frontend tests failed:"
     echo "$FRONTEND_TEST_OUTPUT"
 }
@@ -64,9 +72,10 @@ echo "=== Test Summary Table ==="
 echo ""
 echo "| Tests | Passed | Failed |"
 echo "|-------|--------|--------|"
-echo "| Verifier | $VERIFIER_PASSED | $VERIFIER_FAILED |"
+echo "| Coordinator | $COORDINATOR_PASSED | $COORDINATOR_FAILED |"
+echo "| Trusted-GMP | $TRUSTED_GMP_PASSED | $TRUSTED_GMP_FAILED |"
 echo "| Solver | $SOLVER_PASSED | $SOLVER_FAILED |"
-echo "| Move | $MOVE_PASSED | $MOVE_FAILED |"
+echo "| MVM | $MOVE_PASSED | $MOVE_FAILED |"
 echo "| EVM | $EVM_PASSED | $EVM_FAILED |"
 echo "| SVM | $SVM_PASSED | $SVM_FAILED |"
 echo "| Frontend | $FRONTEND_PASSED | $FRONTEND_FAILED |"

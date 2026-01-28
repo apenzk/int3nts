@@ -1,7 +1,7 @@
 //! Configuration Management Module
 //!
 //! This module handles loading and managing configuration for the solver service.
-//! Configuration includes verifier connection, chain settings, and acceptance criteria.
+//! Configuration includes coordinator connection, chain settings, and acceptance criteria.
 
 use serde::{Deserialize, Serialize};
 use solana_sdk::pubkey::Pubkey;
@@ -17,14 +17,14 @@ use crate::acceptance::TokenPair;
 /// Main configuration structure containing all solver service settings.
 ///
 /// This structure holds configuration for:
-/// - Verifier service connection
+/// - Coordinator service connection
 /// - Hub chain connection details
 /// - Connected chain configurations (one or more, each with a type field)
 /// - Acceptance criteria (token pairs and exchange rates)
 /// - Solver profile and signing settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolverConfig {
-    /// Service configuration (verifier URL, polling intervals)
+    /// Service configuration (coordinator URL, polling intervals)
     pub service: ServiceConfig,
     /// Hub chain configuration (where intents are created)
     pub hub_chain: ChainConfig,
@@ -116,14 +116,16 @@ impl ConnectedChainConfig {
 /// Service-level configuration for the solver.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceConfig {
-    /// Verifier API base URL (e.g., "http://127.0.0.1:3333")
-    pub verifier_url: String,
+    /// Coordinator API base URL (e.g., "http://127.0.0.1:3333") - used for draft negotiation
+    pub coordinator_url: String,
+    /// Trusted GMP API base URL (e.g., "http://127.0.0.1:3334") - used for approvals and validation
+    pub trusted_gmp_url: String,
     /// Polling interval for checking pending drafts in milliseconds
     pub polling_interval_ms: u64,
     /// E2E testing mode: if true, use aptos CLI with profiles; if false, use movement CLI with private keys
     #[serde(default)]
     pub e2e_mode: bool,
-    /// Solver acceptance API host (used by verifier to fetch ratios)
+    /// Solver acceptance API host (used by coordinator to fetch ratios)
     #[serde(default = "default_acceptance_api_host")]
     pub acceptance_api_host: String,
     /// Solver acceptance API port

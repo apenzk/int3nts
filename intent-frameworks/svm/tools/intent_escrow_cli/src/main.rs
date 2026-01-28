@@ -81,7 +81,7 @@ fn handle_initialize(
     program_id: Pubkey,
 ) -> Result<(), Box<dyn Error>> {
     let payer = read_keypair(options, "payer")?;
-    let verifier = parse_pubkey(required_option(options, "verifier")?)?;
+    let approver = parse_pubkey(required_option(options, "approver")?)?;
 
     let (state_pda, _state_bump) =
         Pubkey::find_program_address(&[seeds::STATE_SEED], &program_id);
@@ -93,7 +93,7 @@ fn handle_initialize(
             AccountMeta::new(payer.pubkey(), true),
             AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         ],
-        data: EscrowInstruction::Initialize { verifier }.try_to_vec()?,
+        data: EscrowInstruction::Initialize { approver }.try_to_vec()?,
     };
 
     let signature = send_tx(client, &[ix], &payer, &[])?;
@@ -162,7 +162,7 @@ fn handle_claim(
     let ed25519_ix = new_ed25519_instruction_with_signature(
         &intent_id,
         &signature,
-        &state.verifier.to_bytes(),
+        &state.approver.to_bytes(),
     );
 
     let claim_ix = build_claim_ix(
@@ -456,7 +456,7 @@ Usage:
   intent_escrow_cli <command> --program-id <pubkey> [--option value]...
 
 Commands:
-  initialize         --program-id <pubkey> --payer <keypair> --verifier <pubkey> [--rpc <url>]
+  initialize         --program-id <pubkey> --payer <keypair> --approver <pubkey> [--rpc <url>]
   create-escrow      --program-id <pubkey> --payer <keypair> --requester <keypair> --token-mint <pubkey>
                      --requester-token <pubkey> --solver <pubkey> --intent-id <hex> --amount <u64>
                      [--expiry <i64>] [--rpc <url>]

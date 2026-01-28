@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
 import { useWallet as useMvmWallet } from '@aptos-labs/wallet-adapter-react';
 import { useWallet as useSvmWallet } from '@solana/wallet-adapter-react';
-import { verifierClient } from '@/lib/verifier';
+import { coordinatorClient } from '@/lib/coordinator';
 import type { DraftIntentRequest, DraftIntentSignature } from '@/lib/types';
 import { generateIntentId } from '@/lib/types';
 import { SUPPORTED_TOKENS, type TokenConfig, toSmallestUnits } from '@/config/tokens';
@@ -524,7 +524,7 @@ export function IntentBuilder() {
 
       const poll = async () => {
         try {
-          const response = await verifierClient.pollDraftSignature(draftId!);
+          const response = await coordinatorClient.pollDraftSignature(draftId!);
           console.log('Poll response:', { success: response.success, hasData: !!response.data, error: response.error });
           
           // Check if we got a signature (success: true with data)
@@ -638,7 +638,7 @@ export function IntentBuilder() {
         const desiredChainId = CHAIN_CONFIGS[desiredToken.chain].chainId;
         
         // Query exchange rate for this specific token pair
-        const response = await verifierClient.getExchangeRate(
+        const response = await coordinatorClient.getExchangeRate(
           offeredChainId,
           offeredToken.metadata,
           desiredChainId,
@@ -677,7 +677,7 @@ export function IntentBuilder() {
   }, [savedDraftData?.intentId]);
 
   // Poll for fulfillment
-  // - Outflow: Check verifier approval (verifier confirms funds received on connected chain)
+  // - Outflow: Check trusted-gmp approval (trusted-gmp confirms funds received on connected chain)
   // - Inflow: Check hub chain fulfillment events (solver fulfilled intent on hub chain)
   useEffect(() => {
     if (!transactionHash || !savedDraftData || pollingFulfillmentRef.current) return;
@@ -713,11 +713,11 @@ export function IntentBuilder() {
           }
           
           if (flowType === 'outflow') {
-            // Outflow: Check verifier approval (verifier confirms funds received on connected chain)
+            // Outflow: Check trusted-gmp approval (trusted-gmp confirms funds received on connected chain)
             console.log('Checking approval status for outflow intent:', currentIntentId);
-            
-            const verifierUrl = process.env.NEXT_PUBLIC_VERIFIER_URL || 'http://localhost:3333';
-            const response = await fetch(`${verifierUrl}/approved/${currentIntentId}`);
+
+            const trustedGmpUrl = process.env.NEXT_PUBLIC_TRUSTED_GMP_URL || 'http://localhost:3334';
+            const response = await fetch(`${trustedGmpUrl}/approved/${currentIntentId}`);
             const data = await response.json();
             
             console.log('Approval check response:', data);
@@ -932,7 +932,7 @@ export function IntentBuilder() {
         expiry_time: expiryTime,
       };
 
-      const response = await verifierClient.createDraftIntent(request);
+      const response = await coordinatorClient.createDraftIntent(request);
 
       if (response.success && response.data) {
         const draftId = response.data.draft_id;

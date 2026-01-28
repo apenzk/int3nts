@@ -36,7 +36,7 @@ Required environment variables:
 
 ### `initialize.sh`
 
-Initializes the program state with a verifier pubkey.
+Initializes the program state with a approver pubkey.
 
 ```bash
 ./scripts/initialize.sh
@@ -44,7 +44,7 @@ Initializes the program state with a verifier pubkey.
 
 Required environment variables:
 
-- `SVM_VERIFIER_PUBKEY` (required)
+- `SVM_APPROVER_PUBKEY` (required)
 - `SVM_PROGRAM_ID` (optional, default is the built-in program id)
 - `SVM_RPC_URL` (optional, default `http://localhost:8899`)
 - `SVM_PAYER_KEYPAIR` (optional, default `~/.config/solana/id.json`)
@@ -72,7 +72,7 @@ Required environment variables:
 
 ### `claim-escrow.sh`
 
-Claims escrow funds using a verifier signature.
+Claims escrow funds using a approver signature.
 
 ```bash
 ./scripts/claim-escrow.sh

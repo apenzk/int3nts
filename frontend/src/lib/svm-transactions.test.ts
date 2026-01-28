@@ -33,7 +33,7 @@ describe('getSvmConnection', () => {
 describe('decodeBase64', () => {
   /**
    * Test: Base64 decoding
-   * Why: Verifier signatures arrive as base64 and must be decoded for Solana.
+   * Why: Trusted-gmp signatures arrive as base64 and must be decoded for Solana.
    */
   it('should decode base64 to bytes', () => {
     const bytes = decodeBase64('AQID');

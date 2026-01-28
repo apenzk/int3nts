@@ -1,14 +1,14 @@
 # SVM Intent Framework
 
-Escrow program for cross-chain intents on Solana that releases funds to solvers when verifier signatures check out.
+Escrow program for cross-chain intents on Solana that releases funds to solvers when trusted-gmp signatures check out.
 
 ## Overview
 
 The `IntentEscrow` program implements a secure escrow system:
 
 - Requesters deposit SPL tokens into escrows tied to intent IDs
-- Solvers can claim funds after providing a valid verifier signature
-- Verifiers sign approval messages off-chain after verifying cross-chain conditions
+- Solvers can claim funds after providing a valid trusted-gmp signature
+- The trusted-gmp service signs approval messages off-chain after verifying cross-chain conditions
 - Requesters can cancel and reclaim funds after expiry
 
 ## Architecture
@@ -18,13 +18,13 @@ Ed25519 signature verification similar to the Move/Aptos escrow system.
 Flow:
 
 1. Requester creates escrow and deposits funds atomically (must specify solver address)
-2. Verifier monitors conditions and signs approval (off-chain)
-3. Solver claims with verifier signature (funds go to reserved solver)
+2. Trusted-gmp service monitors conditions and signs approval (off-chain)
+3. Solver claims with trusted-gmp signature (funds go to reserved solver)
 4. Requester can cancel and reclaim after expiry (2 minutes)
 
 ## Signature Verification
 
-The verifier signs the `intent_id` - the signature itself is the approval.
+The trusted-gmp service signs the `intent_id` - the signature itself is the approval.
 
 Uses Solana's Ed25519 instruction introspection:
 
@@ -37,13 +37,13 @@ Uses Solana's Ed25519 instruction introspection:
 For SVM outflow transfers, we use a **Memo-based convention** to attach the `intent_id` to the transaction. This keeps implementation simple and avoids new on-chain programs, but it has tradeoffs:
 
 - **Pros:** No program changes, fast to implement, standard Solana tooling.
-- **Cons:** The verifier must parse and trust a memo format; it is weaker than a PDA-backed record or a custom program instruction.
+- **Cons:** The trusted-gmp service must parse and trust a memo format; it is weaker than a PDA-backed record or a custom program instruction.
 
-**Alternative:** Use a dedicated program instruction (or PDA record) to write `intent_id` and transfer metadata on-chain. This provides stronger verification guarantees but requires additional on-chain code, deployment, and verifier parsing updates.
+**Alternative:** Use a dedicated program instruction (or PDA record) to write `intent_id` and transfer metadata on-chain. This provides stronger verification guarantees but requires additional on-chain code, deployment, and trusted-gmp parsing updates.
 
-**Effort to switch:** medium—new instruction definitions, program changes, deployment update, and verifier/parser changes, plus new tests.
+**Effort to switch:** medium—new instruction definitions, program changes, deployment update, and trusted-gmp/parser changes, plus new tests.
 
-**Verifier requirements (current memo approach):**
+**Trusted-gmp requirements (current memo approach):**
 
 - The memo must be the first instruction and formatted as `intent_id=0x...`.
 - The transaction must include exactly one SPL `transferChecked` instruction.
@@ -55,14 +55,14 @@ For SVM outflow transfers, we use a **Memo-based convention** to attach the `int
 ### Instructions
 
 ```rust
-// Initialize program with verifier pubkey
-fn initialize(ctx: Context<Initialize>, verifier: Pubkey) -> Result<()>
+// Initialize program with approver pubkey
+fn initialize(ctx: Context<Initialize>, approver: Pubkey) -> Result<()>
 
 // Create escrow and deposit tokens atomically
 // Expiry is set to current_time + 120 seconds (2 minutes)
 fn create_escrow(ctx: Context<CreateEscrow>, intent_id: [u8; 32], amount: u64) -> Result<()>
 
-// Claim funds with verifier signature
+// Claim funds with approver signature
 // Requires Ed25519 verify instruction at index 0 in transaction
 fn claim(ctx: Context<Claim>, intent_id: [u8; 32], signature: [u8; 64]) -> Result<()>
 
@@ -83,7 +83,7 @@ fn cancel(ctx: Context<Cancel>, intent_id: [u8; 32]) -> Result<()>
 - `NoDeposit` - No funds in escrow
 - `UnauthorizedRequester` - Caller is not the requester
 - `InvalidSignature` - Signature verification failed
-- `UnauthorizedVerifier` - Signer is not the authorized verifier
+- `UnauthorizedApprover` - Signer is not the authorized approver
 - `EscrowExpired` - Cannot claim after expiry
 - `EscrowNotExpiredYet` - Cannot cancel before expiry
 
@@ -129,12 +129,12 @@ const createEscrowIx = buildCreateEscrowInstruction(
 const createTx = new Transaction().add(createEscrowIx);
 await sendAndConfirmTransaction(connection, createTx, [requester]);
 
-// Verifier signs intent_id (off-chain)
-const signature = nacl.sign.detached(intentId, verifier.secretKey);
+// Approver (trusted-gmp) signs intent_id (off-chain)
+const signature = nacl.sign.detached(intentId, approver.secretKey);
 
 // Build claim transaction with Ed25519 instruction
 const ed25519Ix = Ed25519Program.createInstructionWithPrivateKey({
-  privateKey: verifier.secretKey,
+  privateKey: approver.secretKey,
   message: intentId,
 });
 
@@ -152,7 +152,7 @@ await sendAndConfirmTransaction(connection, claimTx, [solver]);
 
 ## Security Considerations
 
-- Signature verification: Only authorized verifier signatures accepted (Ed25519)
+- Signature verification: Only authorized trusted-gmp signatures accepted (Ed25519)
 - Intent ID binding: Prevents signature replay across escrows
 - PDA authority: Escrow vault is controlled by escrow PDA
 - Access control: Only requester can cancel (after expiry)

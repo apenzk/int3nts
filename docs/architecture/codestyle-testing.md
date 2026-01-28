@@ -2,7 +2,7 @@
 
 ## Task Overview
 
-Refactor test files in the `verifier` project to improve code quality by:
+Refactor test files in the `coordinator` and `trusted-gmp` projects to improve code quality by:
 
 1. **Replacing magic numbers** (hardcoded literal values) with named constants
 2. **Standardizing naming conventions** (e.g., using `_addr` suffix for addresses)

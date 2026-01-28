@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn test_mvm_command_invalid_intent_id() {
         // What is tested: Invalid intent_id address is rejected with error
-        // Why: Intent ID must be valid hex address for verifier tracking
+        // Why: Intent ID must be valid hex address for trusted-gmp tracking
         let result = generate_mvm_command(
             DUMMY_REQUESTER_ADDR_MVMCON,
             DUMMY_TOKEN_ADDR_MVMCON,
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn test_evm_calldata_invalid_intent_id() {
         // What is tested: Invalid intent_id address is rejected with error
-        // Why: Intent ID must be valid hex for verifier tracking
+        // Why: Intent ID must be valid hex for trusted-gmp tracking
         let result = generate_evm_calldata(
             DUMMY_REQUESTER_ADDR_EVM,
             "1000",

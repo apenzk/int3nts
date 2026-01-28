@@ -3,8 +3,8 @@
 # E2E Integration Test Runner - INFLOW
 # 
 # This script runs the inflow E2E tests that require Docker chains.
-# It sets up chains, deploys contracts, starts verifier for negotiation routing,
-# submits inflow intents via verifier, then runs the tests.
+# It sets up chains, deploys contracts, starts coordinator and trusted-gmp for negotiation routing,
+# submits inflow intents via coordinator, then runs the tests.
 
 set -e
 
@@ -27,10 +27,15 @@ echo "================================================================"
 echo ""
 echo " Step 1: Build bins and pre-pull docker images"
 echo "========================================"
-pushd "$PROJECT_ROOT/verifier" > /dev/null
-cargo build --bin verifier --bin generate_keys 2>&1 | tail -5
+pushd "$PROJECT_ROOT/coordinator" > /dev/null
+cargo build --bin coordinator 2>&1 | tail -5
 popd > /dev/null
-echo "   ✅ Verifier: verifier, generate_keys"
+echo "   ✅ Coordinator: coordinator"
+
+pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
+popd > /dev/null
+echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
 cargo build --bin solver --bin sign_intent 2>&1 | tail -5
@@ -40,9 +45,9 @@ echo "   ✅ Solver: solver, sign_intent"
 echo ""
 docker pull "$APTOS_DOCKER_IMAGE"
 
-echo " Step 2: Generating verifier keys..."
+echo " Step 2: Generating trusted-gmp keys..."
 echo "======================================="
-generate_verifier_keys
+generate_trusted_gmp_keys
 echo ""
 
 echo " Step 3: Setting up chains, deploying contracts, funding accounts"
@@ -55,9 +60,10 @@ echo "===================================================================="
 ./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh
 
 echo ""
-echo " Step 4: Configuring and starting verifier (for negotiation routing)..."
+echo " Step 4: Starting coordinator and trusted-gmp..."
 echo "=========================================================================="
-./testing-infra/ci-e2e/e2e-tests-mvm/start-verifier.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-coordinator.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-trusted-gmp.sh
 
 # Start solver service for automatic signing and fulfillment
 echo ""
@@ -71,7 +77,7 @@ echo "======================================="
 echo ""
 echo " Step 5: Testing INFLOW intents (connected chain → hub chain)..."
 echo "==================================================================="
-echo "   Submitting inflow cross-chain intents via verifier negotiation routing..."
+echo "   Submitting inflow cross-chain intents via coordinator negotiation routing..."
 ./testing-infra/ci-e2e/e2e-tests-mvm/inflow-submit-hub-intent.sh
 echo ""
 echo " Pre-Escrow Balance Validation"
@@ -94,7 +100,7 @@ fi
 echo "   The solver service is running and will:"
 echo "   1. Detect the escrow on connected MVM chain"
 echo "   2. Fulfill the intent on hub chain"
-echo "   3. Verifier will detect fulfillment and generate approval"
+echo "   3. Trusted-GMP will detect fulfillment and generate approval"
 echo ""
 
 if ! wait_for_solver_fulfillment "$INTENT_ID" "inflow" 60; then

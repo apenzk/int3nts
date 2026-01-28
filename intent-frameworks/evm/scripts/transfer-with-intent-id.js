@@ -3,7 +3,7 @@
 //! This script executes an ERC20 transfer() call with intent_id appended in calldata.
 //! The calldata format is: selector (4 bytes) + recipient (32 bytes) + amount (32 bytes) + intent_id (32 bytes).
 //! The ERC20 contract ignores the extra intent_id bytes, but they remain in the transaction
-//! data for verifier tracking.
+//! data for approver tracking.
 
 const hre = require("hardhat");
 

@@ -2,7 +2,7 @@
 //!
 //! This helper builds the canonical transaction templates that solvers should
 //! submit on connected chains when fulfilling outflow intents. It guarantees
-//! that the `intent_id` is encoded in the payload so the verifier can link the
+//! that the `intent_id` is encoded in the payload so the trusted-gmp can link the
 //! transfer back to the hub intent.
 
 use anyhow::{Context, Result};
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
 /// Generates Move VM CLI command to call the on-chain transfer_with_intent_id function.
 ///
 /// This function calls the on-chain utils::transfer_with_intent_id() entry function
-/// which includes intent_id as a parameter so the verifier can extract it from the
+/// which includes intent_id as a parameter so the trusted-gmp can extract it from the
 /// transaction payload when querying by transaction hash.
 ///
 /// **Why this approach differs from EVM:**
@@ -66,7 +66,7 @@ fn main() -> Result<()> {
 /// `primary_fungible_store` framework supports withdrawing from one account and depositing
 /// to another within a single function call. By including intent_id as an explicit parameter
 /// in this custom function, we ensure it's part of the transaction payload and can be
-/// extracted by the verifier. In contrast, EVM cannot use a contract function to transfer
+/// extracted by the trusted-gmp. In contrast, EVM cannot use a contract function to transfer
 /// standard ERC20 tokens from the solver's account (without requiring approval/transferFrom),
 /// so the solver must call transfer() directly from their account and append intent_id as
 /// extra calldata.
@@ -106,7 +106,7 @@ fn generate_mvm_template(args: &Args) -> Result<()> {
     println!("  Replace <module_address> with the deployed module address on the connected chain");
     println!("\n  The function will:");
     println!("  - Transfer tokens from your account to the recipient address");
-    println!("  - Include intent_id in the transaction payload for verifier tracking\n");
+    println!("  - Include intent_id in the transaction payload for trusted-gmp tracking\n");
 
     Ok(())
 }
@@ -120,7 +120,7 @@ fn generate_mvm_template(args: &Args) -> Result<()> {
 /// - intent_id: 32 bytes (metadata appended after function parameters)
 ///
 /// The ERC20 contract ignores the extra intent_id bytes, but they remain in the transaction
-/// data and are verifiable on-chain by the verifier.
+/// data and are verifiable on-chain by the trusted-gmp.
 ///
 /// **Why this approach differs from Aptos:**
 /// In EVM with standard ERC20, a contract cannot transfer tokens from the solver's account
@@ -130,7 +130,7 @@ fn generate_mvm_template(args: &Args) -> Result<()> {
 /// standard ERC20 transfer() function only accepts (address, uint256) parameters, we cannot
 /// add intent_id as a parameter. We therefore append intent_id as extra calldata after the
 /// function parameters. The ERC20 contract ignores these extra bytes (they don't match any
-/// function signature), but they remain in the transaction data for verifier tracking. This
+/// function signature), but they remain in the transaction data for trusted-gmp tracking. This
 /// is different from Aptos, where we can create a custom contract function that transfers
 /// tokens from A to B in one call and includes intent_id as an explicit parameter.
 fn generate_evm_template(args: &Args) -> Result<()> {
@@ -169,7 +169,7 @@ fn generate_evm_template(args: &Args) -> Result<()> {
     );
     println!("\n  The transaction will:");
     println!("  - Transfer tokens from your account to the recipient address");
-    println!("  - Include intent_id in the transaction calldata for verifier tracking\n");
+    println!("  - Include intent_id in the transaction calldata for trusted-gmp tracking\n");
 
     Ok(())
 }

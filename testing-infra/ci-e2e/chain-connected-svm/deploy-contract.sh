@@ -57,11 +57,11 @@ done
 
 log ""
 log " Initializing program state..."
-if [ -z "$E2E_VERIFIER_PUBLIC_KEY" ]; then
-    load_verifier_keys
+if [ -z "$E2E_TRUSTED_GMP_PUBLIC_KEY" ]; then
+    load_trusted_gmp_keys
 fi
 
-SVM_VERIFIER_PUBKEY=$(svm_base64_to_base58 "$E2E_VERIFIER_PUBLIC_KEY")
+SVM_APPROVER_PUBKEY=$(svm_base64_to_base58 "$E2E_TRUSTED_GMP_PUBLIC_KEY")
 SVM_PROGRAM_ID="$PROGRAM_ID"
 log "   ⏳ Waiting for program to be executable..."
 sleep 10
@@ -69,7 +69,7 @@ sleep 10
 set +e
 init_success=0
 for attempt in 1 2 3 4 5; do
-    nix develop "$PROJECT_ROOT/nix" -c bash -c "cd \"$PROGRAM_DIR\" && SVM_VERIFIER_PUBKEY=\"$SVM_VERIFIER_PUBKEY\" SVM_PROGRAM_ID=\"$SVM_PROGRAM_ID\" SVM_RPC_URL=\"$SVM_RPC_URL\" SVM_PAYER_KEYPAIR=\"$SVM_PAYER_KEYPAIR\" bash ./scripts/initialize.sh" >> "$LOG_FILE" 2>&1
+    nix develop "$PROJECT_ROOT/nix" -c bash -c "cd \"$PROGRAM_DIR\" && SVM_APPROVER_PUBKEY=\"$SVM_APPROVER_PUBKEY\" SVM_PROGRAM_ID=\"$SVM_PROGRAM_ID\" SVM_RPC_URL=\"$SVM_RPC_URL\" SVM_PAYER_KEYPAIR=\"$SVM_PAYER_KEYPAIR\" bash ./scripts/initialize.sh" >> "$LOG_FILE" 2>&1
     status=$?
     if [ "$status" -eq 0 ]; then
         log "   ✅ Program initialized"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SVM Intent Framework Initialize Script
 #
-# Initializes the program state with the verifier pubkey.
+# Initializes the program state with the approver pubkey.
 
 set -e
 
@@ -19,12 +19,12 @@ fi
 SVM_RPC_URL="${SVM_RPC_URL:-http://localhost:8899}"
 SVM_PAYER_KEYPAIR="${SVM_PAYER_KEYPAIR:-$HOME/.config/solana/id.json}"
 
-if [ -z "$SVM_VERIFIER_PUBKEY" ]; then
-    echo "[initialize.sh] Missing SVM_VERIFIER_PUBKEY"
+if [ -z "$SVM_APPROVER_PUBKEY" ]; then
+    echo "[initialize.sh] Missing SVM_APPROVER_PUBKEY"
     exit 1
 fi
 
-ARGS=(initialize --payer "$SVM_PAYER_KEYPAIR" --verifier "$SVM_VERIFIER_PUBKEY" --rpc "$SVM_RPC_URL")
+ARGS=(initialize --payer "$SVM_PAYER_KEYPAIR" --approver "$SVM_APPROVER_PUBKEY" --rpc "$SVM_RPC_URL")
 if [ -n "$SVM_PROGRAM_ID" ]; then
     ARGS+=(--program-id "$SVM_PROGRAM_ID")
 fi

@@ -1,3 +1,24 @@
 {
-    "spellright.userDictionary": "${workspaceFolder}/.vscode/spellright.dict"
-  }
+  "spellright.userDictionary": "${workspaceFolder}/.vscode/spellright.dict",
+  "spellright.language": [
+    "en"
+  ],
+  "spellright.documentTypes": [
+    "markdown",
+    "latex",
+    "plaintext"
+  ],
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": false,
+    "editor.wordWrap": "on"
+  },
+  "files.associations": {
+    "*.md": "markdown"
+  },
+  "cSpell.enabled": true,
+  "cSpell.language": "en",
+  "cSpell.enableFiletypes": [
+    "markdown"
+  ]
+}

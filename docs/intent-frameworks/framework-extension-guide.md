@@ -20,7 +20,7 @@ Each framework should have the following test files, matching the order and stru
 
 1. **initialization** - Basic setup and escrow creation
 2. **deposit** - Escrow creation and deposit functionality
-3. **claim** - Claiming escrow funds with verifier signatures
+3. **claim** - Claiming escrow funds with trusted-gmp signatures
 4. **cancel** - Cancellation and refund functionality
 5. **expiry** - Expiry timestamp handling and expired escrow behavior
 6. **cross-chain** - Intent ID conversion and cross-chain compatibility
@@ -85,11 +85,11 @@ Escrow test alignment for VM intent framework contracts:
 
 - See [`intent-frameworks/COMPLETENESS.md`](../../intent-frameworks/COMPLETENESS.md)
 
-### Verifier
+### Trusted GMP
 
-Test alignment for the verifier:
+Test alignment for the trusted-gmp service:
 
-- See [`verifier/tests/COMPLETENESS.md`](../../verifier/tests/COMPLETENESS.md)
+- See [`trusted-gmp/tests/COMPLETENESS.md`](../../trusted-gmp/tests/COMPLETENESS.md)
 
 ### Solver
 
@@ -241,7 +241,7 @@ When adding a new test to an existing framework:
 - [ ] Update env/config defaults and testnet scripts
 - [ ] Document solver setup and required env vars
 
-### Verifier Integration
+### Trusted GMP Integration
 
 - [ ] Define chain type identifiers and config surface for the new framework
 - [ ] Add RPC client for chain queries and validation
@@ -253,7 +253,7 @@ When adding a new test to an existing framework:
 - [ ] Update API serialization/deserialization for new chain type
 - [ ] Add unit tests for validation helpers
 - [ ] Add monitoring tests for escrow + fulfillment ingestion
-- [ ] Document verifier setup and required env vars
+- [ ] Document trusted-gmp setup and required env vars
 
 ### Frontend Integration
 

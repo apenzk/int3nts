@@ -10,7 +10,7 @@
 # - MVMCON_URL: Connected chain RPC URL (default: http://127.0.0.1:8082/v1)
 # - HUB_CHAIN_ID: Hub chain ID (default: 1)
 # - MVMCON_CHAIN_ID: Connected chain ID (default: 2)
-# - VERIFIER_URL: Verifier URL (default: http://127.0.0.1:3333)
+# - COORDINATOR_URL: Coordinator URL (default: http://127.0.0.1:3333)
 
 set -e
 
@@ -46,7 +46,8 @@ generate_solver_config_mvm() {
     local usd_con_mvm_con_address=$(get_usdxyz_metadata_addr "0x${test_tokens_mvm_con}" "2")
     
     # Use environment variables or defaults for URLs
-    local verifier_url="${VERIFIER_URL:-http://127.0.0.1:3333}"
+    local coordinator_url="${COORDINATOR_URL:-http://127.0.0.1:3333}"
+    local trusted_gmp_url="${TRUSTED_GMP_URL:-http://127.0.0.1:3334}"
     local hub_rpc="${CHAIN1_URL:-http://127.0.0.1:8080/v1}"
     local connected_rpc="${MVMCON_URL:-http://127.0.0.1:8082/v1}"
     local hub_chain_id="${HUB_CHAIN_ID:-1}"
@@ -56,7 +57,8 @@ generate_solver_config_mvm() {
     local solver_addr="0x${solver_chain1_addr}"
     
     log "   Generating solver config:"
-    log "   - Verifier URL: $verifier_url"
+    log "   - Coordinator URL: $coordinator_url"
+    log "   - Trusted GMP URL: $trusted_gmp_url"
     log "   - Hub RPC: $hub_rpc (chain ID: $hub_chain_id)"
     log "   - Connected RPC: $connected_rpc (chain ID: $connected_chain_id)"
     log "   - Hub module address: $hub_module_addr"
@@ -70,7 +72,8 @@ generate_solver_config_mvm() {
 # Generated at: $(date)
 
 [service]
-verifier_url = "$verifier_url"
+coordinator_url = "$coordinator_url"
+trusted_gmp_url = "$trusted_gmp_url"
 polling_interval_ms = 1000  # Poll frequently for tests
 e2e_mode = true  # Use aptos CLI with profiles for E2E tests
 

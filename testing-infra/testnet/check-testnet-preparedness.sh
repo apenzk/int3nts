@@ -13,7 +13,7 @@
 #   - Ethereum Sepolia (ETH, USDC)
 # 
 # Assets Config: testing-infra/testnet/config/testnet-assets.toml
-# Service Configs: verifier/config/verifier_testnet.toml, solver/config/solver_testnet.toml (gitignored)
+# Service Configs: coordinator/config/coordinator_testnet.toml, trusted-gmp/config/trusted-gmp_testnet.toml, solver/config/solver_testnet.toml (gitignored)
 # Keys: .env.testnet
 
 # Get the script directory and project root
@@ -613,14 +613,14 @@ check_evm_contract() {
 }
 
 # Movement Intent Module
-# Read from verifier_testnet.toml (gitignored config file)
-VERIFIER_CONFIG="$PROJECT_ROOT/verifier/config/verifier_testnet.toml"
-if [ -f "$VERIFIER_CONFIG" ]; then
-    MOVEMENT_INTENT_MODULE_ADDR=$(grep -A5 "\[hub_chain\]" "$VERIFIER_CONFIG" | grep "intent_module_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
+# Read from coordinator_testnet.toml (gitignored config file)
+COORDINATOR_CONFIG="$PROJECT_ROOT/coordinator/config/coordinator_testnet.toml"
+if [ -f "$COORDINATOR_CONFIG" ]; then
+    MOVEMENT_INTENT_MODULE_ADDR=$(grep -A5 "\[hub_chain\]" "$COORDINATOR_CONFIG" | grep "intent_module_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
 fi
 
 if [ -z "$MOVEMENT_INTENT_MODULE_ADDR" ] || [ "$MOVEMENT_INTENT_MODULE_ADDR" = "" ]; then
-    echo "   Movement Intent Module: ❌ Not configured (check verifier_testnet.toml)"
+    echo "   Movement Intent Module: ❌ Not configured (check coordinator/config/coordinator_testnet.toml)"
 else
     status=$(check_movement_module "$MOVEMENT_INTENT_MODULE_ADDR")
     echo "   Movement Intent Module ($MOVEMENT_INTENT_MODULE_ADDR)"
@@ -628,13 +628,13 @@ else
 fi
 
 # Base Escrow Contract
-# Read from verifier_testnet.toml (gitignored config file)
-if [ -f "$VERIFIER_CONFIG" ]; then
-    BASE_ESCROW_CONTRACT_ADDR=$(grep -A5 "\[connected_chain_evm\]" "$VERIFIER_CONFIG" | grep "escrow_contract_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
+# Read from coordinator_testnet.toml (gitignored config file)
+if [ -f "$COORDINATOR_CONFIG" ]; then
+    BASE_ESCROW_CONTRACT_ADDR=$(grep -A5 "\[connected_chain_evm\]" "$COORDINATOR_CONFIG" | grep "escrow_contract_addr" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
 fi
 
 if [ -z "$BASE_ESCROW_CONTRACT_ADDR" ] || [ "$BASE_ESCROW_CONTRACT_ADDR" = "" ]; then
-    echo "   Base Escrow Contract:   ❌ Not configured (check verifier_testnet.toml)"
+    echo "   Base Escrow Contract:   ❌ Not configured (check coordinator/config/coordinator_testnet.toml)"
 else
     status=$(check_evm_contract "$BASE_ESCROW_CONTRACT_ADDR" "$BASE_RPC_URL")
     echo "   Base Escrow Contract ($BASE_ESCROW_CONTRACT_ADDR)"
@@ -729,7 +729,7 @@ fi
 
 echo ""
 echo "   Assets Config: $ASSETS_CONFIG_FILE"
-echo "   Service Configs: verifier_testnet.toml, solver_testnet.toml (gitignored)"
+echo "   Service Configs: coordinator_testnet.toml, trusted-gmp_testnet.toml, solver_testnet.toml (gitignored)"
 echo "   Keys:   $TESTNET_KEYS_FILE"
 echo ""
 if [ "$ready_count" -eq "$total_count" ]; then

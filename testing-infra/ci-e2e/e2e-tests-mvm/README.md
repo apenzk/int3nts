@@ -16,13 +16,13 @@ Tests Move VM-only cross-chain intent framework: intents on Hub and escrows on C
 
 ## What's Tested
 
-1. **Verifier-Based Negotiation**: Draft submission, solver polling, and signature retrieval
-2. **Intent Creation**: Creates intent on Hub with solver signature from verifier
+1. **Coordinator-Based Negotiation**: Draft submission, solver polling, and signature retrieval
+2. **Intent Creation**: Creates intent on Hub with solver signature from coordinator
 3. **Escrow Creation**: Creates escrow on Chain 2 with locked tokens
 4. **Intent Fulfillment**: Solver fulfills intent on Hub
-5. **Verifier Approval**: Verifier monitors and generates Ed25519 approval signature
-6. **Escrow Release**: Escrow released on Chain 2 with verifier signature
+5. **Trusted-GMP Approval**: Trusted-gmp monitors and generates Ed25519 approval signature
+6. **Escrow Release**: Escrow released on Chain 2 with trusted-gmp signature
 
 ## Integration Tests
 
-The `verifier-rust-integration-tests/` directory contains Rust integration tests for the trusted verifier library (connectivity, deployment, event polling). These are automatically run by `run-tests-inflow.sh`.
+The `coordinator-rust-integration-tests/` directory contains Rust integration tests for the coordinator (connectivity, deployment, event polling). These are automatically run by `run-tests-inflow.sh`.

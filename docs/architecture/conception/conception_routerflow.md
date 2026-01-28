@@ -17,7 +17,7 @@ sequenceDiagram
     participant Requester
     participant SourceChain as Source Connected Chain
     participant Hub as Hub Chain
-    participant Verifier
+    participant TrustedGMP as Trusted-GMP
     participant DestChain as Destination Connected Chain
     participant Solver
 
@@ -29,26 +29,26 @@ sequenceDiagram
 
     Note over Requester,Solver: Intent creation on Hub
     Requester->>Hub: Create reserved intent
-    Hub->>Verifier: Request-intent event
+    Hub->>TrustedGMP: Request-intent event
 
     Note over Requester,Solver: Escrow on Source Connected Chain
     Requester->>SourceChain: Create escrow (locks tokens)
-    SourceChain->>Verifier: Escrow event
+    SourceChain->>TrustedGMP: Escrow event
 
     Note over Requester,Solver: Solver fulfillment on Destination Connected Chain
     Solver->>DestChain: Transfer desired tokens to requester
-    DestChain->>Verifier: Transfer event
+    DestChain->>TrustedGMP: Transfer event
 
-    Note over Requester,Solver: Verifier validation and approval
-    Verifier->>Verifier: Validate all legs
-    Verifier->>Solver: Generate approval signature
+    Note over Requester,Solver: Trusted-GMP validation and approval
+    TrustedGMP->>TrustedGMP: Validate all legs
+    TrustedGMP->>Solver: Generate approval signature
 
     Note over Requester,Solver: Escrow release on Source Chain
-    Solver->>SourceChain: Release escrow (with verifier signature)
+    Solver->>SourceChain: Release escrow (with trusted-gmp signature)
     SourceChain->>SourceChain: Transfer to reserved solver
 
     Note over Requester,Solver: Collateral release on Hub
-    Solver->>Hub: Release collateral (with verifier signature)
+    Solver->>Hub: Release collateral (with trusted-gmp signature)
 ```
 
 ## Scenarios
@@ -70,9 +70,9 @@ sequenceDiagram
 #### Possible issues (Requester)
 
 1. The requester initial escrow transfer is too little or too much.
-    - _Mitigation: The solver verifies that the escrow transfer amount is the same as the request-intent offered amount before transferring the funds on the destination connected chain. Alternatively, the solver queries the verifier which verifies that the escrow transfer amount is the same as the request-intent offered amount and informs the solver._
+    - _Mitigation: The solver verifies that the escrow transfer amount is the same as the request-intent offered amount before transferring the funds on the destination connected chain. Alternatively, the solver queries trusted-gmp which verifies that the escrow transfer amount is the same as the request-intent offered amount and informs the solver._
 2. The requester didn't get the right expected amount of USDcon on the destination connected chain.
-    - _Mitigation: The verifier verifies that the transfer amount on the destination connected chain matches the request-intent desired amount. Only if the amount is correct, the verifier signs the approval for escrow release._
+    - _Mitigation: Trusted-gmp verifies that the transfer amount on the destination connected chain matches the request-intent desired amount. Only if the amount is correct, trusted-gmp signs the approval for escrow release._
 3. The escrow deposit on the source connected chain fails. How can the requester withdraw their tokens?
     - _Mitigation: The escrow eventually times out and the requester can withdraw their tokens._
 4. The requester reuses a Tx already attached to another intent.
@@ -92,24 +92,24 @@ sequenceDiagram
    - Then the solver observes the request-intent event
    - Then the solver observes the escrow event on source connected chain
    - Then the solver transfers the desired tokens to the requester on the destination connected chain
-   - Then the solver waits for verifier validation and approval
+   - Then the solver waits for trusted-gmp validation and approval
    - Then the solver claims the escrow funds on the source connected chain
 
 #### Possible issues (Solver)
 
 - The solver doesn't send the right amount of desired tokens to the requester on destination chain.
-  - _Mitigation: The verifier verifies that the transfer amount matches the request-intent desired amount before signing approval._
+  - _Mitigation: Trusted-gmp verifies that the transfer amount matches the request-intent desired amount before signing approval._
 - The solver doesn't receive the correct amount from escrow on source connected chain.
   - _Mitigation: The solver verifies that the escrow transfer amount is the same as the request-intent offered amount before transferring the funds on the destination connected chain._
-  - _Mitigation: The verifier verifies that the escrow offered amount is the same as the request-intent offered amount and informs the solver._
+  - _Mitigation: Trusted-gmp verifies that the escrow offered amount is the same as the request-intent offered amount and informs the solver._
 - The solver is not notified of new request-intent events.
-  - _Mitigation: The verifier receives intent-requests from the contract and can be queried by the solver._
+  - _Mitigation: Trusted-gmp (and coordinator) receive intent-requests from the contract and can be queried by the solver._
 - The solver attempts to fulfill an intent that wasn't reserved for them.
-  - _Mitigation: The verifier only signs approval for the reserved solver._
+  - _Mitigation: Trusted-gmp only signs approval for the reserved solver._
 - The solver provides the wrong token type on destination connected chain.
-  - _Mitigation: The verifier verifies that the token metadata matches the desired_metadata. If the token type is incorrect, no approval signature is given._
-- The verifier signature verification fails during escrow release on source connected chain.
-  - _Mitigation: The escrow contract verifies the verifier signature. If verification fails, the release transaction aborts and funds remain locked until a valid signature is provided or the escrow expires._
+  - _Mitigation: Trusted-gmp verifies that the token metadata matches the desired_metadata. If the token type is incorrect, no approval signature is given._
+- The trusted-gmp signature verification fails during escrow release on source connected chain.
+  - _Mitigation: The escrow contract verifies the trusted-gmp (approver) signature. If verification fails, the release transaction aborts and funds remain locked until a valid signature is provided or the escrow expires._
 
 ### The requester is adverse
 
@@ -119,7 +119,7 @@ sequenceDiagram
    - Then the adversary sends a Tx to the source connected chain that transfers too little USDcon token to an escrow.
    - Then the adversary hopes to get more USDcon on the destination chain than they have provided.
       - _Mitigation: The solver verifies that the correct offered amount has been transferred to the escrow before fulfilling._
-      - _Mitigation: The verifier verifies that the escrow transfer amount is the same as the request-intent offered amount and informs the solver._
+      - _Mitigation: Trusted-gmp verifies that the escrow transfer amount is the same as the request-intent offered amount and informs the solver._
 2. When the adversary attempts to stall the intent, holding solver funds hostage.
    - Then the adversary submits a reserved request-intent on Hub chain
    - Then the adversary takes no action
@@ -132,7 +132,7 @@ sequenceDiagram
    - Then the adversary reserves the request-intent
    - Then the adversary transfers less funds than expected to the requester account on the destination connected chain.
    - Then the adversary hopes that the escrow is released.
-      - _Mitigation: The verifier verifies the transfer amount and type on the destination connected chain before signing approval. If amount or type is incorrect, no approval is given._
+      - _Mitigation: Trusted-gmp verifies the transfer amount and type on the destination connected chain before signing approval. If amount or type is incorrect, no approval is given._
 2. When the adversary attempts to stall the request-intent.
    - Then the adversary reserves the request-intent
    - Then the adversary takes no action
@@ -140,11 +140,11 @@ sequenceDiagram
 
 ## Error Cases
 
-- **Source escrow amount mismatch**: Escrow on the source connected chain does not match the offered amount; solver/verifier rejects fulfillment.
-- **Destination transfer mismatch**: Transfer amount, recipient, or token metadata on the destination chain does not match the intent; verifier refuses approval.
-- **Missing intent linkage**: Connected-chain transfer lacks the required intent metadata (memo/calldata); verifier rejects.
+- **Source escrow amount mismatch**: Escrow on the source connected chain does not match the offered amount; solver/trusted-gmp rejects fulfillment.
+- **Destination transfer mismatch**: Transfer amount, recipient, or token metadata on the destination chain does not match the intent; trusted-gmp refuses approval.
+- **Missing intent linkage**: Connected-chain transfer lacks the required intent metadata (memo/calldata); trusted-gmp rejects.
 - **Timeouts across legs**: Escrow or intent expires before the remaining leg completes; remaining actions must cancel or wait for expiry refund.
-- **Verifier validation failure**: Any leg fails validation (escrow, transfer, or signature); escrow release and collateral release are blocked.
+- **Trusted-gmp validation failure**: Any leg fails validation (escrow, transfer, or signature); escrow release and collateral release are blocked.
 
 ## Protocol steps details
 
@@ -152,7 +152,7 @@ Steps 1-3 are generic to all flows. See [conception_generic.md](conception_gener
 
 ### 4) Requester deposit on source connected chain
 
-Requester deposits on the source connected chain the offered amount + fee token to an escrow contract. Deposit needs to be tracked by the verifier.
+Requester deposits on the source connected chain the offered amount + fee token to an escrow contract. Deposit needs to be tracked by trusted-gmp.
 The requester calls the smart contract with the amount of token to swap + the pre-calculated fee.
 The contract:
 
@@ -167,37 +167,37 @@ The `intent_id` allows to associate the request-intent with a transfer/escrow on
 
 The solver monitors escrow events on the source connected chain to detect when the requester has deposited funds. The solver verifies that the requester has transferred the correct funds to the escrow and that the intent's data are consistent.
 
-Alternatively, the verifier monitors the escrow events and the solver can query the verifier.
+Alternatively, trusted-gmp monitors the escrow events and the solver can query trusted-gmp.
 
 ### 6) Solver fulfills on destination connected chain
 
 The solver transfers the desired amount to the requester on the destination connected chain.
 
-To verify the Solver transfer, the verifier needs a proof. We can use the transfer Tx as proof, but we need to have a way to validate that the Tx hasn't been executed for another purpose. For this purpose, we add the `intent_id` to the transfer Tx as metadata. Or we develop a specific function that does the transfer and links it to the intent.
+To verify the Solver transfer, trusted-gmp needs a proof. We can use the transfer Tx as proof, but we need to have a way to validate that the Tx hasn't been executed for another purpose. For this purpose, we add the `intent_id` to the transfer Tx as metadata. Or we develop a specific function that does the transfer and links it to the intent.
 
-### 7) Verifier verifies the execution of all legs and signs
+### 7) Trusted-gmp verifies the execution of all legs and signs
 
-The verifier verifies the correct execution of all legs:
+Trusted-gmp verifies the correct execution of all legs:
 
-1. **Escrow verification** (source connected chain): The verifier verifies that the requester has deposited the correct offered amount + fee to the escrow on the source connected chain, linked to the correct `intent_id`.
+1. **Escrow verification** (source connected chain): Trusted-gmp verifies that the requester has deposited the correct offered amount + fee to the escrow on the source connected chain, linked to the correct `intent_id`.
 
-2. **Fulfillment verification** (destination connected chain): The verifier verifies that the solver has transferred the correct desired amount to the requester on the destination connected chain, linked to the correct `intent_id`.
+2. **Fulfillment verification** (destination connected chain): Trusted-gmp verifies that the solver has transferred the correct desired amount to the requester on the destination connected chain, linked to the correct `intent_id`.
 
-After successful verification, the verifier signs an approval for escrow release.
+After successful verification, trusted-gmp signs an approval for escrow release.
 
 ### 8) Escrow release on source connected chain
 
-The verifier or the solver (with verifier signature) releases the escrow on the source connected chain. The offered amount + solver fee is transferred to the solver account.
+Trusted-gmp or the solver (with trusted-gmp signature) releases the escrow on the source connected chain. The offered amount + solver fee is transferred to the solver account.
 
 (Optional) Deducts fixed protocol fee → Treasury.
 
-### 9) Verifier free solver collateral
+### 9) Trusted-gmp frees solver collateral
 
-The solver's collateral is released on the Hub chain. The solver may free the collateral using the approval signature from the verifier. Alternatively, the verifier can free the collateral.
+The solver's collateral is released on the Hub chain. The solver may free the collateral using the approval signature from trusted-gmp. Alternatively, trusted-gmp can free the collateral.
 
-### 10) Verifier closes the intent
+### 10) Trusted-gmp closes the intent
 
-(Optional) The verifier updates the intent status to closed.
+(Optional) Trusted-gmp updates the intent status to closed.
 Updates exposure metrics.
 
 Steps 8, 9, and 10 are done in the same Hub chain call.

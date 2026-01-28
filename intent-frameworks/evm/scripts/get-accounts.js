@@ -1,24 +1,24 @@
 //! Hardhat test accounts information utility
 //!
 //! This script outputs addresses and balances for the standard Hardhat test accounts.
-//! Account 0 = deployer/verifier, Account 1 = requester, Account 2 = solver
+//! Account 0 = deployer/approver, Account 1 = requester, Account 2 = solver
 
 const hre = require('hardhat');
 
 /// Outputs test account addresses and balances
 ///
-/// Outputs environment variable format strings for Requester, Solver, and Verifier addresses,
+/// Outputs environment variable format strings for Requester, Solver, and Approver addresses,
 /// as well as their native ETH balances.
 ///
 /// # Returns
-/// Outputs REQUESTER_ADDR, SOLVER_ADDR, VERIFIER_ADDR, REQUESTER_BALANCE, and SOLVER_BALANCE.
+/// Outputs REQUESTER_ADDR, SOLVER_ADDR, APPROVER_ADDR, REQUESTER_BALANCE, and SOLVER_BALANCE.
 async function main() {
   const signers = await hre.ethers.getSigners();
   
-  // Account 0 = deployer/verifier, Account 1 = requester, Account 2 = solver
+  // Account 0 = deployer/approver, Account 1 = requester, Account 2 = solver
   console.log('REQUESTER_ADDR=' + signers[1].address);
   console.log('SOLVER_ADDR=' + signers[2].address);
-  console.log('VERIFIER_ADDR=' + signers[0].address); // Verifier is account 0 (Deployer)
+  console.log('APPROVER_ADDR=' + signers[0].address); // Approver is account 0 (Deployer)
   
   const requesterBalance = await hre.ethers.provider.getBalance(signers[1].address);
   const solverBalance = await hre.ethers.provider.getBalance(signers[2].address);

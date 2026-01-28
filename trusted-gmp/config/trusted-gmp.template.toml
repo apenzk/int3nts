@@ -1,0 +1,45 @@
+# Trusted GMP Configuration
+#
+# This file contains configuration for the trusted-gmp service (validation and signing).
+# Copy this template to trusted-gmp.toml and update the values for your environment.
+#
+# SECURITY WARNING: Keys are loaded from environment variables. Never commit actual keys!
+
+# Hub Chain Configuration
+# The hub chain is where intents are created and monitored
+[hub_chain]
+name = "Hub Chain"
+rpc_url = "http://127.0.0.1:8080"
+chain_id = 1
+intent_module_addr = "0x123"
+
+# Connected EVM Chain Configuration
+# Include this section if you have a connected EVM chain (e.g. Base Sepolia)
+[connected_chain_evm]
+name = "Connected EVM Chain"
+rpc_url = "http://127.0.0.1:8545"
+chain_id = 31337
+escrow_contract_addr = "0x123"
+approver_evm_pubkey_hash = "0x123"  # EVM address derived from trusted-gmp ECDSA key (on-chain approver address)
+
+# Connected SVM Chain Configuration
+# Include this section if you have a connected Solana chain
+[connected_chain_svm]
+name = "Connected SVM Chain"
+rpc_url = "http://127.0.0.1:8899"
+chain_id = 1001
+escrow_program_id = "<your-svm-program-id>"
+
+# Trusted GMP Configuration
+# Keys are loaded from environment variables at runtime (TRUSTED_GMP_PRIVATE_KEY, TRUSTED_GMP_PUBLIC_KEY)
+[trusted_gmp]
+private_key_env = "TRUSTED_GMP_PRIVATE_KEY"
+public_key_env = "TRUSTED_GMP_PUBLIC_KEY"
+polling_interval_ms = 2000
+validation_timeout_ms = 30000
+
+# API Server Configuration
+[api]
+host = "127.0.0.1"
+port = 3334
+cors_origins = ["http://localhost:3000", "http://localhost:3334"]

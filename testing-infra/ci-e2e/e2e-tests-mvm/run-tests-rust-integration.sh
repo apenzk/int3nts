@@ -2,8 +2,8 @@
 
 # E2E Integration Test Runner - Rust Integration Tests
 # 
-# This script runs the Rust integration tests for verifier and solver.
-# It sets up chains, deploys contracts, starts verifier, then runs Rust tests.
+# This script runs the Rust integration tests for coordinator and solver.
+# It sets up chains, deploys contracts, starts services, then runs Rust tests.
 
 set -e
 
@@ -26,10 +26,15 @@ echo "================================================================"
 echo ""
 echo " Step 1: Build bins and pre-pull docker images"
 echo "========================================"
-pushd "$PROJECT_ROOT/verifier" > /dev/null
-cargo build --bin verifier --bin generate_keys 2>&1 | tail -5
+pushd "$PROJECT_ROOT/coordinator" > /dev/null
+cargo build --bin coordinator 2>&1 | tail -5
 popd > /dev/null
-echo "   ✅ Verifier: verifier, generate_keys"
+echo "   ✅ Coordinator: coordinator"
+
+pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
+popd > /dev/null
+echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
 cargo build --bin solver --bin sign_intent 2>&1 | tail -5
@@ -39,9 +44,9 @@ echo "   ✅ Solver: solver, sign_intent"
 echo ""
 docker pull "$APTOS_DOCKER_IMAGE"
 
-echo " Step 2: Generating verifier keys..."
+echo " Step 2: Generating trusted-gmp keys..."
 echo "======================================="
-generate_verifier_keys
+generate_trusted_gmp_keys
 echo ""
 
 echo " Step 3: Setting up chains, deploying contracts, funding accounts"
@@ -54,14 +59,15 @@ echo "===================================================================="
 ./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh
 
 echo ""
-echo " Step 4: Configuring and starting verifier..."
+echo " Step 4: Configuring and starting services..."
 echo "================================================"
-./testing-infra/ci-e2e/e2e-tests-mvm/start-verifier.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-coordinator.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/start-trusted-gmp.sh
 
 echo ""
 echo " Step 5: Running Rust integration tests..."
 echo "============================================="
-./testing-infra/ci-e2e/e2e-tests-mvm/verifier-rust-integration-tests.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/coordinator-rust-integration-tests.sh
 
 echo ""
 echo "✅ Rust integration tests completed!"

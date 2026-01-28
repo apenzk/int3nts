@@ -12,7 +12,8 @@ The system consists of several components:
 
 - **EVM Intent Framework**: A set of Solidity smart contracts that implement escrow functionality for EVM-based connected chains, enabling cross-chain intents with EVM chains.
 
-- **Trusted Verifier Service**: A Rust-based external service that monitors intent events on the hub chain, validates fulfillment conditions across connected chains, and provides cryptographic approvals for intent and escrow completion in cross-chain scenarios.
+- **Coordinator**: A Rust service for event monitoring and negotiation routing (draft intents, no private keys).
+- **Trusted-GMP**: A Rust service that validates fulfillment conditions across connected chains and provides cryptographic approvals for intent and escrow completion in cross-chain scenarios.
 
 - **Solver Tools**: Tools and libraries for solver signature generation and transaction templates, enabling solvers to participate in the intent system.
 
@@ -27,7 +28,7 @@ The framework can also function as an escrow mechanism, allowing funds to be loc
 
 - Requester: the requester that wants to swap some USDhub/USDcon from one chain to another using the intent process.
 - Solver: actor that solves the swap intent. Can be anyone in a permissionless setting.
-- Movement (Mvmt): Represents the Movement corporation that operates the intent application. Depending on the protocol but it can be a trusted entity if it runs some part of the protocol like the verifier.
+- Movement (Mvmt): Represents the Movement corporation that operates the intent application. Depending on the protocol but it can be a trusted entity if it runs some part of the protocol (e.g. coordinator and trusted-gmp services).
 - Adversary: a malicious actor that wants to steal some funds or disturb the system.
 
 ## Flow Types
@@ -122,7 +123,7 @@ We list generic use cases applicable to all flows. For flow-specific use cases, 
 
 All escrow intents MUST have `revocable = false`. This is a critical security requirement.
 
-**Rationale:** Escrow funds must remain locked until verifier approval or expiry. If escrows were revocable, users could withdraw funds after verifiers trigger actions elsewhere (e.g., after solver has already fulfilled on another chain), breaking protocol security guarantees.
+**Rationale:** Escrow funds must remain locked until trusted-gmp approval or expiry. If escrows were revocable, users could withdraw funds after trusted-gmp triggers actions elsewhere (e.g., after solver has already fulfilled on another chain), breaking protocol security guarantees.
 
 ### Reserved Solver Enforcement
 
@@ -142,7 +143,7 @@ Only one solver can fulfill an intent, even if multiple solvers attempt simultan
 - **Insufficient solver collateral**: Request-intent creation aborts if the solver does not meet collateral requirements on the hub chain.
 - **Intent expiry reached**: Fulfillment or escrow release is rejected after `expiry_time`.
 - **Invalid witness / proof**: Wrong witness type or proof format is provided for the flow; the fulfillment or validation call aborts.
-- **Verifier unavailable or lagging**: Approval signatures are delayed; escrow release must wait until verification completes.
+- **Trusted-gmp unavailable or lagging**: Approval signatures are delayed; escrow release must wait until verification completes.
 - **Chain mismatch or metadata mismatch**: Offered/desired token metadata or chain ID does not match the intent; validation rejects the action.
 
 ## Risks
@@ -154,5 +155,5 @@ Only one solver can fulfill an intent, even if multiple solvers attempt simultan
 
 ### Disturb the service
 
-- DOS attack on server (Solver or Verifier) or one of the blockchain.
+- DOS attack on server (Solver or Trusted-gmp) or one of the blockchain.
 - Create too many false intents.

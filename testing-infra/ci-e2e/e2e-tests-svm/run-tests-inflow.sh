@@ -25,10 +25,15 @@ log_and_echo "=========================================================="
 log_and_echo ""
 log_and_echo " Step 1: Build bins and pre-pull docker images"
 log_and_echo "========================================"
-pushd "$PROJECT_ROOT/verifier" > /dev/null
-cargo build --bin verifier --bin generate_keys 2>&1 | tail -5
+pushd "$PROJECT_ROOT/coordinator" > /dev/null
+cargo build --bin coordinator 2>&1 | tail -5
 popd > /dev/null
-log_and_echo "   ✅ Verifier: verifier, generate_keys"
+log_and_echo "   ✅ Coordinator: coordinator"
+
+pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
+popd > /dev/null
+log_and_echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
 
 pushd "$PROJECT_ROOT/solver" > /dev/null
 cargo build --bin solver 2>&1 | tail -5
@@ -42,9 +47,9 @@ log_and_echo "   ✅ SVM: intent_escrow_cli"
 
 docker pull "$APTOS_DOCKER_IMAGE"
 
-log_and_echo " Step 2: Generating verifier keys..."
+log_and_echo " Step 2: Generating trusted-gmp keys..."
 log_and_echo "======================================="
-generate_verifier_keys
+generate_trusted_gmp_keys
 log_and_echo ""
 
 log_and_echo " Step 3: Setting up chains and deploying contracts..."
@@ -57,9 +62,10 @@ log_and_echo "======================================================"
 ./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
 
 log_and_echo ""
-log_and_echo " Step 4: Configuring and starting verifier (for negotiation routing)..."
+log_and_echo " Step 4: Configuring and starting coordinator and trusted-gmp (for negotiation routing)..."
 log_and_echo "=========================================================================="
-./testing-infra/ci-e2e/e2e-tests-svm/start-verifier.sh
+./testing-infra/ci-e2e/e2e-tests-svm/start-coordinator.sh
+./testing-infra/ci-e2e/e2e-tests-svm/start-trusted-gmp.sh
 
 log_and_echo ""
 log_and_echo " Step 4b: Starting solver service..."
@@ -69,7 +75,7 @@ log_and_echo "======================================="
 ./testing-infra/ci-e2e/verify-solver-running.sh
 
 log_and_echo ""
-log_and_echo " Step 5: Submitting cross-chain intents via verifier negotiation routing..."
+log_and_echo " Step 5: Submitting cross-chain intents via coordinator negotiation routing..."
 log_and_echo "============================================================================="
 ./testing-infra/ci-e2e/e2e-tests-svm/inflow-submit-hub-intent.sh
 log_and_echo ""

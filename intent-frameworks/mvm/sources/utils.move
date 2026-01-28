@@ -97,18 +97,18 @@ module mvmt_intent::utils {
     ///
     /// This is a helper function for connected-chain transfers (outflow intents) that allows
     /// solvers to transfer tokens while including intent_id metadata. The intent_id is included
-    /// as a parameter so the verifier can extract it from the transaction when querying by hash.
+    /// as a parameter so the approver can extract it from the transaction when querying by hash.
     ///
     /// # Arguments
     /// - `sender`: Signer of the solver account (must have tokens to transfer)
     /// - `recipient`: Address on the connected chain where tokens should be sent
     /// - `metadata`: Metadata object address for the token type
     /// - `amount`: Amount of tokens to transfer (base units)
-    /// - `intent_id`: Intent ID that links this transaction to the hub intent (for verifier tracking)
+    /// - `intent_id`: Intent ID that links this transaction to the hub intent (for approver tracking)
     ///
     /// # Note
     /// This function is designed for outflow intents where solvers transfer tokens on connected chains.
-    /// The intent_id parameter ensures the verifier can link the connected-chain transaction back
+    /// The intent_id parameter ensures the approver can link the connected-chain transaction back
     /// to the hub intent when validating fulfillment.
     public entry fun transfer_with_intent_id(
         sender: &signer,
@@ -124,8 +124,8 @@ module mvmt_intent::utils {
         // Deposit tokens to recipient address
         primary_fungible_store::deposit(recipient, asset);
 
-        // Keep intent_id in payload so the verifier can read it from the transaction
-        // The verifier queries the transaction by hash and extracts intent_id from function arguments
+        // Keep intent_id in payload so the approver can read it from the transaction
+        // The approver queries the transaction by hash and extracts intent_id from function arguments
         let _intent_id = intent_id;
     }
 }

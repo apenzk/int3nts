@@ -1,7 +1,7 @@
 //! Connected SVM Chain Client
 //!
 //! Client for interacting with connected SVM chains to query escrow accounts
-//! and release escrows after verifier approval.
+//! and release escrows after trusted-gmp approval.
 
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -48,12 +48,12 @@ pub struct EscrowAccount {
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
 pub struct EscrowState {
     pub discriminator: [u8; 8],
-    pub verifier: Pubkey,
+    pub approver: Pubkey,
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub enum EscrowInstruction {
-    Initialize { verifier: Pubkey },
+    Initialize { approver: Pubkey },
     CreateEscrow {
         intent_id: [u8; 32],
         amount: u64,
@@ -182,13 +182,13 @@ impl ConnectedSvmClient {
         Ok(events)
     }
 
-    /// Claims an escrow using a verifier signature (not yet implemented).
+    /// Claims an escrow using a trusted-gmp signature (not yet implemented).
     ///
     /// # Arguments
     ///
     /// * `escrow_id` - Escrow PDA address
     /// * `intent_id` - Intent id
-    /// * `signature` - Verifier signature bytes
+    /// * `signature` - Approver (Trusted GMP) signature bytes
     ///
     /// # Returns
     ///
@@ -251,7 +251,7 @@ impl ConnectedSvmClient {
         let ed25519_ix = new_ed25519_instruction_with_signature(
             &intent_bytes,
             &signature_bytes,
-            &state.verifier.to_bytes(),
+            &state.approver.to_bytes(),
         );
 
         let claim_ix = Instruction {

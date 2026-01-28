@@ -17,7 +17,7 @@ This document provides precise definitions of domain boundaries, external interf
 **Out of Scope**:
 
 - Asset custody (belongs to Escrow Domain)
-- Verifier approval logic (belongs to Verification Domain)
+- Trusted GMP approval logic (belongs to Trusted GMP Domain)
 - Escrow-specific operations (belongs to Escrow Domain)
 
 ### External Interfaces
@@ -76,15 +76,15 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **In Scope**:
 
 - Asset custody and fund locking on individual chains
-- Escrow creation with verifier public key
-- Escrow completion with verifier signature (signature itself is the approval)
+- Escrow creation with trusted-gmp public key
+- Escrow completion with trusted-gmp signature (signature itself is the approval)
 - Reserved solver address enforcement
 - Non-revocable requirement enforcement
 
 **Out of Scope**:
 
 - Intent creation logic (belongs to Intent Management Domain)
-- Verifier monitoring and validation (belongs to Verification Domain)
+- Coordinator monitoring and trusted-gmp validation (belongs to Coordinator and Trusted GMP Domains)
 - Cross-chain intent creation (belongs to Intent Management Domain)
 
 ### Escrow: External Interfaces
@@ -92,19 +92,19 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **Public Entry Functions** (Move):
 
 - `create_escrow_from_fa()` - Create escrow from fungible asset
-- `complete_escrow_from_fa()` - Complete escrow with verifier signature (signature itself is the approval)
+- `complete_escrow_from_fa()` - Complete escrow with trusted-gmp signature (signature itself is the approval)
 
 **Public Functions** (Move):
 
-- `create_escrow()` - Create escrow with verifier requirement
+- `create_escrow()` - Create escrow with trusted-gmp requirement
 - `start_escrow_session()` - Start escrow session (solver takes escrowed assets)
-- `complete_escrow()` - Complete escrow with verifier signature (signature itself is the approval)
+- `complete_escrow()` - Complete escrow with trusted-gmp signature (signature itself is the approval)
 
 **Public Functions** (Solidity):
 
 - `createEscrow(uint256 intentId, address token, uint256 amount, address reservedSolver)` - Create and deposit escrow
 - `deposit(uint256 intentId, address token, uint256 amount)` - Additional deposit to escrow
-- `claim(uint256 intentId, bytes signature)` - Claim escrow with verifier signature (signature itself is the approval)
+- `claim(uint256 intentId, bytes signature)` - Claim escrow with trusted-gmp signature (signature itself is the approval)
 - `cancel(uint256 intentId)` - Cancel escrow after expiry
 
 **Events Emitted**:
@@ -124,7 +124,7 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 - Non-revocable enforcement logic (`revocable = false` requirement)
 - Reserved solver address validation
-- Verifier signature verification (Ed25519 for Move, ECDSA for EVM)
+- Trusted-gmp signature verification (Ed25519 for Move, ECDSA for EVM)
 - Expiry-based cancellation logic
 
 ### Escrow: Data Ownership
@@ -154,7 +154,7 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 - Intent creation (belongs to Intent Management Domain)
 - Escrow creation (belongs to Escrow Domain)
-- Verifier validation (belongs to Verification Domain)
+- Trusted-gmp validation (belongs to Trusted GMP Domain)
 
 **Note**: Settlement functionality is distributed across Intent Management and Escrow modules, not a separate structural module.
 
@@ -163,12 +163,12 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **Public Entry Functions** (Move):
 
 - `fulfill_cross_chain_request_intent()` - Fulfill cross-chain intent (in fa_intent.move)
-- `complete_escrow_from_fa()` - Complete escrow with verifier signature (in intent_as_escrow_entry.move) - signature itself is the approval
+- `complete_escrow_from_fa()` - Complete escrow with trusted-gmp signature (in intent_as_escrow_entry.move) - signature itself is the approval
 
 **Public Functions** (Move):
 
 - `finish_fa_intent_session()` - Complete FA intent session (in fa_intent.move)
-- `complete_escrow()` - Complete escrow with verifier signature (in intent_as_escrow.move) - signature itself is the approval
+- `complete_escrow()` - Complete escrow with trusted-gmp signature (in intent_as_escrow.move) - signature itself is the approval
 
 **Public Functions** (Solidity):
 
@@ -178,7 +178,7 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 ### Settlement: Internal Components
 
 - Fulfillment validation logic (witness verification, condition checking)
-- Verifier signature verification
+- Trusted-gmp signature verification
 - Asset transfer execution
 - Expiry validation
 
@@ -194,37 +194,35 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 ---
 
-## Verification: Boundaries and Interfaces
+## Coordinator: Boundaries and Interfaces
 
-### Verification: Domain Boundaries
+### Coordinator: Domain Boundaries
 
 **In Scope**:
 
-- Event monitoring from hub and connected chains (Move VM and EVM)
-- Symmetrical monitoring of Move VM and EVM escrows (both cached and validated when created)
-- Cross-chain state validation
-- Approval signature generation (Ed25519 for Move VM, ECDSA for EVM)
+- Read-only event monitoring from hub and connected chains (Move VM and EVM)
+- Symmetrical monitoring of Move VM and EVM escrows (both cached when created)
+- Event caching and retrieval
 - Event correlation and matching
-- REST API for external integration
+- Negotiation routing
+- REST API for event queries and negotiation
 
 **Out of Scope**:
 
 - Intent creation (belongs to Intent Management Domain)
 - Escrow creation (belongs to Escrow Domain)
 - Asset custody (belongs to Escrow Domain)
+- Cross-chain validation (belongs to Trusted GMP Domain)
+- Approval signature generation (belongs to Trusted GMP Domain)
+- Cryptographic operations (belongs to Trusted GMP Domain)
 
-### Verification: External Interfaces
+### Coordinator: External Interfaces
 
 **REST API Endpoints**:
 
 - `GET /health` - Health check
-- `GET /public-key` - Get verifier public key
 - `GET /events` - Get cached events (intents, escrows, fulfillments)
-- `GET /approvals` - Get cached approval signatures
-- `GET /approvals/:escrow_id` - Get approval for specific escrow
-- `POST /approval` - Manually create approval signature
-- `POST /validate-outflow-fulfillment` - Validate connected chain transaction for outflow intent and return approval signature
-- `POST /validate-inflow-escrow` - Validate escrow deposit for inflow intent
+- Negotiation routing endpoints (solver discovery and matching)
 
 **Public Functions** (Rust):
 
@@ -235,6 +233,65 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 - `EventMonitor::monitor_connected_chain()` - Monitor Move VM connected chain continuously
 - `EventMonitor::monitor_evm_chain()` - Monitor EVM connected chain continuously
 - `EventMonitor::get_cached_events()` - Get cached events
+
+**Data Structures Exported**:
+
+- `RequestIntentEvent` - Normalized request-intent event structure
+- `EscrowEvent` - Normalized escrow event structure with `chain_type` field (Mvm, Evm, Svm) set by coordinator based on monitor that discovered it
+- `FulfillmentEvent` - Normalized fulfillment event structure
+
+### Coordinator: Internal Components
+
+- Event polling and caching mechanisms (symmetrical for Move VM and EVM)
+- Event correlation logic (`intent_id` matching)
+- Negotiation routing logic
+- Configuration management
+- Blockchain RPC clients (MvmClient for Move VM chains)
+
+### Coordinator: Data Ownership
+
+- **Event Cache**: Owned by Coordinator domain, populated from blockchain events
+- **Configuration**: Owned by Coordinator domain, loaded from config files
+
+### Coordinator: Interaction Protocols
+
+For comprehensive inter-domain interaction patterns, see [Inter-Domain Interaction Patterns and Dependencies](architecture-component-mapping.md#inter-domain-interaction-patterns-and-dependencies) in the architecture component mapping document.
+
+---
+
+## Trusted GMP: Boundaries and Interfaces
+
+### Trusted GMP: Domain Boundaries
+
+**In Scope**:
+
+- Cross-chain state validation
+- Approval signature generation (Ed25519 for Move VM, ECDSA for EVM)
+- Cryptographic operations (signing with private keys)
+- REST API for validation and approval endpoints
+
+**Out of Scope**:
+
+- Intent creation (belongs to Intent Management Domain)
+- Escrow creation (belongs to Escrow Domain)
+- Asset custody (belongs to Escrow Domain)
+- Event monitoring and caching (belongs to Coordinator Domain)
+- Negotiation routing (belongs to Coordinator Domain)
+
+### Trusted GMP: External Interfaces
+
+**REST API Endpoints**:
+
+- `GET /health` - Health check
+- `GET /public-key` - Get trusted-gmp public key
+- `GET /approvals` - Get cached approval signatures
+- `GET /approvals/:escrow_id` - Get approval for specific escrow
+- `POST /approval` - Manually create approval signature
+- `POST /validate-outflow-fulfillment` - Validate connected chain transaction for outflow intent and return approval signature
+- `POST /validate-inflow-escrow` - Validate escrow deposit for inflow intent
+
+**Public Functions** (Rust):
+
 - `CrossChainValidator::validate_intent_safety()` - Validate intent safety
 - `CrossChainValidator::validate_fulfillment()` - Validate fulfillment
 - `CrossChainValidator::validate_intent_fulfillment()` - Validate escrow fulfills intent
@@ -244,15 +301,11 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 **Data Structures Exported**:
 
-- `RequestIntentEvent` - Normalized request-intent event structure
-- `EscrowEvent` - Normalized escrow event structure with `chain_type` field (Mvm, Evm, Svm) set by verifier based on monitor that discovered it
-- `FulfillmentEvent` - Normalized fulfillment event structure
 - `ApprovalSignature` - Approval signature structure
 - `ValidationResult` - Validation result structure
 
-### Verification: Internal Components
+### Trusted GMP: Internal Components
 
-- Event polling and caching mechanisms (symmetrical for Move VM and EVM)
 - Cross-chain event correlation logic (`intent_id` matching)
 - Chain ID validation (ensures escrow created on correct connected chain)
 - Solver address validation (Move VM addresses directly, EVM addresses via solver registry)
@@ -260,12 +313,11 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 - Configuration management
 - Blockchain RPC clients (MvmClient for Move VM chains, EvmClient for EVM chains)
 
-### Verification: Data Ownership
+### Trusted GMP: Data Ownership
 
-- **Event Cache**: Owned by Verification domain, populated from blockchain events
-- **Approval Signatures**: Generated by Verification domain, cached for retrieval
-- **Configuration**: Owned by Verification domain, loaded from config files
+- **Approval Signatures**: Generated by Trusted GMP domain, cached for retrieval
+- **Configuration**: Owned by Trusted GMP domain, loaded from config files
 
-### Verification: Interaction Protocols
+### Trusted GMP: Interaction Protocols
 
 For comprehensive inter-domain interaction patterns, see [Inter-Domain Interaction Patterns and Dependencies](architecture-component-mapping.md#inter-domain-interaction-patterns-and-dependencies) in the architecture component mapping document.

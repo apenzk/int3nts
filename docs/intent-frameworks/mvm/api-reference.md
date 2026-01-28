@@ -139,7 +139,7 @@ public fun create_outflow_intent(
     expiry_time: u64,
     intent_id: address,
     requester_addr_connected_chain: address,
-    verifier_public_key: vector<u8>,
+    approver_public_key: vector<u8>,
     solver: address,
     solver_signature: vector<u8>,
 ): Object<Intent<FungibleStoreManager, OracleGuardedLimitOrder>>
@@ -159,11 +159,11 @@ public fun create_outflow_intent(
 - `expiry_time`: Unix timestamp when intent expires
 - `intent_id`: Intent ID for cross-chain linking
 - `requester_addr_connected_chain`: Address on connected chain where solver should send tokens
-- `verifier_public_key`: Public key of the verifier that will approve the connected chain transaction (32 bytes)
+- `approver_public_key`: Public key of the trusted-gmp that will approve the connected chain transaction (32 bytes)
 - `solver`: Address of the solver authorized to fulfill this intent (must be registered in solver registry)
 - `solver_signature`: Ed25519 signature from the solver authorizing this intent
 
-**Note**: This intent locks actual tokens on the hub chain. The solver must transfer tokens on the connected chain first, then the verifier approves that transaction. The solver receives the locked tokens from the hub as reward. This function uses `OracleGuardedLimitOrder` and requires verifier signature for fulfillment.
+**Note**: This intent locks actual tokens on the hub chain. The solver must transfer tokens on the connected chain first, then the trusted-gmp service approves that transaction. The solver receives the locked tokens from the hub as reward. This function uses `OracleGuardedLimitOrder` and requires trusted-gmp signature for fulfillment.
 
 **Aborts:**
 
@@ -189,7 +189,7 @@ public entry fun fulfill_inflow_intent(
 - `intent`: Object reference to the inflow intent to fulfill
 - `payment_amount`: Amount of tokens to provide
 
-**Note**: This function is used to fulfill inflow intents where tokens are locked on the connected chain (in escrow) and desired on the hub. The solver provides the desired tokens to the requester on the hub chain. No verifier signature is required for inflow intents.
+**Note**: This function is used to fulfill inflow intents where tokens are locked on the connected chain (in escrow) and desired on the hub. The solver provides the desired tokens to the requester on the hub chain. No trusted-gmp signature is required for inflow intents.
 
 ### Fulfilling an Outflow Request Intent
 
@@ -197,7 +197,7 @@ public entry fun fulfill_inflow_intent(
 public entry fun fulfill_outflow_intent(
     solver: &signer,
     intent: Object<Intent<FungibleStoreManager, OracleGuardedLimitOrder>>,
-    verifier_signature_bytes: vector<u8>,
+    approver_signature_bytes: vector<u8>,
 )
 ```
 
@@ -205,9 +205,9 @@ public entry fun fulfill_outflow_intent(
 
 - `solver`: Signer fulfilling the intent
 - `intent`: Object reference to the outflow intent to fulfill
-- `verifier_signature_bytes`: Verifier's Ed25519 signature as bytes (signs the intent_id, proves connected chain transfer)
+- `approver_signature_bytes`: Approver's Ed25519 signature as bytes (signs the intent_id, proves connected chain transfer)
 
-**Note**: This function is used to fulfill outflow intents where tokens are locked on the hub chain and desired on the connected chain. The solver must first transfer tokens on the connected chain, then the verifier approves that transaction. The solver receives the locked tokens from the hub as reward. Verifier signature is required - it proves the solver transferred tokens on the connected chain.
+**Note**: This function is used to fulfill outflow intents where tokens are locked on the hub chain and desired on the connected chain. The solver must first transfer tokens on the connected chain, then the trusted-gmp service approves that transaction. The solver receives the locked tokens from the hub as reward. Trusted-gmp signature is required - it proves the solver transferred tokens on the connected chain.
 
 ### Starting a Fungible Asset Session
 
@@ -451,7 +451,7 @@ public entry fun register_solver(
 - The solver's connected chain EVM address (for EVM outflow validation)
 - The solver's connected chain SVM address (for SVM outflow validation)
 
-For outflow intents, the verifier validates that the transaction solver on the connected chain matches the registered connected chain address from the hub registry.
+For outflow intents, the trusted-gmp service validates that the transaction solver on the connected chain matches the registered connected chain address from the hub registry.
 
 **Aborts:**
 

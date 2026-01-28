@@ -266,11 +266,11 @@ async fn test_revert_if_already_claimed() {
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
     // Claim the escrow first
-    let signature = env.verifier.sign_message(&intent_id);
+    let signature = env.approver.sign_message(&intent_id);
     let mut signature_bytes = [0u8; 64];
     signature_bytes.copy_from_slice(signature.as_ref());
 
-    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.verifier.pubkey());
+    let ed25519_ix = create_ed25519_instruction(&intent_id, &signature_bytes, &env.approver.pubkey());
 
     let claim_ix = create_claim_ix(
         env.program_id,

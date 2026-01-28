@@ -35,9 +35,9 @@ if [ -z "$BASE_DEPLOYER_PRIVATE_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$VERIFIER_EVM_PUBKEY_HASH" ]; then
-    echo "❌ ERROR: VERIFIER_EVM_PUBKEY_HASH not set in .env.testnet"
-    echo "   Run: nix develop ./nix -c bash -c 'cd verifier && VERIFIER_CONFIG_PATH=config/verifier_testnet.toml cargo run --bin get_verifier_eth_address'"
+if [ -z "$TRUSTED_GMP_EVM_PUBKEY_HASH" ]; then
+    echo "❌ ERROR: TRUSTED_GMP_EVM_PUBKEY_HASH not set in .env.testnet"
+    echo "   Run: nix develop ./nix -c bash -c 'cd trusted-gmp && TRUSTED_GMP_CONFIG_PATH=config/trusted-gmp_testnet.toml cargo run --bin get_approver_eth_address'"
     exit 1
 fi
 
@@ -59,7 +59,7 @@ fi
 
 echo " Configuration:"
 echo "   Deployer Address: $BASE_DEPLOYER_ADDR"
-echo "   Verifier EVM Pubkey Hash: $VERIFIER_EVM_PUBKEY_HASH"
+echo "   Trusted-GMP EVM Pubkey Hash: $TRUSTED_GMP_EVM_PUBKEY_HASH"
 echo "   Network: Base Sepolia"
 echo "   RPC URL: $BASE_SEPOLIA_RPC_URL"
 echo ""
@@ -76,7 +76,7 @@ cd "$PROJECT_ROOT/intent-frameworks/evm"
 
 # Export environment variables for Hardhat
 export DEPLOYER_PRIVATE_KEY="$BASE_DEPLOYER_PRIVATE_KEY"
-export VERIFIER_ADDR="$VERIFIER_EVM_PUBKEY_HASH"
+export APPROVER_ADDR="$TRUSTED_GMP_EVM_PUBKEY_HASH"
 export BASE_SEPOLIA_RPC_URL
 
 echo " Environment configured for Hardhat"
@@ -116,27 +116,31 @@ if [ -n "$CONTRACT_ADDR" ]; then
     echo ""
     echo " Update the following files with this address:"
     echo ""
-    echo "   1. frontend/src/config/chains.ts"
-    echo "      Line ~26: escrowContractAddress: '$CONTRACT_ADDR'"
-    echo "      (in the 'base-sepolia' section)"
+    echo "   1. coordinator/config/coordinator_testnet.toml"
+    echo "      escrow_contract_addr = \"$CONTRACT_ADDR\""
+    echo "      (in the [connected_chain_evm] section)"
     echo ""
-    echo "   2. verifier/config/verifier_testnet.toml"
-    echo "      Line ~24: escrow_contract_addr = \"$CONTRACT_ADDR\""
+    echo "   2. trusted-gmp/config/trusted-gmp_testnet.toml"
+    echo "      escrow_contract_addr = \"$CONTRACT_ADDR\""
     echo "      (in the [connected_chain_evm] section)"
     echo ""
     echo "   3. solver/config/solver_testnet.toml"
-    echo "      Line ~31: escrow_contract_addr = \"$CONTRACT_ADDR\""
-    echo "      (in the [connected_chain_evm] section)"
+    echo "      escrow_contract_addr = \"$CONTRACT_ADDR\""
+    echo "      (in the [[connected_chain]] EVM section)"
     echo ""
-    echo "   4. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
+    echo "   4. frontend/.env.local"
+    echo "      NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS=$CONTRACT_ADDR"
+    echo ""
+    echo "   5. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
 else
     echo "️  Could not extract contract address from output"
     echo "   Please copy it manually from the deployment output above"
     echo ""
     echo " Update the following files:"
-    echo "   - frontend/src/config/chains.ts (escrowContractAddress in 'base-sepolia' section)"
-    echo "   - verifier/config/verifier_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
-    echo "   - solver/config/solver_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
+    echo "   - coordinator/config/coordinator_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
+    echo "   - trusted-gmp/config/trusted-gmp_testnet.toml (escrow_contract_addr in [connected_chain_evm] section)"
+    echo "   - solver/config/solver_testnet.toml (escrow_contract_addr in [[connected_chain]] EVM section)"
+    echo "   - frontend/.env.local (NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS)"
 fi
 echo ""
 
