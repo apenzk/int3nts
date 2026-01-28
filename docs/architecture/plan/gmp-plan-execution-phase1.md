@@ -4,7 +4,7 @@
 **Depends On:** None
 **Blocks:** Phase 2
 
-**Goal:** Define the shared message format and interfaces that all chains will use. Research LayerZero integration for both Solana and Movement.
+**Goal:** Define the shared message format and interfaces that all chains will use. Research LZ integration for both Solana and Movement.
 
 ---
 
@@ -12,22 +12,29 @@
 
 > 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
 
-### Commit 1: Research LayerZero integration for Solana and Movement
+### Commit 1: Design GMP integration into our architecture
 
 **Files:**
 
-- `docs/architecture/plan/layerzero-solana-integration.md`
-- `docs/architecture/plan/layerzero-movement-integration.md`
+- `docs/architecture/plan/gmp-architecture-integration.md`
 
 **Tasks:**
 
-- [ ] Research LayerZero's Solana integration (OApp pattern in native Rust)
-- [ ] Research LayerZero's Movement/Aptos integration (OApp pattern in Move)
-- [ ] Document endpoint addresses for Solana devnet/mainnet
-- [ ] Document endpoint addresses for Movement testnet/mainnet (or confirm LZ not yet available)
-- [ ] Document how message payloads are wrapped by LayerZero on each chain
-- [ ] Document nonce tracking differences between chains
-- [ ] Identify any chain-specific limitations or quirks
+- [x] **Message flow diagrams** - Document full flows for:
+  - Outflow: Hub intent created → LZ send → connected chain receives → solver fulfills → LZ send → hub releases
+  - Inflow: Hub intent created → LZ send → connected escrow created → LZ send → hub confirms → solver fulfills → LZ send → escrow releases
+- [x] **Integration points** - Identify which existing contracts need GMP hooks:
+  - MVM: `intent_as_escrow.move`, `fa_intent_outflow.move`, `fa_intent_inflow.move`
+  - SVM: `intent_escrow` program (modify existing to add GMP support)
+  - What triggers `lzSend()`? (contract logic on state change, not external caller)
+- [x] **Trusted-GMP relay design** - How it works in local/CI:
+  - Watches `MessageSent` events on local GMP endpoints
+  - Calls `deliver_message()` / `lzReceive()` on destination chain
+  - Needs funded operator wallet per chain
+- [x] **Environment matrix** - What uses local vs LZ GMP endpoints:
+  - Local/CI: Local GMP endpoints + Trusted-GMP relay
+  - Testnet: LZ GMP endpoints everywhere
+  - Mainnet: LZ GMP endpoints everywhere
 
 **Test:**
 
@@ -39,7 +46,34 @@
 
 ---
 
-### Commit 2: Define GMP message wire format specification
+### Commit 2: Research LZ integration for Solana and Movement
+
+**Files:**
+
+- `docs/architecture/plan/layerzero-solana-integration.md`
+- `docs/architecture/plan/layerzero-movement-integration.md`
+
+**Tasks:**
+
+- [ ] Research LZ's Solana integration (OApp pattern in native Rust)
+- [ ] Research LZ's Movement/Aptos integration (OApp pattern in Move)
+- [ ] Document endpoint addresses for Solana devnet/mainnet
+- [ ] Document endpoint addresses for Movement testnet/mainnet (or confirm LZ not yet available)
+- [ ] Document how message payloads are wrapped by LZ on each chain
+- [ ] Document nonce tracking differences between chains
+- [ ] Identify any chain-specific limitations or quirks
+
+**Test:**
+
+```bash
+# Documentation review - manual
+```
+
+> ⚠️ **Review complete before proceeding to Commit 3.**
+
+---
+
+### Commit 3: Define GMP message wire format specification
 
 **Files:**
 
@@ -64,11 +98,11 @@
 # Documentation review - manual
 ```
 
-> ⚠️ **Review complete before proceeding to Commit 3.**
+> ⚠️ **Review complete before proceeding to Commit 4.**
 
 ---
 
-### Commit 3: Add gmp-common crate with message encoding (SVM)
+### Commit 4: Add gmp-common crate with message encoding (SVM)
 
 **Files:**
 
@@ -84,7 +118,7 @@
 - [ ] Implement `IntentRequirements` encode/decode per wire format spec
 - [ ] Implement `EscrowConfirmation` encode/decode per wire format spec
 - [ ] Implement `FulfillmentProof` encode/decode per wire format spec
-- [ ] Define LayerZero endpoint addresses (devnet, mainnet, mock)
+- [ ] Define GMP endpoint addresses (LZ devnet, LZ mainnet, local)
 - [ ] Test encoding matches documented wire format exactly
 - [ ] Test decoding of known byte sequences
 
@@ -94,11 +128,11 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 4.**
+> ⚠️ **CI tests must pass before proceeding to Commit 5.**
 
 ---
 
-### Commit 4: Add gmp-common module with message encoding (MVM)
+### Commit 5: Add gmp-common module with message encoding (MVM)
 
 **Files:**
 
@@ -112,7 +146,7 @@
 - [ ] Implement `IntentRequirements` encode/decode per wire format spec
 - [ ] Implement `EscrowConfirmation` encode/decode per wire format spec
 - [ ] Implement `FulfillmentProof` encode/decode per wire format spec
-- [ ] Define LayerZero endpoint addresses (testnet, mainnet, mock)
+- [ ] Define GMP endpoint addresses (LZ testnet, LZ mainnet, local)
 - [ ] Test encoding matches documented wire format exactly
 - [ ] Test decoding of known byte sequences (same test vectors as SVM)
 
@@ -122,11 +156,11 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 5.**
+> ⚠️ **CI tests must pass before proceeding to Commit 6.**
 
 ---
 
-### Commit 5: Add cross-chain encoding compatibility test
+### Commit 6: Add cross-chain encoding compatibility test
 
 **Files:**
 
@@ -149,11 +183,11 @@
 ./testing-infra/gmp-encoding-test/verify-mvm.sh
 ```
 
-> ⚠️ **Both chains must produce identical encoding before proceeding to Commit 6.**
+> ⚠️ **Both chains must produce identical encoding before proceeding to Commit 7.**
 
 ---
 
-### Commit 6: Add outflow validator interface (SVM)
+### Commit 7: Add outflow validator interface (SVM)
 
 **Files:**
 
@@ -174,24 +208,23 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 7.**
+> ⚠️ **CI tests must pass before proceeding to Commit 8.**
 
 ---
 
-### Commit 7: Add inflow escrow GMP interface (SVM)
+### Commit 8: Add GMP support to intent_escrow (SVM)
 
 **Files:**
 
-- `intent-frameworks/svm/programs/escrow-gmp/Cargo.toml`
-- `intent-frameworks/svm/programs/escrow-gmp/src/lib.rs` (interface only - stub implementations)
+- `intent-frameworks/svm/programs/intent-escrow/src/lib.rs` (modify existing)
 
 **Tasks:**
 
-- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
-- [ ] Define `lz_receive` instruction for intent requirements
-- [ ] Define `create_escrow_with_validation` instruction
-- [ ] Define `lz_receive` instruction for fulfillment proof
-- [ ] Add stub implementations that return `Ok(())`
+- [ ] Add `lz_receive` instruction for receiving intent requirements
+- [ ] Add on-chain validation in `create_escrow` against stored requirements
+- [ ] Add `lz_receive` instruction for receiving fulfillment proof (auto-release)
+- [ ] Remove signature verification in `claim`
+- [ ] Add dependency on `gmp-common`
 
 **Test:**
 
@@ -199,11 +232,11 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 8.**
+> ⚠️ **CI tests must pass before proceeding to Commit 9.**
 
 ---
 
-### Commit 8: Add hub intent GMP interface (MVM)
+### Commit 9: Add hub intent GMP interface (MVM)
 
 **Files:**
 
@@ -223,25 +256,25 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 9.**
+> ⚠️ **CI tests must pass before proceeding to Commit 10.**
 
 ---
 
-### Commit 9: Add mock LayerZero endpoint interfaces (SVM + MVM)
+### Commit 10: Add local GMP endpoint interfaces (SVM + MVM)
 
 **Files:**
 
-- `intent-frameworks/svm/programs/mock-lz-endpoint/Cargo.toml`
-- `intent-frameworks/svm/programs/mock-lz-endpoint/src/lib.rs` (interface only)
-- `intent-frameworks/mvm/sources/mocks/mock_lz_endpoint.move` (interface only)
+- `intent-frameworks/svm/programs/local-gmp-endpoint/Cargo.toml`
+- `intent-frameworks/svm/programs/local-gmp-endpoint/src/lib.rs` (interface only)
+- `intent-frameworks/mvm/sources/gmp/local_gmp_endpoint.move` (interface only)
 
 **Tasks:**
 
 - [ ] SVM: Define `send` instruction signature (emits event)
-- [ ] SVM: Define `deliver_message` instruction for simulator
+- [ ] SVM: Define `deliver_message` instruction for trusted-GMP relay
 - [ ] SVM: Add stub implementations
 - [ ] MVM: Define `lz_send()` function signature
-- [ ] MVM: Define `deliver_message()` entry function for simulator
+- [ ] MVM: Define `deliver_message()` entry function for trusted-GMP relay
 - [ ] MVM: Add stub implementations
 
 **Test:**
@@ -250,11 +283,11 @@
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 10.**
+> ⚠️ **CI tests must pass before proceeding to Commit 11.**
 
 ---
 
-### Commit 10: Add fee estimation and document endpoint configuration
+### Commit 11: Add fee estimation and document endpoint configuration
 
 **Files:**
 
@@ -263,9 +296,9 @@
 
 **Tasks:**
 
-- [ ] Document all LayerZero endpoint addresses (Solana, Movement, mock)
-- [ ] Document environment configuration (local/CI uses mock, testnet uses mock for Movement + real for Solana, mainnet uses real everywhere)
-- [ ] Estimate LayerZero message fees for each route
+- [ ] Document all GMP endpoint addresses (LZ for Solana and Movement, local for testing)
+- [ ] Document environment configuration (local/CI uses local GMP endpoints, testnet and mainnet use LZ GMP endpoints)
+- [ ] Estimate LZ message fees for each route
 - [ ] Estimate on-chain validation gas costs
 - [ ] Compare costs to current Trusted GMP system
 
@@ -289,12 +322,13 @@
 
 ## Exit Criteria
 
-- [ ] All 10 commits merged to feature branch
+- [ ] All 11 commits merged to feature branch
+- [ ] GMP architecture integration design reviewed
 - [ ] Wire format spec documented and reviewed
 - [ ] SVM message encoding matches spec (tested)
 - [ ] MVM message encoding matches spec (tested)
 - [ ] Cross-chain encoding test passes (both produce identical bytes)
 - [ ] All interfaces defined for SVM and MVM
-- [ ] Mock endpoint interfaces defined for both chains
-- [ ] LayerZero research documented for both Solana and Movement
+- [ ] Local GMP endpoint interfaces defined for both chains
+- [ ] LZ research documented for both Solana and Movement
 - [ ] Fee analysis complete
