@@ -106,7 +106,7 @@ When adding tests for shared modules (e.g., `gmp_common`/`gmp-common`):
 - **Use identical test vectors**: Same inputs must produce same expected outputs across all chains
 - **Update test-vectors.json**: Cross-chain encoding tests reference `intent-frameworks/common/testing/gmp-encoding-test-vectors.json`
 - **Keep test counts in sync**: MVM and SVM should have matching test numbers for shared functionality
-- **Update COMPLETENESS.md**: Each component has a COMPLETENESS.md tracking test status. See `docs/intent-frameworks/framework-extension-guide.md` for the full reference
+- **Update COMPLETENESS-CHECKLIST.md**: Each component has a COMPLETENESS-CHECKLIST.md tracking test status. See `docs/intent-frameworks/framework-extension-guide.md` for the full reference
 
 --------------------------------------------------------------------------------
 

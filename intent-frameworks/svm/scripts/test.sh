@@ -26,3 +26,6 @@ RUST_LOG=tarpc=error,solana_runtime=warn cargo test -p intent_escrow --tests -- 
 
 echo "[test.sh] Running gmp-common tests..."
 RUST_LOG=tarpc=error,solana_runtime=warn cargo test -p gmp-common --tests -- --nocapture "$@"
+
+echo "[test.sh] Running outflow-validator tests..."
+RUST_LOG=tarpc=error,solana_runtime=warn cargo test -p outflow_validator --tests -- --nocapture "$@"

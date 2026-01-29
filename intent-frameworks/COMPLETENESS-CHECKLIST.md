@@ -208,3 +208,24 @@ These tests verify that encoding produces identical bytes across all frameworks.
 | 38 | test_cross_chain_encoding_fulfillment_proof | ✅ | ✅ | ⚠️ |
 | 39 | test_cross_chain_encoding_intent_requirements_zeros | ✅ | ✅ | ⚠️ |
 | 40 | test_cross_chain_encoding_intent_requirements_max | ✅ | ✅ | ⚠️ |
+
+---
+
+## Outflow Validator test alignment
+
+Outflow validator handles the connected chain side of outflow intents (tokens flow OUT of Movement TO connected chain). The solver fulfills on the connected chain, and the validator sends proof back to the hub.
+
+- `intent-frameworks/svm/programs/outflow-validator/tests/`
+- `intent-frameworks/evm/test/outflow-validator/` (future)
+
+### interface_tests.rs / interface.test.js
+
+| # | Test | SVM | EVM |
+| --- | --- | --- | --- |
+| 1 | test_initialize_instruction_roundtrip | ✅ | ⚠️ |
+| 2 | test_lz_receive_instruction_roundtrip | ✅ | ⚠️ |
+| 3 | test_fulfill_intent_instruction_roundtrip | ✅ | ⚠️ |
+| 4 | test_intent_requirements_account_roundtrip | ✅ | ⚠️ |
+| 5 | test_config_account_roundtrip | ✅ | ⚠️ |
+| 6 | test_error_conversion | ✅ | ⚠️ |
+| 7 | test_error_codes_unique | ✅ | ⚠️ |

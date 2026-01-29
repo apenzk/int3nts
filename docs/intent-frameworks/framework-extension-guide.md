@@ -83,25 +83,25 @@ All tests listed are VM-specific; generic tests are intentionally excluded becau
 
 Escrow test alignment for VM intent framework contracts:
 
-- See [`intent-frameworks/COMPLETENESS.md`](../../intent-frameworks/COMPLETENESS.md)
+- See [`intent-frameworks/COMPLETENESS-CHECKLIST.md`](../../intent-frameworks/COMPLETENESS-CHECKLIST.md)
 
 ### Trusted GMP
 
 Test alignment for the trusted-gmp service:
 
-- See [`trusted-gmp/tests/COMPLETENESS.md`](../../trusted-gmp/tests/COMPLETENESS.md)
+- See [`trusted-gmp/tests/COMPLETENESS-CHECKLIST.md`](../../trusted-gmp/tests/COMPLETENESS-CHECKLIST.md)
 
 ### Solver
 
 Test alignment for the solver:
 
-- See [`solver/tests/COMPLETENESS.md`](../../solver/tests/COMPLETENESS.md)
+- See [`solver/tests/COMPLETENESS-CHECKLIST.md`](../../solver/tests/COMPLETENESS-CHECKLIST.md)
 
 ### Frontend
 
 Test alignment for the frontend:
 
-- See [`frontend/src/COMPLETENESS.md`](../../frontend/src/COMPLETENESS.md)
+- See [`frontend/src/COMPLETENESS-CHECKLIST.md`](../../frontend/src/COMPLETENESS-CHECKLIST.md)
 
 ## Handling Platform Differences
 

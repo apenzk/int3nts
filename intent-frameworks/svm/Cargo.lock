@@ -2758,6 +2758,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "outflow_validator"
+version = "0.1.0"
+dependencies = [
+ "borsh 0.10.4",
+ "gmp-common",
+ "hex",
+ "solana-program",
+ "solana-program-test",
+ "solana-sdk",
+ "spl-token",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

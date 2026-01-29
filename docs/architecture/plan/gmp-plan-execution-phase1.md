@@ -1,6 +1,6 @@
 # Phase 1: Research & Design (2-3 days)
 
-**Status:** Not Started
+**Status:** In Progress (Commits 1-7 complete)
 **Depends On:** None
 **Blocks:** Phase 2
 
@@ -164,23 +164,22 @@
 
 **Files:**
 
-- `testing-infra/gmp-encoding-test/test-vectors.json`
-- `testing-infra/gmp-encoding-test/verify-svm.sh`
-- `testing-infra/gmp-encoding-test/verify-mvm.sh`
+- `intent-frameworks/common/testing/gmp-encoding-test-vectors.json`
+- `intent-frameworks/svm/programs/gmp-common/tests/gmp_common_tests.rs` (tests 36-40)
+- `intent-frameworks/mvm/tests/gmp_common_tests.move` (tests 36-40)
 
 **Tasks:**
 
-- [ ] Create test vectors JSON with known inputs and expected byte outputs
-- [ ] Script to run SVM encoding and compare to expected bytes
-- [ ] Script to run MVM encoding and compare to expected bytes
-- [ ] Verify both chains produce identical bytes for same logical message
-- [ ] Add to CI pipeline
+- [x] Create test vectors JSON with known inputs and expected byte outputs
+- [x] Add SVM unit tests (36-40) that verify encoding matches expected bytes
+- [x] Add MVM unit tests (36-40) that verify encoding matches expected bytes
+- [x] Verify both chains produce identical bytes for same logical message (via shared test vectors)
+- [x] Tests run as part of CI pipeline (`./testing-infra/run-all-unit-tests.sh`)
 
 **Test:**
 
 ```bash
-./testing-infra/gmp-encoding-test/verify-svm.sh
-./testing-infra/gmp-encoding-test/verify-mvm.sh
+./testing-infra/run-all-unit-tests.sh
 ```
 
 > ⚠️ **Both chains must produce identical encoding before proceeding to Commit 7.**
@@ -192,15 +191,21 @@
 **Files:**
 
 - `intent-frameworks/svm/programs/outflow-validator/Cargo.toml`
-- `intent-frameworks/svm/programs/outflow-validator/src/lib.rs` (interface only - stub implementations)
+- `intent-frameworks/svm/programs/outflow-validator/src/lib.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/instruction.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/processor.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/state.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/error.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/events.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/entrypoint.rs`
 
 **Tasks:**
 
-- [ ] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
-- [ ] Define `lz_receive` instruction for receiving intent requirements
-- [ ] Define `fulfill_intent` instruction for authorized solvers
-- [ ] Define `FulfillmentSucceeded`, `FulfillmentFailed` events
-- [ ] Add stub implementations that return `Ok(())`
+- [x] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
+- [x] Define `lz_receive` instruction for receiving intent requirements
+- [x] Define `fulfill_intent` instruction for authorized solvers
+- [x] Define `FulfillmentSucceeded`, `FulfillmentFailed` events
+- [x] Add stub implementations that return `Ok(())`
 
 **Test:**
 
@@ -323,12 +328,12 @@
 ## Exit Criteria
 
 - [ ] All 11 commits merged to feature branch
-- [ ] GMP architecture integration design reviewed
-- [ ] Wire format spec documented and reviewed
-- [ ] SVM message encoding matches spec (tested)
-- [ ] MVM message encoding matches spec (tested)
-- [ ] Cross-chain encoding test passes (both produce identical bytes)
+- [x] GMP architecture integration design reviewed
+- [x] Wire format spec documented and reviewed
+- [x] SVM message encoding matches spec (tested)
+- [x] MVM message encoding matches spec (tested)
+- [x] Cross-chain encoding test passes (both produce identical bytes)
 - [ ] All interfaces defined for SVM and MVM
 - [ ] Local GMP endpoint interfaces defined for both chains
-- [ ] LZ research documented for both Solana and Movement
+- [x] LZ research documented for both Solana and Movement
 - [ ] Fee analysis complete

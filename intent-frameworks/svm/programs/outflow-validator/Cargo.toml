@@ -1,0 +1,28 @@
+[package]
+name = "outflow_validator"
+version = "0.1.0"
+description = "Solana outflow validator for cross-chain intent fulfillment via GMP"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "outflow_validator"
+
+[features]
+no-entrypoint = []
+custom-heap = []
+custom-panic = []
+default = []
+
+[dependencies]
+solana-program = "2.1"
+spl-token = { version = "6.0", features = ["no-entrypoint"] }
+borsh = "0.10"
+thiserror = "1.0"
+hex = "0.4"
+gmp-common = { path = "../gmp-common" }
+
+[dev-dependencies]
+solana-program-test = "2.1"
+solana-sdk = "2.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
