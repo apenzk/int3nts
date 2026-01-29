@@ -196,3 +196,15 @@ Each message type has a symmetric set of tests. The table below shows how test c
 | --- | --- | --- | --- | --- |
 | 34 | test_max_u64_amount_roundtrip | ✅ | ✅ | ⚠️ |
 | 35 | test_zero_solver_addr_means_any | ✅ | ✅ | ⚠️ |
+
+### Cross-Chain Encoding Compatibility
+
+These tests verify that encoding produces identical bytes across all frameworks. Expected bytes are defined in `intent-frameworks/common/testing/gmp-encoding-test-vectors.json`.
+
+| # | Test | SVM | MVM | EVM |
+| --- | --- | --- | --- | --- |
+| 36 | test_cross_chain_encoding_intent_requirements | ✅ | ✅ | ⚠️ |
+| 37 | test_cross_chain_encoding_escrow_confirmation | ✅ | ✅ | ⚠️ |
+| 38 | test_cross_chain_encoding_fulfillment_proof | ✅ | ✅ | ⚠️ |
+| 39 | test_cross_chain_encoding_intent_requirements_zeros | ✅ | ✅ | ⚠️ |
+| 40 | test_cross_chain_encoding_intent_requirements_max | ✅ | ✅ | ⚠️ |

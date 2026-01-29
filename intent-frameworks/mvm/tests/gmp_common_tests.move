@@ -84,6 +84,34 @@ module mvmt_intent::gmp_common_tests {
         *vector::borrow_mut(v, offset + 7) = ((val & 0xFF) as u8);
     }
 
+    /// Convert a hex character to its numeric value (0-15)
+    fun hex_char_to_u8(c: u8): u8 {
+        if (c >= 0x30 && c <= 0x39) {       // '0'-'9'
+            c - 0x30
+        } else if (c >= 0x61 && c <= 0x66) { // 'a'-'f'
+            c - 0x61 + 10
+        } else if (c >= 0x41 && c <= 0x46) { // 'A'-'F'
+            c - 0x41 + 10
+        } else {
+            abort 99 // invalid hex char
+        }
+    }
+
+    /// Convert a hex string (as bytes) to a byte vector
+    fun hex_to_bytes(hex: vector<u8>): vector<u8> {
+        let len = vector::length(&hex);
+        assert!(len % 2 == 0, 98); // must be even length
+        let result = vector::empty<u8>();
+        let i = 0;
+        while (i < len) {
+            let hi = hex_char_to_u8(*vector::borrow(&hex, i));
+            let lo = hex_char_to_u8(*vector::borrow(&hex, i + 1));
+            vector::push_back(&mut result, (hi << 4) | lo);
+            i = i + 2;
+        };
+        result
+    }
+
     // ============================================================================
     // INTENT REQUIREMENTS (0x01) TESTS
     // ============================================================================
@@ -642,5 +670,116 @@ module mvmt_intent::gmp_common_tests {
         let encoded = gmp_messages::encode_intent_requirements(&msg);
         let decoded = gmp_messages::decode_intent_requirements(&encoded);
         assert!(*gmp_messages::intent_requirements_solver_addr(&decoded) == zeros(32), 1);
+    }
+
+    // ============================================================================
+    // CROSS-CHAIN ENCODING COMPATIBILITY TESTS
+    // ============================================================================
+    // These tests verify that MVM encoding matches the expected bytes defined in
+    // intent-frameworks/common/testing/gmp-encoding-test-vectors.json. The same bytes must be
+    // produced by SVM to ensure cross-chain compatibility.
+
+    //36. Test: Cross-chain IntentRequirements Encoding
+    //Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+    //Why: Cross-chain GMP requires byte-exact encoding. If MVM produces different bytes
+    //than SVM, messages cannot be decoded correctly on the receiving chain.
+    #[test]
+    fun test_cross_chain_encoding_intent_requirements() {
+        let msg = gmp_messages::new_intent_requirements(
+            test_intent_id(), test_addr_1(), DUMMY_AMOUNT,
+            test_addr_2(), test_addr_3(), DUMMY_EXPIRY,
+        );
+        let encoded = gmp_messages::encode_intent_requirements(&msg);
+        let expected = hex_to_bytes(b"01aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f42403300000000000000000000000000000000000000000000000000000000000044550000000000000000000000000000000000000000000000000000000000006600000000000003e8");
+
+        assert!(vector::length(&encoded) == vector::length(&expected), 1);
+        let i = 0;
+        while (i < vector::length(&encoded)) {
+            assert!(*vector::borrow(&encoded, i) == *vector::borrow(&expected, i), 100 + i);
+            i = i + 1;
+        };
+    }
+
+    //37. Test: Cross-chain EscrowConfirmation Encoding
+    //Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+    //Why: Cross-chain GMP requires byte-exact encoding. If MVM produces different bytes
+    //than SVM, messages cannot be decoded correctly on the receiving chain.
+    #[test]
+    fun test_cross_chain_encoding_escrow_confirmation() {
+        let msg = gmp_messages::new_escrow_confirmation(
+            test_intent_id(), test_addr_1(), DUMMY_AMOUNT,
+            test_addr_2(), test_addr_3(),
+        );
+        let encoded = gmp_messages::encode_escrow_confirmation(&msg);
+        let expected = hex_to_bytes(b"02aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f424033000000000000000000000000000000000000000000000000000000000000445500000000000000000000000000000000000000000000000000000000000066");
+
+        assert!(vector::length(&encoded) == vector::length(&expected), 1);
+        let i = 0;
+        while (i < vector::length(&encoded)) {
+            assert!(*vector::borrow(&encoded, i) == *vector::borrow(&expected, i), 100 + i);
+            i = i + 1;
+        };
+    }
+
+    //38. Test: Cross-chain FulfillmentProof Encoding
+    //Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+    //Why: Cross-chain GMP requires byte-exact encoding. If MVM produces different bytes
+    //than SVM, messages cannot be decoded correctly on the receiving chain.
+    #[test]
+    fun test_cross_chain_encoding_fulfillment_proof() {
+        let msg = gmp_messages::new_fulfillment_proof(
+            test_intent_id(), test_addr_1(), DUMMY_AMOUNT, DUMMY_TIMESTAMP,
+        );
+        let encoded = gmp_messages::encode_fulfillment_proof(&msg);
+        let expected = hex_to_bytes(b"03aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f424000000000000003e8");
+
+        assert!(vector::length(&encoded) == vector::length(&expected), 1);
+        let i = 0;
+        while (i < vector::length(&encoded)) {
+            assert!(*vector::borrow(&encoded, i) == *vector::borrow(&expected, i), 100 + i);
+            i = i + 1;
+        };
+    }
+
+    //39. Test: Cross-chain IntentRequirements Zeros Encoding
+    //Verifies that all-zero values encode correctly across chains.
+    //Why: Boundary test for zero values. Ensures no special-casing or off-by-one errors
+    //when all fields are at their minimum value.
+    #[test]
+    fun test_cross_chain_encoding_intent_requirements_zeros() {
+        let msg = gmp_messages::new_intent_requirements(
+            zeros(32), zeros(32), 0, zeros(32), zeros(32), 0,
+        );
+        let encoded = gmp_messages::encode_intent_requirements(&msg);
+        // Expected: 01 + 144 zero bytes
+        assert!(vector::length(&encoded) == 145, 1);
+        assert!(*vector::borrow(&encoded, 0) == 0x01, 2);
+        let i = 1;
+        while (i < 145) {
+            assert!(*vector::borrow(&encoded, i) == 0x00, 100 + i);
+            i = i + 1;
+        };
+    }
+
+    //40. Test: Cross-chain IntentRequirements Max Values Encoding
+    //Verifies that maximum u64 values encode correctly across chains.
+    //Why: Boundary test for max values. Ensures no overflow, sign-extension, or
+    //truncation errors when all fields are at their maximum value.
+    #[test]
+    fun test_cross_chain_encoding_intent_requirements_max() {
+        let max_u64: u64 = 18446744073709551615;
+        let ff32 = repeat(0xFF, 32);
+        let msg = gmp_messages::new_intent_requirements(
+            copy ff32, copy ff32, max_u64, copy ff32, copy ff32, max_u64,
+        );
+        let encoded = gmp_messages::encode_intent_requirements(&msg);
+        // Expected: 01 + 144 0xFF bytes
+        assert!(vector::length(&encoded) == 145, 1);
+        assert!(*vector::borrow(&encoded, 0) == 0x01, 2);
+        let i = 1;
+        while (i < 145) {
+            assert!(*vector::borrow(&encoded, i) == 0xFF, 100 + i);
+            i = i + 1;
+        };
     }
 }

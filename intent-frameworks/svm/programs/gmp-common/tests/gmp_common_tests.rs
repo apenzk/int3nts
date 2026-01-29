@@ -8,6 +8,10 @@ const DUMMY_AMOUNT: u64 = 1_000_000;
 const DUMMY_EXPIRY: u64 = 1000;
 const DUMMY_TIMESTAMP: u64 = 1000;
 
+fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
 // Test vectors — known inputs with hand-computed expected bytes.
 // These same vectors should be used by MVM tests (Commit 6) to verify
 // cross-chain encoding compatibility.
@@ -798,4 +802,153 @@ fn test_zero_solver_addr_means_any() {
     };
     let decoded = IntentRequirements::decode(&msg.encode()).unwrap();
     assert_eq!(decoded.solver_addr, [0u8; 32]);
+}
+
+// ============================================================================
+// CROSS-CHAIN ENCODING COMPATIBILITY TESTS
+// ============================================================================
+// These tests verify that SVM encoding matches the expected bytes defined in
+// intent-frameworks/common/testing/gmp-encoding-test-vectors.json. The same bytes must be
+// produced by MVM to ensure cross-chain compatibility.
+
+/// 36. Test: Cross-chain IntentRequirements Encoding
+/// Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+/// Why: Cross-chain GMP requires byte-exact encoding. If SVM produces different bytes
+/// than MVM, messages cannot be decoded correctly on the receiving chain.
+#[test]
+fn test_cross_chain_encoding_intent_requirements() {
+    let msg = IntentRequirements {
+        intent_id: test_intent_id(),
+        requester_addr: test_addr_1(),
+        amount_required: DUMMY_AMOUNT,
+        token_addr: test_addr_2(),
+        solver_addr: test_addr_3(),
+        expiry: DUMMY_EXPIRY,
+    };
+    let encoded = msg.encode();
+    let hex = bytes_to_hex(&encoded);
+
+    // Expected from gmp-encoding-test-vectors.json "intent_requirements_standard"
+    // 01 + intent_id(32) + requester(32) + amount(8) + token(32) + solver(32) + expiry(8) = 145 bytes
+    let expected = "01aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f42403300000000000000000000000000000000000000000000000000000000000044550000000000000000000000000000000000000000000000000000000000006600000000000003e8";
+
+    assert_eq!(
+        hex, expected,
+        "IntentRequirements encoding mismatch!\nGot:      {}\nExpected: {}",
+        hex, expected
+    );
+    println!("IntentRequirements encoding matches expected: {} bytes", encoded.len());
+}
+
+/// 37. Test: Cross-chain EscrowConfirmation Encoding
+/// Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+/// Why: Cross-chain GMP requires byte-exact encoding. If SVM produces different bytes
+/// than MVM, messages cannot be decoded correctly on the receiving chain.
+#[test]
+fn test_cross_chain_encoding_escrow_confirmation() {
+    let msg = EscrowConfirmation {
+        intent_id: test_intent_id(),
+        escrow_id: test_addr_1(),
+        amount_escrowed: DUMMY_AMOUNT,
+        token_addr: test_addr_2(),
+        creator_addr: test_addr_3(),
+    };
+    let encoded = msg.encode();
+    let hex = bytes_to_hex(&encoded);
+
+    // Expected from gmp-encoding-test-vectors.json "escrow_confirmation_standard"
+    // 02 + intent_id(32) + escrow_id(32) + amount(8) + token(32) + creator(32) = 137 bytes
+    let expected = "02aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f424033000000000000000000000000000000000000000000000000000000000000445500000000000000000000000000000000000000000000000000000000000066";
+
+    assert_eq!(
+        hex, expected,
+        "EscrowConfirmation encoding mismatch!\nGot:      {}\nExpected: {}",
+        hex, expected
+    );
+    println!("EscrowConfirmation encoding matches expected: {} bytes", encoded.len());
+}
+
+/// 38. Test: Cross-chain FulfillmentProof Encoding
+/// Verifies that encoding produces bytes identical to gmp-encoding-test-vectors.json.
+/// Why: Cross-chain GMP requires byte-exact encoding. If SVM produces different bytes
+/// than MVM, messages cannot be decoded correctly on the receiving chain.
+#[test]
+fn test_cross_chain_encoding_fulfillment_proof() {
+    let msg = FulfillmentProof {
+        intent_id: test_intent_id(),
+        solver_addr: test_addr_1(),
+        amount_fulfilled: DUMMY_AMOUNT,
+        timestamp: DUMMY_TIMESTAMP,
+    };
+    let encoded = msg.encode();
+    let hex = bytes_to_hex(&encoded);
+
+    // Expected from gmp-encoding-test-vectors.json "fulfillment_proof_standard"
+    // 03 + intent_id(32) + solver(32) + amount(8) + timestamp(8) = 81 bytes
+    let expected = "03aa000000000000000000000000000000000000000000000000000000000000bb110000000000000000000000000000000000000000000000000000000000002200000000000f424000000000000003e8";
+
+    assert_eq!(
+        hex, expected,
+        "FulfillmentProof encoding mismatch!\nGot:      {}\nExpected: {}",
+        hex, expected
+    );
+    println!("FulfillmentProof encoding matches expected: {} bytes", encoded.len());
+}
+
+/// 39. Test: Cross-chain IntentRequirements Zeros Encoding
+/// Verifies that all-zero values encode correctly across chains.
+/// Why: Boundary test for zero values. Ensures no special-casing or off-by-one errors
+/// when all fields are at their minimum value.
+#[test]
+fn test_cross_chain_encoding_intent_requirements_zeros() {
+    let msg = IntentRequirements {
+        intent_id: [0u8; 32],
+        requester_addr: [0u8; 32],
+        amount_required: 0,
+        token_addr: [0u8; 32],
+        solver_addr: [0u8; 32],
+        expiry: 0,
+    };
+    let encoded = msg.encode();
+    let hex = bytes_to_hex(&encoded);
+
+    // Expected from gmp-encoding-test-vectors.json "intent_requirements_zeros"
+    // 01 + 144 zero bytes = 145 bytes = 290 hex chars
+    let expected = "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+    assert_eq!(
+        hex, expected,
+        "IntentRequirements zeros encoding mismatch!\nGot:      {}\nExpected: {}",
+        hex, expected
+    );
+    println!("IntentRequirements zeros encoding matches expected: {} bytes", encoded.len());
+}
+
+/// 40. Test: Cross-chain IntentRequirements Max Values Encoding
+/// Verifies that maximum u64 values encode correctly across chains.
+/// Why: Boundary test for max values. Ensures no overflow, sign-extension, or
+/// truncation errors when all fields are at their maximum value.
+#[test]
+fn test_cross_chain_encoding_intent_requirements_max() {
+    let msg = IntentRequirements {
+        intent_id: [0xFF; 32],
+        requester_addr: [0xFF; 32],
+        amount_required: u64::MAX,
+        token_addr: [0xFF; 32],
+        solver_addr: [0xFF; 32],
+        expiry: u64::MAX,
+    };
+    let encoded = msg.encode();
+    let hex = bytes_to_hex(&encoded);
+
+    // Expected from gmp-encoding-test-vectors.json "intent_requirements_max_values"
+    // 01 + 144 0xFF bytes = 145 bytes = 290 hex chars
+    let expected = "01ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+    assert_eq!(
+        hex, expected,
+        "IntentRequirements max values encoding mismatch!\nGot:      {}\nExpected: {}",
+        hex, expected
+    );
+    println!("IntentRequirements max values encoding matches expected: {} bytes", encoded.len());
 }
