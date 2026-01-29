@@ -199,4 +199,3 @@ Applying RPG methodology to the Intent Framework architecture provides:
 ## References
 
 - RPG methodology principles from Microsoft Research
-- Task Master RPG template: `.taskmaster/templates/example_prd_rpg.txt`

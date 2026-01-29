@@ -4,7 +4,7 @@
 
 ## Document Scope
 
-This document specifies **requirements** for the Intent Framework—what the system must support and how it should behave. It focuses on requirements not covered in the other taskmaster architecture documents:
+This document specifies **requirements** for the Intent Framework—what the system must support and how it should behave. It focuses on requirements not covered in the other architecture documents:
 
 - **[Section 2: Functional Requirements](#2-functional-requirements)** - High-level functional capabilities the system must support.
 

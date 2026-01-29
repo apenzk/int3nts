@@ -1,11 +1,4 @@
----
-description: Intent Framework project architecture, patterns, and coding standards
-alwaysApply: true
----
-
 # Intent Framework Project Rules
-
-For guidance on how to write rules, see [Cursor Rules Documentation](https://cursor.com/docs/context/rules).
 
 ## Commit Message Conventions
 
@@ -46,48 +39,19 @@ git commit -m "<type of change>: <description>
 - Do NOT mention subtask or task IDs in commit messages
 - Do NOT advertise AI tools in commits - no AI/Claude/LLM references, "Co-Authored-By" phrases, or similar
 
-### Test Count Commands
+### Test Commands
 
-Get test counts for all components and display in a summary table:
+Run all tests with summary:
 
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-This script runs all tests and displays a summary table with passed/failed counts for each component.
-
-Individual component commands:
-
-```bash
-# Coordinator tests
-RUST_LOG=off nix develop ./nix -c bash -c "cd coordinator && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
-
-# Trusted-GMP tests
-RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
-
-# Move tests
-nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1 | grep "Total tests:"
-
-# Solver tests
-RUST_LOG=off nix develop ./nix -c bash -c "cd solver && cargo test --quiet" 2>&1 | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum}'
-
-# EVM tests
-nix develop ./nix -c bash -c "cd intent-frameworks/evm && npm install && npm test" 2>&1 | grep -oE "[0-9]+ passing" | awk '{print $1}'
-
-# Frontend tests
-nix develop ./nix -c bash -c "cd frontend && npm install --legacy-peer-deps && npm test" 2>&1 | grep -oE "Tests[[:space:]]+[0-9]+ passed" | grep -oE "[0-9]+"
-
-# SVM tests
-nix develop ./nix -c bash -c "cd intent-frameworks/svm && ./scripts/test.sh" 2>&1 | grep -oE "[0-9]+ test" | awk '{print $1}'
-```
-
-## Context Requirements
-
-**IMPORTANT:** The root [README.md](README.md) must always be included in context when working on this project. It provides essential project overview, quick start instructions, and links to all major components.
+For individual component commands, see `README.md#testing`.
 
 ## Documentation
 
-For information on how documentation is organized and how to navigate it, see [docs/docs-guide.md](docs/docs-guide.md).
+See `docs/docs-guide.md` for documentation organization.
 
 ### Markdown Style Guidelines
 
@@ -105,44 +69,23 @@ These rules ensure consistent formatting and prevent linting errors. Always chec
 
 This is a cross-chain intent framework enabling conditional asset transfers across blockchain networks. The system supports both **inflow** (tokens locked on connected chain, desired on hub) and **outflow** (tokens locked on hub, desired on connected chain) flows.
 
-For comprehensive architecture documentation, see `.taskmaster/docs/` - includes component-to-domain mapping, domain boundaries, data models, and use cases.
-
 --------------------------------------------------------------------------------
 
 ## Code Organization
 
-### Move/Aptos Contracts
-
-See [Move Intent Framework Documentation](docs/intent-frameworks/mvm/README.md) for API reference, technical overview, and oracle-guarded intents. Planned cross-chain functions documented in [Implementation Plan](.taskmaster/implementplan.md).
-
-### EVM/Solidity Contracts
-
-See [EVM Intent Framework README](docs/intent-frameworks/evm/README.md) for contract interface and usage. Outflow transaction format documented in [Implementation Plan](.taskmaster/implementplan.md#scenario-b-evm-connected-chain).
-
-### SVM/Solana Program
-
-See [SVM Intent Framework README](docs/intent-frameworks/svm/README.md) for Solana escrow program structure and usage.
-
-### Rust Services
-
-See [Coordinator](docs/coordinator/README.md), [Trusted-GMP](docs/trusted-gmp/README.md), and [Solver](docs/solver/README.md) for service architecture and implementation details.
-
-### Testing Infrastructure
-
-See [Testing Infrastructure README](docs/testing-infra/README.md) for E2E test structure and utilities.
-
---------------------------------------------------------------------------------
-
-## Coding Standards
-
-See [`.cursor/codestandards.md`](.cursor/codestandards.md) for language-specific coding standards and conventions.
+- **MVM/Move**: `docs/intent-frameworks/mvm/README.md`
+- **EVM/Solidity**: `docs/intent-frameworks/evm/README.md`
+- **SVM/Solana**: `docs/intent-frameworks/svm/README.md`
+- **Rust services**: `docs/coordinator/`, `docs/trusted-gmp/`, `docs/solver/`
+- **Testing**: `docs/testing-infra/README.md`
+- **Coding standards**: `docs/codestandards.md`
 
 --------------------------------------------------------------------------------
 
 ## Documentation Standards
 
 - **Location**: `docs/` directory
-- **Structure**: Each major component has its own README.md
+- **Structure**: Each major component has its own README
 - **API docs**: Use code comments that can be extracted to API reference
 - **Architecture docs**: Use mermaid diagrams for visual representation
 

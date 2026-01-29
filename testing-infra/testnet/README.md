@@ -121,5 +121,3 @@ All scripts read from:
 - `trusted-gmp/config/trusted-gmp_testnet.toml` - Trusted GMP service config (gitignored)
 - `solver/config/solver_testnet.toml` - Solver service config (gitignored)
 - `config/testnet-assets.toml` - Public asset addresses and decimals
-
-See `.taskmaster/tasks/TESTNET_DEPLOYMENT_PLAN.md` for detailed deployment instructions.
