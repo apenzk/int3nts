@@ -241,19 +241,29 @@
 
 ---
 
-### Commit 9: Add hub intent GMP interface (MVM)
+### Commit 9: Add intent GMP interface (MVM)
 
 **Files:**
 
-- `intent-frameworks/mvm/sources/interfaces/intent_gmp.move`
+- `intent-frameworks/mvm/sources/interfaces/intent_gmp_hub.move`
+- `intent-frameworks/mvm/sources/interfaces/outflow_validator.move`
+- `intent-frameworks/mvm/tests/intent_gmp_tests.move`
+- `intent-frameworks/mvm/tests/interface_tests.move`
 
 **Tasks:**
 
-- [ ] Define `send_intent_requirements()` function signature (GMP outbound)
-- [ ] Define `receive_escrow_confirmation()` function signature (GMP inbound)
-- [ ] Define `send_fulfillment_proof()` function signature (GMP outbound)
-- [ ] Define `receive_fulfillment_proof()` function signature (GMP inbound)
-- [ ] Add stub implementations
+Hub functions (MVM as hub):
+
+- [x] Define `send_intent_requirements()` function signature (GMP outbound)
+- [x] Define `receive_escrow_confirmation()` function signature (GMP inbound)
+- [x] Define `send_fulfillment_proof()` function signature (GMP outbound)
+- [x] Define `receive_fulfillment_proof()` function signature (GMP inbound)
+
+Connected chain functions (MVM as connected chain):
+
+- [x] Define `receive_intent_requirements()` function signature (GMP inbound, mirrors SVM outflow-validator)
+- [x] Add stub implementations
+- [x] Add unit tests for all functions
 
 **Test:**
 

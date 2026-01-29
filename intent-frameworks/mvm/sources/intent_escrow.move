@@ -10,7 +10,7 @@
 /// The approver acts as a trusted entity that approves or rejects escrow conditions.
 /// Approver provides approval_value: 1 = approve, 0 = reject
 ///
-module mvmt_intent::intent_as_escrow {
+module mvmt_intent::intent_escrow {
     use std::option::{Self as option};
     use std::signer;
     use aptos_framework::fungible_asset::{Self, FungibleAsset, Metadata};

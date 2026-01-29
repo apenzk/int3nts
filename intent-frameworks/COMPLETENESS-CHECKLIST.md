@@ -2,14 +2,14 @@
 
 > **⚠️ IMPORTANT: When adding a new framework, ensure maximal completeness by implementing all tests listed below.**
 
-This document tracks test alignment status for VM intent framework contracts (EVM/SVM). For the complete overview and other frameworks, see the [Framework Extension Guide](../docs/intent-frameworks/framework-extension-guide.md#test-alignment-reference).
+This document tracks test alignment status for VM intent framework contracts (EVM/SVM/MVM). For the complete overview and other frameworks, see the [Framework Extension Guide](../docs/intent-frameworks/framework-extension-guide.md#test-alignment-reference).
 
 All tests listed here are VM-specific; generic tests are intentionally excluded because they are not relevant when integrating a new VM.
 
 Escrow test alignment for VM intent framework contracts:
 
 - `intent-frameworks/evm/test/`
-- `intent-frameworks/svm/programs/intent_escrow/tests/`
+- `intent-frameworks/svm/programs/intent-escrow/tests/`
 
 Each test file uses independent numbering starting from 1. At the end of the implementation, check that all tests are numbered correctly and match the list below.
 
@@ -37,11 +37,13 @@ Each test file uses independent numbering starting from 1. At the end of the imp
 
 | # | Test | EVM | SVM |
 | --- | ------ | ----- | ----- |
-| 1 | Should allow solver to claim with valid approver signature | ✅ | ✅ |
-| 2 | Should revert with invalid signature | ✅ | ✅ |
-| 3 | Should prevent signature replay across different intent_ids | ✅ | ✅ |
+| 1 | Should allow solver to claim with valid approver signature (EVM) / fulfillment proof (SVM) | ✅ | ✅ |
+| 2 | Should revert with invalid signature (EVM) / without requirements (SVM) | ✅ | ✅ |
+| 3 | Should prevent signature replay (EVM) / double fulfillment (SVM) | ✅ | ✅ |
 | 4 | Should revert if escrow already claimed | ✅ | ✅ |
 | 5 | Should revert if escrow does not exist | ✅ | ✅ |
+
+> **Note:** SVM uses GMP-based claim via `LzReceiveFulfillmentProof` instruction. EVM uses signature-based claim.
 
 ## cancel.test.js / cancel.rs
 
@@ -59,7 +61,9 @@ Each test file uses independent numbering starting from 1. At the end of the imp
 | --- | ------ | ----- | ----- |
 | 1 | Should allow requester to cancel expired escrow | ✅ | ✅ |
 | 2 | Should verify expiry timestamp is stored correctly | ✅ | ✅ |
-| 3 | Should prevent claim on expired escrow | ✅ | ✅ |
+| 3 | Should prevent claim on expired escrow (EVM) / allow GMP fulfillment after local expiry (SVM) | ✅ | ✅ |
+
+> **Note:** SVM honors GMP fulfillment proofs regardless of local expiry (hub is source of truth). Local expiry only affects cancel operation.
 
 ## cross-chain.test.js / cross_chain.rs
 
@@ -109,7 +113,7 @@ Each test file uses independent numbering starting from 1. At the end of the imp
 
 ## GMP message encoding/decoding test alignment
 
-- `intent-frameworks/svm/programs/gmp-common/tests/message_tests.rs`
+- `intent-frameworks/svm/programs/gmp-common/tests/gmp_common_tests.rs`
 - `intent-frameworks/mvm/tests/gmp_common_tests.move`
 - `intent-frameworks/evm/test/gmp-common/`
 
@@ -215,17 +219,18 @@ These tests verify that encoding produces identical bytes across all frameworks.
 
 Outflow validator handles the connected chain side of outflow intents (tokens flow OUT of Movement TO connected chain). The solver fulfills on the connected chain, and the validator sends proof back to the hub.
 
-- `intent-frameworks/svm/programs/outflow-validator/tests/`
+- `intent-frameworks/svm/programs/outflow-validator/tests/interface_tests.rs`
+- `intent-frameworks/mvm/tests/interface_tests.move`
 - `intent-frameworks/evm/test/outflow-validator/` (future)
 
-### interface_tests.rs / interface.test.js
+### interface_tests.rs / interface_tests.move / interface.test.js
 
-| # | Test | SVM | EVM |
-| --- | --- | --- | --- |
-| 1 | test_initialize_instruction_roundtrip | ✅ | ⚠️ |
-| 2 | test_lz_receive_instruction_roundtrip | ✅ | ⚠️ |
-| 3 | test_fulfill_intent_instruction_roundtrip | ✅ | ⚠️ |
-| 4 | test_intent_requirements_account_roundtrip | ✅ | ⚠️ |
-| 5 | test_config_account_roundtrip | ✅ | ⚠️ |
-| 6 | test_error_conversion | ✅ | ⚠️ |
-| 7 | test_error_codes_unique | ✅ | ⚠️ |
+| # | Test | SVM | MVM | EVM |
+| --- | --- | --- | --- | --- |
+| 1 | test_initialize_instruction_roundtrip | ✅ | N/A | ⚠️ |
+| 2 | test_lz_receive_instruction_roundtrip | ✅ | ✅ | ⚠️ |
+| 3 | test_fulfill_intent_instruction_roundtrip | ✅ | ⚠️ | ⚠️ |
+| 4 | test_intent_requirements_account_roundtrip | ✅ | N/A | ⚠️ |
+| 5 | test_config_account_roundtrip | ✅ | N/A | ⚠️ |
+| 6 | test_error_conversion | ✅ | N/A | ⚠️ |
+| 7 | test_error_codes_unique | ✅ | N/A | ⚠️ |

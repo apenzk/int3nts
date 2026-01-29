@@ -1,10 +1,10 @@
 #[test_only]
-module mvmt_intent::intent_as_escrow_tests {
+module mvmt_intent::intent_escrow_tests {
     use std::signer;
     use std::bcs;
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
-    use mvmt_intent::intent_as_escrow;
+    use mvmt_intent::intent_escrow;
     use mvmt_intent::fa_intent_with_oracle;
     use mvmt_intent::test_utils;
     use mvmt_intent::intent_reservation;
@@ -43,7 +43,7 @@ module mvmt_intent::intent_as_escrow_tests {
         // Requester creates escrow (must specify reserved solver)
         let offered_asset = primary_fungible_store::withdraw(user, offered_token_type, 50);
         let reservation = intent_reservation::new_reservation(signer::address_of(solver));
-        let escrow_intent = intent_as_escrow::create_escrow(
+        let escrow_intent = intent_escrow::create_escrow(
             user,
             offered_asset,
             2, // offered_chain_id: connected chain where escrow is created
@@ -55,7 +55,7 @@ module mvmt_intent::intent_as_escrow_tests {
         );
         
         // Solver starts escrow session
-        let (escrowed_asset, session) = intent_as_escrow::start_escrow_session(solver, escrow_intent);
+        let (escrowed_asset, session) = intent_escrow::start_escrow_session(solver, escrow_intent);
         primary_fungible_store::deposit(signer::address_of(solver), escrowed_asset);
         
         // Trusted GMP signs the intent_id - the signature itself is the approval
@@ -64,7 +64,7 @@ module mvmt_intent::intent_as_escrow_tests {
 
         // Solver provides payment (source token type)
         let solver_payment = primary_fungible_store::withdraw(solver, offered_token_type, 50);
-        intent_as_escrow::complete_escrow(
+        intent_escrow::complete_escrow(
             solver,
             session,
             solver_payment,
@@ -106,7 +106,7 @@ module mvmt_intent::intent_as_escrow_tests {
         // Create escrow with intent_id = @0x1
         let offered_asset = primary_fungible_store::withdraw(user, offered_token_type, 50);
         let reservation = intent_reservation::new_reservation(signer::address_of(solver));
-        let escrow_intent = intent_as_escrow::create_escrow(
+        let escrow_intent = intent_escrow::create_escrow(
             user,
             offered_asset,
             2, // offered_chain_id: connected chain where escrow is created
@@ -117,7 +117,7 @@ module mvmt_intent::intent_as_escrow_tests {
             1, // desired_chain_id: hub chain where tokens are desired
         );
         
-        let (escrowed_asset, session) = intent_as_escrow::start_escrow_session(solver, escrow_intent);
+        let (escrowed_asset, session) = intent_escrow::start_escrow_session(solver, escrow_intent);
         primary_fungible_store::deposit(signer::address_of(solver), escrowed_asset);
         
         // Trusted GMP signs a DIFFERENT intent_id (@0x2) instead of the escrow's intent_id (@0x1)
@@ -127,7 +127,7 @@ module mvmt_intent::intent_as_escrow_tests {
 
         // This should abort because signature was created for wrong intent_id
         let solver_payment = primary_fungible_store::withdraw(solver, offered_token_type, 50);
-        intent_as_escrow::complete_escrow(
+        intent_escrow::complete_escrow(
             solver,
             session,
             solver_payment,
@@ -164,7 +164,7 @@ module mvmt_intent::intent_as_escrow_tests {
         // Create escrow A with intent_id = @0x1
         let offered_asset_a = primary_fungible_store::withdraw(user, offered_token_type, 30);
         let reservation_a = intent_reservation::new_reservation(signer::address_of(solver));
-        let _escrow_intent_a = intent_as_escrow::create_escrow(
+        let _escrow_intent_a = intent_escrow::create_escrow(
             user,
             offered_asset_a,
             2, // offered_chain_id: connected chain where escrow is created
@@ -178,7 +178,7 @@ module mvmt_intent::intent_as_escrow_tests {
         // Create escrow B with intent_id = @0x2
         let offered_asset_b = primary_fungible_store::withdraw(user, offered_token_type, 30);
         let reservation_b = intent_reservation::new_reservation(signer::address_of(solver));
-        let escrow_intent_b = intent_as_escrow::create_escrow(
+        let escrow_intent_b = intent_escrow::create_escrow(
             user,
             offered_asset_b,
             2, // offered_chain_id: connected chain where escrow is created
@@ -190,7 +190,7 @@ module mvmt_intent::intent_as_escrow_tests {
         );
         
         // Start escrow session for escrow B
-        let (escrowed_asset_b, session_b) = intent_as_escrow::start_escrow_session(solver, escrow_intent_b);
+        let (escrowed_asset_b, session_b) = intent_escrow::start_escrow_session(solver, escrow_intent_b);
         primary_fungible_store::deposit(signer::address_of(solver), escrowed_asset_b);
         
         // Trusted GMP creates a VALID signature for intent_id @0x1 (escrow A)
@@ -200,7 +200,7 @@ module mvmt_intent::intent_as_escrow_tests {
         // Try to use the signature for intent_id @0x1 on escrow B (which has intent_id @0x2)
         // This should fail because the signature is bound to @0x1, not @0x2
         let solver_payment = primary_fungible_store::withdraw(solver, offered_token_type, 30);
-        intent_as_escrow::complete_escrow(
+        intent_escrow::complete_escrow(
             solver,
             session_b,
             solver_payment,
@@ -231,7 +231,7 @@ module mvmt_intent::intent_as_escrow_tests {
         
         let offered_asset = primary_fungible_store::withdraw(user, offered_token_type, 50);
         let reservation = intent_reservation::new_reservation(signer::address_of(solver));
-        let escrow_intent = intent_as_escrow::create_escrow(
+        let escrow_intent = intent_escrow::create_escrow(
             user,
             offered_asset,
             2, // offered_chain_id: connected chain where escrow is created
@@ -271,7 +271,7 @@ module mvmt_intent::intent_as_escrow_tests {
         let approver_public_key_bytes = ed25519::unvalidated_public_key_to_bytes(&approver_public_key);
         
         // Test the wrapper function: create escrow from FA (must specify reserved solver)
-        mvmt_intent::intent_as_escrow_entry::create_escrow_from_fa(
+        mvmt_intent::intent_escrow_entry::create_escrow_from_fa(
             user,
             fa_metadata,
             50,

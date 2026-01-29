@@ -1,9 +1,9 @@
-module mvmt_intent::intent_as_escrow_entry {
+module mvmt_intent::intent_escrow_entry {
     use std::signer;
     use aptos_framework::primary_fungible_store;
     use aptos_framework::object::Object;
     use aptos_framework::fungible_asset::{Self as fungible_asset, FungibleAsset};
-    use mvmt_intent::intent_as_escrow::{Self, start_escrow_session, complete_escrow};
+    use mvmt_intent::intent_escrow::{Self, start_escrow_session, complete_escrow};
     use mvmt_intent::intent::Intent;
     use mvmt_intent::fa_intent_with_oracle;
     use aptos_std::ed25519;
@@ -49,7 +49,7 @@ module mvmt_intent::intent_as_escrow_entry {
         let reservation = intent_reservation::new_reservation(reserved_solver);
 
         // Call the general escrow creation function
-        intent_as_escrow::create_escrow(requester_signer, fa, offered_chain_id, oracle_pk, expiry_time, intent_id, reservation, desired_chain_id);
+        intent_escrow::create_escrow(requester_signer, fa, offered_chain_id, oracle_pk, expiry_time, intent_id, reservation, desired_chain_id);
     }
 
     /// CLI-friendly wrapper for completing escrow with any fungible asset.

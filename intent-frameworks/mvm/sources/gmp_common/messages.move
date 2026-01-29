@@ -2,7 +2,7 @@
 ///
 /// All messages use fixed-width fields, big-endian integers, and 32-byte addresses.
 /// No serialization library — plain bytes readable by Move, Rust, and Solidity.
-module mvmt_intent::gmp_messages {
+module mvmt_intent::gmp_common {
     use std::vector;
 
     // ============================================================================
