@@ -1,4 +1,4 @@
-# Phase 5: Integration & Documentation (2-3 days)
+# Phase 5: Integration & Documentation (1-2 days)
 
 **Status:** Not Started
 **Depends On:** Phase 4
@@ -86,7 +86,32 @@
 
 ---
 
-### Commit 4: Add GMP integration documentation
+### Commit 4: Add fee estimation and endpoint configuration
+
+**Files:**
+
+- `docs/architecture/plan/gmp-endpoints.md`
+- `docs/architecture/plan/gmp-fee-analysis.md`
+
+**Tasks:**
+
+- [ ] Document all GMP endpoint addresses (LZ for Solana and Movement, local for testing)
+- [ ] Document environment configuration (local/CI uses native GMP endpoints, testnet/mainnet use LZ)
+- [ ] Estimate LZ message fees for each route
+- [ ] Estimate on-chain validation gas costs
+- [ ] Compare costs to current Trusted GMP system
+
+**Test:**
+
+```bash
+# Documentation review - manual
+```
+
+> ⚠️ **Documentation review before proceeding to Commit 5.**
+
+---
+
+### Commit 5: Add GMP integration documentation
 
 **Files:**
 
@@ -110,11 +135,11 @@
 # Documentation review - manual
 ```
 
-> ⚠️ **CI e2e tests must pass before proceeding to Commit 5.**
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 6.**
 
 ---
 
-### Commit 5: Final cleanup and verification
+### Commit 6: Final cleanup and verification
 
 **Files:**
 
@@ -142,7 +167,7 @@ test ! -d verifier && echo "OK: coordinator + trusted-gmp only"
 grep -r "private_key\|secret_key\|signing_key" coordinator/ && exit 1 || echo "OK: coordinator has no keys"
 ```
 
-> ⚠️ **CI e2e tests must pass before Phase 5 is complete.**
+> ⚠️ **CI e2e tests must pass before Phase 5 is complete (6 commits total).**
 
 ---
 
@@ -173,10 +198,11 @@ At the end of Phase 5, update:
 
 ## Exit Criteria
 
-- [ ] All 5 commits merged to feature branch
+- [ ] All 6 commits merged to feature branch
 - [ ] Frontend shows GMP status correctly
 - [ ] Solver uses validation contracts (GMP flow only)
 - [ ] Full cross-chain testnet integration passes
 - [ ] Documentation complete
+- [ ] Fee analysis complete (deferred from Phase 1)
 - [ ] Architecture confirmed: coordinator + trusted-gmp only (no monolithic signer)
 - [ ] All conception documents reviewed and updated

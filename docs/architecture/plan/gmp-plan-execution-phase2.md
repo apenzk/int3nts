@@ -1,4 +1,4 @@
-# Phase 2: SVM + MVM Core Implementation (5-7 days)
+# Phase 2: SVM + MVM Core Implementation (2-3 days)
 
 **Status:** Not Started
 **Depends On:** Phase 1
@@ -12,22 +12,22 @@
 
 > 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
 
-### Commit 1: Implement MockLayerZeroEndpoint for Solana
+### Commit 1: Implement native GMP endpoint for Solana
 
 **Files:**
 
-- `intent-frameworks/svm/programs/mock-lz-endpoint/src/lib.rs`
-- `intent-frameworks/svm/programs/mock-lz-endpoint/tests/mock_tests.rs`
+- `intent-frameworks/svm/programs/native-gmp-endpoint/src/lib.rs` (already exists from Phase 1, extend)
+- `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs`
 
 **Tasks:**
 
-- [ ] Implement `send` instruction that emits `MessageSent` event (no actual cross-chain)
-- [ ] Implement `deliver_message` instruction for simulator to inject messages
+- [ ] Extend `Send` instruction to track nonces and emit structured `MessageSent` event
+- [ ] Extend `DeliverMessage` instruction to CPI into destination program's receive handler
 - [ ] Implement trusted remote verification via PDA
-- [ ] Track message nonces for realistic behavior
-- [ ] Test `send` emits correct event with payload
-- [ ] Test `deliver_message` calls receiver's `lz_receive`
-- [ ] Test nonce tracking works correctly
+- [ ] Add relay authorization checks
+- [ ] Test `Send` emits correct event with payload
+- [ ] Test `DeliverMessage` calls receiver's handler
+- [ ] Test nonce tracking and replay protection
 
 **Test:**
 
@@ -39,23 +39,21 @@
 
 ---
 
-### Commit 2: Add LayerZero OApp base for Movement (MVM)
+### Commit 2: Extend native GMP endpoint for Movement (MVM)
 
 **Files:**
 
-- `intent-frameworks/mvm/sources/layerzero/oapp.move`
-- `intent-frameworks/mvm/sources/layerzero/endpoint.move`
-- `intent-frameworks/mvm/sources/mocks/mock_lz_endpoint.move`
-- `intent-frameworks/mvm/tests/layerzero_tests.move`
+- `intent-frameworks/mvm/sources/gmp/native_gmp_endpoint.move` (already exists from Phase 1, extend)
+- `intent-frameworks/mvm/tests/native_gmp_endpoint_tests.move`
 
 **Tasks:**
 
-- [ ] Port LayerZero OApp pattern to Move
-- [ ] Implement `lz_receive()` entry function
-- [ ] Implement `lz_send()` internal function
-- [ ] Implement trusted remote verification
-- [ ] Implement mock endpoint for testing
-- [ ] Test send/receive with mock endpoint
+- [ ] Extend `native_gmp_endpoint` with CPI to destination module's receive handler
+- [ ] Add trusted remote verification (source chain + address validation)
+- [ ] Add replay protection with nonce tracking per source
+- [ ] Implement message routing based on payload type
+- [ ] Test send/receive flow end-to-end
+- [ ] Test relay authorization and replay protection
 
 **Test:**
 
@@ -71,12 +69,12 @@
 
 **Files:**
 
-- `intent-frameworks/svm/programs/outflow-validator/src/lib.rs`
+- `intent-frameworks/svm/programs/outflow-validator/src/lib.rs` (already exists from Phase 1, implement)
 - `intent-frameworks/svm/programs/outflow-validator/tests/validator_tests.rs`
 
 **Tasks:**
 
-- [ ] Implement LayerZero OApp pattern in native Solana Rust
+- [ ] Implement GMP receive handler for native GMP endpoint
 - [ ] Implement `lz_receive` to receive intent requirements from hub
 - [ ] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [ ] **If requirements already exist → ignore duplicate message (idempotent)**
@@ -109,7 +107,7 @@
 
 **Tasks:**
 
-- [ ] Implement LayerZero OApp pattern in native Solana Rust
+- [ ] Implement GMP receive handler for native GMP endpoint
 - [ ] Implement `lz_receive` for intent requirements from hub
 - [ ] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [ ] **If requirements already exist → ignore duplicate message (idempotent)**
@@ -158,21 +156,21 @@
 
 ---
 
-### Commit 6: Implement LayerZero simulator in trusted-gmp
+### Commit 6: Implement native GMP relay in trusted-gmp
 
 **Files:**
 
-- `trusted-gmp/src/layerzero_simulator.rs`
+- `trusted-gmp/src/native_gmp_relay.rs`
 - `trusted-gmp/src/main.rs`
-- `trusted-gmp/tests/simulator_tests.rs`
+- `trusted-gmp/tests/relay_tests.rs`
 
 **Tasks:**
 
-- [ ] Add `LayerZeroSimulator` struct
-- [ ] Watch for `MessageSent` events on MVM and SVM
-- [ ] Deliver messages by calling `lzReceive` / `deliver_message`
-- [ ] Support configurable chain RPCs and mock endpoints
-- [ ] Integrate into trusted-gmp binary as `--mode simulator`
+- [ ] Add `NativeGmpRelay` struct
+- [ ] Watch for `MessageSent` events on MVM and SVM native GMP endpoints
+- [ ] Deliver messages by calling `deliver_message` on destination chain
+- [ ] Support configurable chain RPCs and endpoint addresses
+- [ ] Integrate into trusted-gmp binary as `--mode native-gmp-relay`
 - [ ] Test event parsing and message delivery
 
 **Test:**
@@ -185,83 +183,103 @@
 
 ---
 
-### Commit 7: Add cross-chain E2E test: MVM ↔ SVM outflow
+### Commit 7: Fix existing E2E tests for GMP: MVM ↔ MVM
 
 **Files:**
 
-- `testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-outflow.sh`
-- `testing-infra/ci-e2e/e2e-tests-gmp/test-helpers.sh`
+- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
 
 **Tasks:**
 
-- [ ] Set up test environment with mock endpoints on both chains
-- [ ] Start LayerZero simulator in background
-- [ ] Create intent on MVM hub
-- [ ] Verify requirements message sent to SVM
-- [ ] Solver validates on SVM
-- [ ] Verify success message sent back to MVM
-- [ ] Verify intent completes on MVM
+- [ ] Update MVM e2e test environment to use native GMP endpoints
+- [ ] Start native GMP relay in background during tests
+- [ ] Update `run-tests-outflow.sh` to use GMP flow
+- [ ] Update `run-tests-inflow.sh` to use GMP flow
+- [ ] Verify GMP messages are sent and received correctly (MVM hub ↔ MVM connected)
+- [ ] Ensure existing test assertions still pass
 
 **Test:**
 
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 
-# Run GMP e2e test
-./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-outflow.sh
+# Run MVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-outflow.sh
+./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-inflow.sh
 ```
 
 > ⚠️ **CI e2e tests must pass before proceeding to Commit 8.**
 
 ---
 
-### Commit 8: Add cross-chain E2E test: MVM ↔ SVM inflow
+### Commit 8: Fix existing E2E tests for GMP: MVM ↔ SVM outflow
 
 **Files:**
 
-- `testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-inflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-svm/` (update existing)
 
 **Tasks:**
 
-- [ ] Create intent on MVM hub (inflow type)
-- [ ] Verify requirements message sent to SVM
-- [ ] Requester creates escrow on SVM
-- [ ] Verify escrow confirmation sent back to MVM
-- [ ] Solver fulfills on MVM hub
-- [ ] Verify fulfillment proof sent to SVM
-- [ ] Verify escrow releases on SVM
+- [ ] Update SVM e2e test environment to use native GMP endpoints
+- [ ] Start native GMP relay in background during tests
+- [ ] Update outflow test to use GMP flow (solver calls validation contract)
+- [ ] Verify GMP messages are sent and received correctly
+- [ ] Ensure existing test assertions still pass
 
 **Test:**
 
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 
-# Run GMP e2e test
-./testing-infra/ci-e2e/e2e-tests-gmp/mvm-svm-inflow.sh
+# Run SVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-svm/run-tests-outflow.sh
 ```
 
 > ⚠️ **CI e2e tests must pass before proceeding to Commit 9.**
 
 ---
 
-### Commit 9: Add deployment scripts and deploy to testnets
+### Commit 9: Fix existing E2E tests for GMP: MVM ↔ SVM inflow
 
 **Files:**
 
-- `intent-frameworks/svm/scripts/deploy-outflow-validator.sh`
-- `intent-frameworks/svm/scripts/deploy-escrow-gmp.sh`
-- `intent-frameworks/svm/scripts/configure-trusted-remotes.sh`
-- `docs/architecture/plan/gmp-testnet-deployment.md`
+- `testing-infra/ci-e2e/e2e-tests-svm/` (update existing)
 
 **Tasks:**
 
-- [ ] Script to deploy OutflowValidator to Solana devnet
-- [ ] Script to deploy InflowEscrowGMP to Solana devnet
-- [ ] Script to configure trusted remotes (hub address via PDA)
-- [ ] Deploy MVM GMP modules to Movement testnet
-- [ ] Configure trusted remotes on MVM
-- [ ] Document deployed program/module addresses
-- [ ] Verify cross-chain flow works on testnets (with simulator)
+- [ ] Update inflow test to use GMP flow (escrow receives requirements via GMP)
+- [ ] Verify escrow confirmation GMP message sent back to MVM
+- [ ] Verify fulfillment proof GMP message sent to SVM
+- [ ] Verify escrow auto-releases on fulfillment proof receipt
+- [ ] Ensure existing test assertions still pass
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+
+# Run SVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-svm/run-tests-inflow.sh
+```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 10.**
+
+---
+
+### Commit 10: Update existing deployment scripts for GMP
+
+**Files:**
+
+- `intent-frameworks/svm/scripts/` (update existing deployment scripts)
+- `intent-frameworks/mvm/scripts/` (update existing deployment scripts)
+
+**Tasks:**
+
+- [ ] Update SVM deployment scripts to include GMP programs (OutflowValidator, InflowEscrowGMP)
+- [ ] Update MVM deployment scripts to include GMP modules
+- [ ] Add trusted remote configuration to deployment scripts
+- [ ] Deploy updated contracts/modules to testnets
+- [ ] Verify cross-chain flow works on testnets (with native GMP relay)
 
 **Test:**
 
@@ -289,10 +307,10 @@ solana program show <OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
 
 ## Exit Criteria
 
-- [ ] All 9 commits merged to feature branch
+- [ ] All 10 commits merged to feature branch
 - [ ] SVM programs build and pass unit tests
 - [ ] MVM modules build and pass unit tests
-- [ ] LayerZero simulator works for MVM ↔ SVM
+- [ ] Native GMP relay works for MVM ↔ SVM
 - [ ] Cross-chain E2E tests pass (outflow + inflow)
 - [ ] Programs/modules deployed to testnets
 - [ ] Documentation updated

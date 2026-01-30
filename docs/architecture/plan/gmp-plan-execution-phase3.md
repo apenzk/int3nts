@@ -1,4 +1,4 @@
-# Phase 3: EVM Expansion (3-4 days)
+# Phase 3: EVM Expansion (1-2 days)
 
 **Status:** Not Started
 **Depends On:** Phase 2
@@ -12,21 +12,22 @@
 
 > 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards.
 
-### Commit 1: Implement MockLayerZeroEndpoint for EVM
+### Commit 1: Implement native GMP endpoint for EVM
 
 **Files:**
 
-- `intent-frameworks/evm/contracts/mocks/MockLayerZeroEndpoint.sol`
-- `intent-frameworks/evm/test/MockLayerZeroEndpoint.test.js`
+- `intent-frameworks/evm/contracts/gmp/NativeGmpEndpoint.sol`
+- `intent-frameworks/evm/test/NativeGmpEndpoint.test.js`
 
 **Tasks:**
 
 - [ ] Implement `send()` function that emits `MessageSent` event
-- [ ] Implement `deliverMessage()` for simulator to inject messages
+- [ ] Implement `deliverMessage()` for relay to inject messages
 - [ ] Implement trusted remote verification
-- [ ] Track message nonces
+- [ ] Add relay authorization checks
+- [ ] Track message nonces for replay protection
 - [ ] Test send emits correct event
-- [ ] Test deliverMessage calls receiver's lzReceive
+- [ ] Test deliverMessage calls receiver's receive handler
 
 **Test:**
 
@@ -47,8 +48,8 @@
 
 **Tasks:**
 
-- [ ] Inherit from LayerZero `OApp` base contract (or implement interface)
-- [ ] Implement `lzReceive()` to receive intent requirements from hub
+- [ ] Implement GMP receive handler interface
+- [ ] Implement `receiveMessage()` to receive intent requirements from hub
 - [ ] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [ ] **If requirements already exist → ignore duplicate message (idempotent)**
 - [ ] **If requirements don't exist → store intent requirements** in mapping
@@ -57,7 +58,7 @@
 - [ ] Validate recipient, amount, token match stored requirements
 - [ ] Validate solver matches authorized solver from stored requirements
 - [ ] Forward tokens to user wallet
-- [ ] Send GMP message to hub via `lzSend()`
+- [ ] Send GMP message to hub via native GMP endpoint
 - [ ] Test all validation scenarios
 - [ ] Test `transferFrom()` fails without approval
 - [ ] Test fulfillment fails with unauthorized solver
@@ -81,8 +82,8 @@
 
 **Tasks:**
 
-- [ ] Inherit from LayerZero `OApp` base contract (or implement interface)
-- [ ] Implement `lzReceive()` for intent requirements from hub
+- [ ] Implement GMP receive handler interface
+- [ ] Implement `receiveMessage()` for intent requirements from hub
 - [ ] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [ ] **If requirements already exist → ignore duplicate message (idempotent)**
 - [ ] **If requirements don't exist → store requirements**
@@ -103,12 +104,12 @@
 
 ---
 
-### Commit 4: Update LayerZero simulator to support EVM
+### Commit 4: Update native GMP relay to support EVM
 
 **Files:**
 
-- `trusted-gmp/src/layerzero_simulator.rs`
-- `trusted-gmp/tests/simulator_evm_tests.rs`
+- `trusted-gmp/src/native_gmp_relay.rs`
+- `trusted-gmp/tests/relay_evm_tests.rs`
 
 **Tasks:**
 
@@ -128,21 +129,20 @@
 
 ---
 
-### Commit 5: Add cross-chain E2E test: MVM ↔ EVM outflow
+### Commit 5: Fix existing E2E tests for GMP: MVM ↔ EVM outflow
 
 **Files:**
 
-- `testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-outflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-evm/` (update existing)
+- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
 
 **Tasks:**
 
-- [ ] Set up test environment with mock endpoints on MVM and EVM
-- [ ] Start LayerZero simulator in background
-- [ ] Create intent on MVM hub
-- [ ] Verify requirements message sent to EVM
-- [ ] Solver validates on EVM (approve + fulfillIntent)
-- [ ] Verify success message sent back to MVM
-- [ ] Verify intent completes on MVM
+- [ ] Update test environment to use native GMP endpoints on MVM and EVM
+- [ ] Start native GMP relay in background during tests
+- [ ] Update outflow test to use GMP flow (solver calls validation contract)
+- [ ] Verify GMP messages are sent and received correctly
+- [ ] Ensure existing test assertions still pass
 
 **Test:**
 
@@ -157,21 +157,20 @@
 
 ---
 
-### Commit 6: Add cross-chain E2E test: MVM ↔ EVM inflow
+### Commit 6: Fix existing E2E tests for GMP: MVM ↔ EVM inflow
 
 **Files:**
 
-- `testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-inflow.sh`
+- `testing-infra/ci-e2e/e2e-tests-evm/` (update existing)
+- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
 
 **Tasks:**
 
-- [ ] Create intent on MVM hub (inflow type)
-- [ ] Verify requirements message sent to EVM
-- [ ] Requester creates escrow on EVM
-- [ ] Verify escrow confirmation sent back to MVM
-- [ ] Solver fulfills on MVM hub
-- [ ] Verify fulfillment proof sent to EVM
-- [ ] Verify escrow releases on EVM
+- [ ] Update inflow test to use GMP flow (escrow receives requirements via GMP)
+- [ ] Verify escrow confirmation GMP message sent back to MVM
+- [ ] Verify fulfillment proof GMP message sent to EVM
+- [ ] Verify escrow auto-releases on fulfillment proof receipt
+- [ ] Ensure existing test assertions still pass
 
 **Test:**
 
@@ -200,7 +199,7 @@
 - [ ] Configure trusted remotes (MVM hub address)
 - [ ] Verify contracts on BaseScan
 - [ ] Document deployed contract addresses
-- [ ] Test cross-chain flow MVM ↔ EVM on testnets (with simulator)
+- [ ] Test cross-chain flow MVM ↔ EVM on testnets (with native GMP relay)
 
 **Test:**
 
@@ -230,7 +229,7 @@ npx hardhat verify --network base-sepolia <CONTRACT_ADDRESS>
 
 - [ ] All 7 commits merged to feature branch
 - [ ] EVM contracts build and pass unit tests
-- [ ] LayerZero simulator supports all three chain types (MVM, SVM, EVM)
+- [ ] Native GMP relay supports all three chain types (MVM, SVM, EVM)
 - [ ] Cross-chain E2E tests pass (MVM ↔ EVM outflow + inflow)
 - [ ] All three chains can send/receive GMP messages in test environment
 - [ ] EVM contracts deployed to Base Sepolia

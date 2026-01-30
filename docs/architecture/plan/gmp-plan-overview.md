@@ -1,6 +1,6 @@
 # GMP Integration Proposal
 
-**Status:** Proposal
+**Status:** In Progress (Phase 1 Complete)
 **Date:** 2026-01-22
 **Summary:** Add Generic Message Passing (GMP) so production can use LayerZero instead of our off-chain signer. Validation moves on-chain; cross-chain messaging replaces approval signatures. Coordinator and Trusted GMP are assumed (already in place).
 
@@ -51,13 +51,13 @@ Add **on-chain validation + GMP messaging** so production does not depend on our
 
 See execution phase documents for detailed implementation plan:
 
-- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) (2-3 days) - Interfaces, message schemas, fee analysis
-- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) (5-7 days) - Build both chains together for real cross-chain testing
-- [Phase 3: EVM Expansion](gmp-plan-execution-phase3.md) (3-4 days) - Add EVM connected chain support
-- [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (2 days) - Add GMP message tracking to coordinator
-- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (2-3 days) - Frontend, solver SDK, final cleanup
+- [Phase 1: Research & Design](gmp-plan-execution-phase1.md) ✅ **COMPLETE** - Interfaces, message schemas, wire format spec
+- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) (2-3 days) - Build both chains together for real cross-chain testing
+- [Phase 3: EVM Expansion](gmp-plan-execution-phase3.md) (1-2 days) - Add EVM connected chain support
+- [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (1 day) - Add GMP message tracking to coordinator
+- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (1-2 days) - Frontend, solver SDK, fee analysis, final cleanup
 
-**Total Timeline:** ~3 weeks (testnet only)
+**Total Timeline:** ~1.5 weeks (testnet only)
 
 **Assumed starting point:** Coordinator and Trusted GMP already exist. This plan adds GMP so production uses LayerZero instead of our signer.
 
@@ -479,7 +479,7 @@ Adding GMP so production does not use our signer is **FEASIBLE** but requires:
 - **GMP integration** – add cross-chain messaging to all contracts
 - **New validation contracts** – deploy on all connected chains
 - **Coordinator** – unchanged (already in place; no keys, no validation)
-- **~3 week timeline** – testnet only
+- **~1.5 week timeline** – testnet only
 
 ### Key Benefits
 
@@ -493,7 +493,7 @@ Adding GMP so production does not use our signer is **FEASIBLE** but requires:
 
 - ⚠️ **Higher gas costs** - GMP fees + on-chain validation
 - ⚠️ **Contract complexity** - moderate increase (~50-100 lines per contract)
-- ⚠️ **Development time** - 3-4 weeks for testnet (with AI assistance)
+- ⚠️ **Development time** - ~1.5 weeks for testnet (with AI assistance)
 - ⚠️ **New dependencies** - rely on GMP protocol security
 - ⚠️ **Solver UX changes** - must use validation contracts
 

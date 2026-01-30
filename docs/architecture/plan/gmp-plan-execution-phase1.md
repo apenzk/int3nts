@@ -1,6 +1,6 @@
-# Phase 1: Research & Design (2-3 days)
+# Phase 1: Research & Design (1-2 days)
 
-**Status:** In Progress (Commits 1-10 complete)
+**Status:** Complete (Commits 1-10)
 **Depends On:** None
 **Blocks:** Phase 2
 
@@ -298,32 +298,13 @@ Connected chain functions (MVM as connected chain):
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-> ⚠️ **CI tests must pass before proceeding to Commit 11.**
+> ⚠️ **Phase 1 complete after Commit 10.**
 
 ---
 
-### Commit 11: Add fee estimation and document endpoint configuration
+### ~~Commit 11: Add fee estimation and document endpoint configuration~~ (Deferred)
 
-**Files:**
-
-- `docs/architecture/plan/gmp-endpoints.md`
-- `docs/architecture/plan/gmp-fee-analysis.md`
-
-**Tasks:**
-
-- [ ] Document all GMP endpoint addresses (LZ for Solana and Movement, local for testing)
-- [ ] Document environment configuration (local/CI uses native GMP endpoints, testnet and mainnet use LZ GMP endpoints)
-- [ ] Estimate LZ message fees for each route
-- [ ] Estimate on-chain validation gas costs
-- [ ] Compare costs to current Trusted GMP system
-
-**Test:**
-
-```bash
-# Documentation review - manual
-```
-
-> ⚠️ **Documentation complete before Phase 1 is complete.**
+> **Moved to Phase 5, Commit 4.** Fee estimation is not needed now since local/CI testing uses native GMP endpoints which are fee-free. LZ fee analysis will be done when integrating with LZ endpoints for testnet/mainnet.
 
 ---
 
@@ -337,13 +318,13 @@ Connected chain functions (MVM as connected chain):
 
 ## Exit Criteria
 
-- [ ] All 11 commits merged to feature branch
+- [x] All 10 commits merged to feature branch
 - [x] GMP architecture integration design reviewed
 - [x] Wire format spec documented and reviewed
 - [x] SVM message encoding matches spec (tested)
 - [x] MVM message encoding matches spec (tested)
 - [x] Cross-chain encoding test passes (both produce identical bytes)
-- [ ] All interfaces defined for SVM and MVM
+- [x] All interfaces defined for SVM and MVM
 - [x] Native GMP endpoint interfaces defined for both chains
 - [x] LZ research documented for both Solana and Movement
-- [ ] Fee analysis complete
+- ~~[ ] Fee analysis complete~~ (Moved to Phase 5)

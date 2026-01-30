@@ -1,4 +1,4 @@
-# Phase 4: Coordinator GMP Integration (2 days)
+# Phase 4: Coordinator GMP Integration (1 day)
 
 **Status:** Not Started
 **Depends On:** Phase 3
