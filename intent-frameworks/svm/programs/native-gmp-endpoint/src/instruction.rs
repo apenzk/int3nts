@@ -1,0 +1,106 @@
+//! Instruction definitions for the native GMP endpoint program.
+
+use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::pubkey::Pubkey;
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
+pub enum NativeGmpInstruction {
+    /// Initialize the GMP endpoint configuration.
+    ///
+    /// Accounts expected:
+    /// 0. `[writable]` Config account (PDA: ["config"])
+    /// 1. `[signer]` Admin (becomes the config admin)
+    /// 2. `[signer]` Payer
+    /// 3. `[]` System program
+    Initialize {
+        /// This chain's endpoint ID
+        chain_id: u32,
+    },
+
+    /// Add an authorized relay.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[writable]` Relay account (PDA: ["relay", relay_pubkey])
+    /// 2. `[signer]` Admin
+    /// 3. `[signer]` Payer
+    /// 4. `[]` System program
+    AddRelay {
+        /// The relay public key to authorize
+        relay: Pubkey,
+    },
+
+    /// Remove an authorized relay.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[writable]` Relay account (PDA: ["relay", relay_pubkey])
+    /// 2. `[signer]` Admin
+    RemoveRelay {
+        /// The relay public key to deauthorize
+        relay: Pubkey,
+    },
+
+    /// Set a trusted remote address for a source chain.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[writable]` Trusted remote account (PDA: ["trusted_remote", src_chain_id])
+    /// 2. `[signer]` Admin
+    /// 3. `[signer]` Payer
+    /// 4. `[]` System program
+    SetTrustedRemote {
+        /// Source chain endpoint ID
+        src_chain_id: u32,
+        /// Trusted source address (32 bytes)
+        trusted_addr: [u8; 32],
+    },
+
+    /// Send a cross-chain message.
+    ///
+    /// Emits a `MessageSent` event that the GMP relay monitors.
+    /// The relay picks up the event and calls `DeliverMessage` on the
+    /// destination chain.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[writable]` Outbound nonce account (PDA: ["nonce_out", dst_chain_id])
+    /// 2. `[signer]` Sender (the program/user sending the message)
+    /// 3. `[signer]` Payer (pays for nonce account creation if needed)
+    /// 4. `[]` System program
+    Send {
+        /// Destination chain endpoint ID (e.g., Movement = 30325)
+        dst_chain_id: u32,
+        /// Destination address (32 bytes, the receiving program/module)
+        dst_addr: [u8; 32],
+        /// Message payload (encoded GMP message)
+        payload: Vec<u8>,
+    },
+
+    /// Deliver a cross-chain message to a destination program.
+    ///
+    /// Called by the GMP relay after observing a `MessageSent` event
+    /// on the source chain. The relay decodes the event, constructs this
+    /// instruction, and submits it to the destination chain.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[]` Relay account (PDA: ["relay", relay_pubkey])
+    /// 2. `[]` Trusted remote account (PDA: ["trusted_remote", src_chain_id])
+    /// 3. `[writable]` Inbound nonce account (PDA: ["nonce_in", src_chain_id])
+    /// 4. `[signer]` Relay (must be authorized)
+    /// 5. `[signer]` Payer (for nonce account creation if needed)
+    /// 6. `[]` Destination program
+    /// 7. `[]` System program
+    /// 8+. Additional accounts required by destination program
+    DeliverMessage {
+        /// Source chain endpoint ID
+        src_chain_id: u32,
+        /// Source address (32 bytes, the sending program/module)
+        src_addr: [u8; 32],
+        /// Message payload (encoded GMP message)
+        payload: Vec<u8>,
+        /// Nonce for replay protection
+        nonce: u64,
+    },
+}

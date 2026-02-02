@@ -276,9 +276,22 @@ Native GMP endpoint provides a standardized interface for cross-chain messaging.
 
 MVM: `intent-frameworks/mvm/tests/native_gmp_endpoint_tests.move` ⚠️
 EVM: `intent-frameworks/evm/test/native-gmp-endpoint/` ⚠️
-SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/src/lib.rs` (inline tests)
+SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | --- | --- | --- | --- |
 | 1 | test_send_instruction_serialization | N/A | ⚠️ | ✅ |
 | 2 | test_deliver_message_instruction_serialization | N/A | ⚠️ | ✅ |
+| 3 | test_initialize_instruction_serialization | N/A | ⚠️ | ✅ |
+| 4 | test_add_relay_instruction_serialization | N/A | ⚠️ | ✅ |
+| 5 | test_set_trusted_remote_instruction_serialization | N/A | ⚠️ | ✅ |
+| 6 | test_config_account_serialization | N/A | ⚠️ | ✅ |
+| 7 | test_relay_account_serialization | N/A | ⚠️ | ✅ |
+| 8 | test_trusted_remote_account_serialization | N/A | ⚠️ | ✅ |
+| 9 | test_outbound_nonce_account | N/A | ⚠️ | ✅ |
+| 10 | test_inbound_nonce_account_replay_detection | N/A | ⚠️ | ✅ |
+| 11 | test_error_conversion | N/A | ⚠️ | ✅ |
+| 12 | test_error_codes_unique | N/A | ⚠️ | ✅ |
+| 13 | test_send_updates_nonce_state | ⚠️ | ⚠️ | ✅ |
+| 14 | test_deliver_message_calls_receiver | ⚠️ | ⚠️ | ✅ |
+| 15 | test_deliver_message_rejects_replay | ⚠️ | ⚠️ | ✅ |

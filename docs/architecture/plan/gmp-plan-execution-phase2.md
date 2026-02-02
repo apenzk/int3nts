@@ -21,13 +21,13 @@
 
 **Tasks:**
 
-- [ ] Extend `Send` instruction to track nonces and emit structured `MessageSent` event
-- [ ] Extend `DeliverMessage` instruction to CPI into destination program's receive handler
-- [ ] Implement trusted remote verification via PDA
-- [ ] Add relay authorization checks
-- [ ] Test `Send` emits correct event with payload
-- [ ] Test `DeliverMessage` calls receiver's handler
-- [ ] Test nonce tracking and replay protection
+- [x] Extend `Send` instruction to track nonces and emit structured `MessageSent` event
+- [x] Extend `DeliverMessage` instruction to CPI into destination program's receive handler
+- [x] Implement trusted remote verification via PDA
+- [x] Add relay authorization checks
+- [x] Test `Send` emits correct event with payload
+- [x] Test `DeliverMessage` calls receiver's handler
+- [x] Test nonce tracking and replay protection
 
 **Test:**
 

@@ -106,7 +106,46 @@ Match the expected format for each constant type:
 - **Transaction hashes**: 32 bytes (64 hex chars + `0x` prefix = 66 chars)
 - **IDs**: Match the format used by the system (typically 32 bytes for MVM)
 
-### 10. Test File Section Headers
+### 10. Test Function Documentation
+
+Every test function must include documentation with the following format:
+
+```rust
+/// N. Test: [Test Name]
+/// Verifies that [what the test does].
+/// Why: [rationale for why this test is important].
+#[test]
+fn test_example() {
+    // ...
+}
+```
+
+**Required elements:**
+
+- **Number**: Sequential number (1, 2, 3...) for tracking test coverage across frameworks
+- **Test name**: Brief descriptive name
+- **Verifies**: What behavior is being tested (use "Verifies that..." phrasing)
+- **Why**: The rationale - why this test matters, what could go wrong without it
+
+**Example:**
+
+```rust
+/// 1. Test: Valid Claim with Approver Signature
+/// Verifies that solvers can claim escrow funds when provided with a valid approver signature.
+/// Why: Claiming is the core fulfillment mechanism. Solvers must be able to receive funds after approver approval.
+#[test]
+fn test_valid_claim_with_signature() {
+    // ...
+}
+```
+
+**Language-specific formats:**
+
+- **Rust**: Use `///` doc comments
+- **JavaScript/TypeScript**: Use `///` comments (same format)
+- **Move**: Use `///` doc comments
+
+### 11. Test File Section Headers
 
 Use section headers for test files that group multiple related tests:
 
@@ -121,6 +160,8 @@ Use section headers for test files that group multiple related tests:
 - `edge-cases` / `edge_cases` - "EDGE CASE TESTS"
 - `integration` - "INTEGRATION TESTS"
 - `cross-chain` / `cross_chain` - "CROSS-CHAIN INTENT ID CONVERSION TESTS"
+- Serialization tests - "INSTRUCTION SERIALIZATION TESTS", "STATE SERIALIZATION TESTS"
+- Error tests - "ERROR CONVERSION TESTS"
 
 **When NOT to use section headers:**
 

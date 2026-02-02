@@ -31,7 +31,11 @@ Each framework should have the following test files, matching the order and stru
 
 ### Section Headers
 
-See [Test File Section Headers](../../architecture/codestyle-testing.md#10-test-file-section-headers) in the coding guide for section header formatting guidelines.
+See [Test File Section Headers](../../architecture/codestyle-testing.md#11-test-file-section-headers) in the coding guide for section header formatting guidelines.
+
+### Test Documentation Format
+
+See [Test Function Documentation](../../architecture/codestyle-testing.md#10-test-function-documentation) in the coding guide for the required `Test:` / `Verifies` / `Why:` format.
 
 ### Test Descriptions
 
@@ -48,14 +52,6 @@ See [Test File Section Headers](../../architecture/codestyle-testing.md#10-test-
 - "Verifies that createEscrow reverts when ERC20 allowance is insufficient" (too EVM-specific)
 - "Verifies that intent IDs from Aptos hex format can be converted to EVM uint256" (mentions other platforms)
 - "Verifies that the contract handles boundary values" (use "program" for SVM, "contract" for EVM)
-
-**Test description format:**
-
-```rust
-/// Test: [Test Name]
-/// Verifies that [what the test does].
-/// Why: [rationale for why this test is important].
-```
 
 ### Test Order and Numbering
 
@@ -83,25 +79,25 @@ All tests listed are VM-specific; generic tests are intentionally excluded becau
 
 Escrow test alignment for VM intent framework contracts:
 
-- See [`intent-frameworks/COMPLETENESS-CHECKLIST.md`](../../intent-frameworks/COMPLETENESS-CHECKLIST.md)
+- See [`intent-frameworks/EXTENSION-CHECKLIST.md`](../../intent-frameworks/EXTENSION-CHECKLIST.md)
 
 ### Trusted GMP
 
 Test alignment for the trusted-gmp service:
 
-- See [`trusted-gmp/tests/COMPLETENESS-CHECKLIST.md`](../../trusted-gmp/tests/COMPLETENESS-CHECKLIST.md)
+- See [`trusted-gmp/tests/EXTENSION-CHECKLIST.md`](../../trusted-gmp/tests/EXTENSION-CHECKLIST.md)
 
 ### Solver
 
 Test alignment for the solver:
 
-- See [`solver/tests/COMPLETENESS-CHECKLIST.md`](../../solver/tests/COMPLETENESS-CHECKLIST.md)
+- See [`solver/tests/EXTENSION-CHECKLIST.md`](../../solver/tests/EXTENSION-CHECKLIST.md)
 
 ### Frontend
 
 Test alignment for the frontend:
 
-- See [`frontend/src/COMPLETENESS-CHECKLIST.md`](../../frontend/src/COMPLETENESS-CHECKLIST.md)
+- See [`frontend/src/EXTENSION-CHECKLIST.md`](../../frontend/src/EXTENSION-CHECKLIST.md)
 
 ## Handling Platform Differences
 

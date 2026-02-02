@@ -41,13 +41,34 @@ git commit -m "<type of change>: <description>
 
 ### Test Commands
 
+**CRITICAL: NEVER run tests directly with `cargo test`, `npm test`, or `movement move test`. ALWAYS use the project scripts.**
+
 Run all tests with summary:
 
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 ```
 
-For individual component commands, see `README.md#testing`.
+Run individual component tests (from project root):
+
+```bash
+# SVM (Solana) - ALWAYS use this, never cargo test directly
+cd intent-frameworks/svm && ./scripts/test.sh
+
+# MVM (Movement)
+cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123
+
+# EVM
+cd intent-frameworks/evm && npm test
+
+# Rust services
+cd coordinator && cargo test --quiet
+cd trusted-gmp && cargo test --quiet
+cd solver && cargo test --quiet
+
+# Frontend
+cd frontend && npm test
+```
 
 ## Documentation
 
@@ -91,6 +112,7 @@ This is a cross-chain intent framework enabling conditional asset transfers acro
 
 ## Testing Standards
 
+- **Test documentation format**: See `docs/architecture/codestyle-testing.md` for required `Test:` / `Verifies` / `Why:` format
 - **Move tests**: Place in `intent-frameworks/mvm/tests/` with `*_tests.move` naming
 - **Solidity tests**: Place in `intent-frameworks/evm/test/` with `*.test.js` naming
 - **E2E tests**: Use shell scripts in `testing-infra/ci-e2e/e2e-tests-*/`
@@ -106,7 +128,7 @@ When adding tests for shared modules (e.g., `gmp_common`/`gmp-common`):
 - **Use identical test vectors**: Same inputs must produce same expected outputs across all chains
 - **Update test-vectors.json**: Cross-chain encoding tests reference `intent-frameworks/common/testing/gmp-encoding-test-vectors.json`
 - **Keep test counts in sync**: MVM and SVM should have matching test numbers for shared functionality
-- **Update COMPLETENESS-CHECKLIST.md**: Each component has a COMPLETENESS-CHECKLIST.md tracking test status. See `docs/intent-frameworks/framework-extension-guide.md` for the full reference
+- **Update EXTENSION-CHECKLIST.md**: Each component has an EXTENSION-CHECKLIST.md tracking test status. See `docs/intent-frameworks/framework-extension-guide.md` for the full reference
 
 --------------------------------------------------------------------------------
 

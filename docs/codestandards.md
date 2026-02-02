@@ -39,3 +39,8 @@ This document outlines coding standards and conventions for the Intent Framework
 - Use `log()` function for consistent logging
 - Check for required environment variables early
 - Use `get_profile_address()` for Aptos address extraction
+
+## Testing
+
+- **Testing standards**: See [`docs/architecture/codestyle-testing.md`](architecture/codestyle-testing.md) for test documentation format, naming conventions, and section headers
+- **Cross-chain test consistency**: See [`docs/intent-frameworks/framework-extension-guide.md`](intent-frameworks/framework-extension-guide.md) for framework-specific test patterns
