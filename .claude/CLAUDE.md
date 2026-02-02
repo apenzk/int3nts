@@ -6,6 +6,19 @@
 **Import project rules and conventions, treat as if import is in the main CLAUDE.md file.**
 @./.claude/rules.md
 
+## Test Commands - CRITICAL
+
+**CRITICAL: Running tests without `nix develop` wrapper WILL FAIL.**
+
+**ALL test commands MUST use the exact format from root README.md "Testing" section.**
+
+Pattern:
+```bash
+nix develop ./nix -c bash -c "<test command>"
+```
+
+**Do NOT run test commands directly. They will fail without the nix environment.**
+
 ## No Fallbacks Policy
 
 **CRITICAL: No fallbacks, workarounds, or graceful degradation.** Code either works or it fails. Tests either pass or they fail. There are no temporary workarounds.

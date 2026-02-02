@@ -24,6 +24,20 @@ git commit -m "<type of change>: <description>
 - <more detailed points if needed (optional)>"
 ```
 
+**For multi-line commit messages, use heredoc format:**
+
+```bash
+git commit -m "$(cat <<'EOF'
+<type>: <description>
+
+- <detail 1 if needed>
+- <detail 2 if needed>
+EOF
+)"
+```
+
+**Note**: Use `EOF` as the heredoc delimiter (standard convention).
+
 **Commit Rules:**
 
 - **ALWAYS commit after completing each subtask or task** - ensures incremental progress is saved
