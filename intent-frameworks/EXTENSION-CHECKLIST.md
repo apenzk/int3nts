@@ -259,7 +259,7 @@ SVM: `intent-frameworks/svm/programs/outflow-validator/tests/interface_tests.rs`
 | # | Test | MVM | EVM | SVM |
 | --- | --- | --- | --- | --- |
 | 1 | test_initialize_instruction_roundtrip | N/A | ⚠️ | ✅ |
-| 2 | test_lz_receive_instruction_roundtrip | ✅ | ⚠️ | ✅ |
+| 2 | test_receive_instruction_roundtrip | ✅ | ⚠️ | ✅ |
 | 3 | test_fulfill_intent_instruction_roundtrip | ⚠️ | ⚠️ | ✅ |
 | 4 | test_intent_requirements_account_roundtrip | N/A | ⚠️ | ✅ |
 | 5 | test_config_account_roundtrip | N/A | ⚠️ | ✅ |
@@ -276,10 +276,10 @@ SVM: `intent-frameworks/svm/programs/outflow-validator/tests/validator_tests.rs`
 | --- | --- | --- | --- | --- |
 | 1 | test_initialize_creates_config | ✅ | ⚠️ | ✅ |
 | 2 | test_initialize_rejects_double_init | ✅ | ⚠️ | ✅ |
-| 3 | test_lz_receive_stores_requirements | ✅ | ⚠️ | ✅ |
-| 4 | test_lz_receive_idempotent | ✅ | ⚠️ | ✅ |
-| 5 | test_lz_receive_rejects_untrusted_source | ✅ | ⚠️ | ✅ |
-| 6 | test_lz_receive_rejects_invalid_payload | ✅ | ⚠️ | ✅ |
+| 3 | test_receive_stores_requirements | ✅ | ⚠️ | ✅ |
+| 4 | test_receive_idempotent | ✅ | ⚠️ | ✅ |
+| 5 | test_receive_rejects_untrusted_source | ✅ | ⚠️ | ✅ |
+| 6 | test_receive_rejects_invalid_payload | ✅ | ⚠️ | ✅ |
 | 7 | test_fulfill_intent_rejects_already_fulfilled | ✅ | ⚠️ | ✅ |
 | 8 | test_fulfill_intent_rejects_expired | ✅ | ⚠️ | ✅ |
 | 9 | test_fulfill_intent_rejects_unauthorized_solver | ✅ | ⚠️ | ✅ |
@@ -328,26 +328,32 @@ SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs
 
 ## Inflow Escrow GMP test alignment
 
-Inflow escrow handles the connected chain side of inflow intents (tokens locked on connected chain, desired on hub). The user locks tokens in escrow on the connected chain (SVM/EVM), the solver fulfills by delivering tokens on the hub (Movement), and the hub sends fulfillment proof via GMP to release the escrowed tokens to the solver.
+Inflow escrow handles the connected chain side of inflow intents (tokens locked on connected chain, desired on hub). The user locks tokens in escrow on the connected chain (SVM/EVM/MVM), the solver fulfills by delivering tokens on the hub (Movement), and the hub sends fulfillment proof via GMP to release the escrowed tokens to the solver.
 
 ### Inflow Escrow GMP Tests
 
-MVM: `intent-frameworks/mvm/tests/inflow_escrow_gmp_tests.move` ⚠️
+MVM: `intent-frameworks/mvm/tests/inflow_escrow_gmp_tests.move`
 EVM: `intent-frameworks/evm/test/inflow-escrow-gmp/` ⚠️
 SVM: `intent-frameworks/svm/programs/intent_escrow/tests/gmp.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | --- | --- | --- | --- |
-| 1 | test_set_gmp_config | ⚠️ | ⚠️ | ✅ |
-| 2 | test_set_gmp_config_rejects_unauthorized | ⚠️ | ⚠️ | ✅ |
-| 3 | test_lz_receive_requirements_stores_requirements | ⚠️ | ⚠️ | ✅ |
-| 4 | test_lz_receive_requirements_idempotent | ⚠️ | ⚠️ | ✅ |
-| 5 | test_lz_receive_requirements_rejects_untrusted_source | ⚠️ | ⚠️ | ✅ |
-| 6 | test_lz_receive_fulfillment_proof_releases_escrow | ⚠️ | ⚠️ | ✅ |
-| 7 | test_lz_receive_fulfillment_proof_rejects_untrusted_source | ⚠️ | ⚠️ | ✅ |
-| 8 | test_lz_receive_fulfillment_proof_rejects_already_fulfilled | ⚠️ | ⚠️ | ✅ |
-| 9 | test_create_escrow_validates_against_requirements | ⚠️ | ⚠️ | ✅ |
-| 10 | test_create_escrow_rejects_amount_mismatch | ⚠️ | ⚠️ | ✅ |
-| 11 | test_create_escrow_rejects_token_mismatch | ⚠️ | ⚠️ | ✅ |
-| 12 | test_create_escrow_sends_escrow_confirmation | ⚠️ | ⚠️ | ✅ |
-| 13 | test_full_inflow_gmp_workflow | ⚠️ | ⚠️ | ✅ |
+| 1 | test_set_gmp_config / test_initialize_creates_config | ✅ | ⚠️ | ✅ |
+| 2 | test_set_gmp_config_rejects_unauthorized / test_initialize_rejects_double_init | ✅ | ⚠️ | ✅ |
+| 3 | test_receive_requirements_stores_requirements | ✅ | ⚠️ | ✅ |
+| 4 | test_receive_requirements_idempotent | ✅ | ⚠️ | ✅ |
+| 5 | test_receive_requirements_rejects_untrusted_source | ✅ | ⚠️ | ✅ |
+| 6 | test_receive_fulfillment_proof_releases_escrow (SVM) / test_receive_fulfillment_proof_marks_fulfilled (MVM) | ✅ | ⚠️ | ✅ |
+| 7 | test_receive_fulfillment_rejects_untrusted_source | ✅ | ⚠️ | ✅ |
+| 8 | test_receive_fulfillment_proof_rejects_already_fulfilled | ✅ | ⚠️ | ✅ |
+| 9 | test_create_escrow_validates_against_requirements / test_create_escrow_validates_requirements | ✅ | ⚠️ | ✅ |
+| 10 | test_create_escrow_rejects_amount_mismatch | ✅ | ⚠️ | ✅ |
+| 11 | test_create_escrow_rejects_token_mismatch | ✅ | ⚠️ | ✅ |
+| 12 | test_create_escrow_sends_escrow_confirmation | ✅ | ⚠️ | ✅ |
+| 13 | test_full_inflow_gmp_workflow | ✅ | ⚠️ | ✅ |
+| 14 | test_create_escrow_rejects_no_requirements | ✅ | ⚠️ | N/A |
+| 15 | test_create_escrow_rejects_double_create | ✅ | ⚠️ | N/A |
+| 16 | test_release_escrow_succeeds_after_fulfillment | ✅ | ⚠️ | N/A |
+| 17 | test_release_escrow_rejects_without_fulfillment | ✅ | ⚠️ | N/A |
+| 18 | test_release_escrow_rejects_unauthorized_solver | ✅ | ⚠️ | N/A |
+| 19 | test_release_escrow_rejects_double_release | ✅ | ⚠️ | N/A |

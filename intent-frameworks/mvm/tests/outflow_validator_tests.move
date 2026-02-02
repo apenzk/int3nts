@@ -164,11 +164,11 @@ module mvmt_intent::outflow_validator_tests {
     // LZ_RECEIVE TESTS
     // ============================================================================
 
-    /// 3. Test: LzReceive stores intent requirements
+    /// 3. Test: Receive stores intent requirements
     /// Verifies that receive_intent_requirements correctly stores requirements.
     /// Why: Storing requirements is essential for validating fulfillments later.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
-    fun test_lz_receive_stores_requirements(aptos_framework: &signer, admin: &signer) {
+    fun test_receive_stores_requirements(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
         timestamp::update_global_time_for_test_secs(1000);
 
@@ -205,11 +205,11 @@ module mvmt_intent::outflow_validator_tests {
         assert!(outflow_validator_impl::get_amount_required(intent_id) == amount, 3);
     }
 
-    /// 4. Test: LzReceive is idempotent (duplicate ignored)
+    /// 4. Test: Receive is idempotent (duplicate ignored)
     /// Verifies that receiving the same requirements twice doesn't fail or overwrite.
     /// Why: Idempotency prevents issues with duplicate GMP message delivery.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
-    fun test_lz_receive_idempotent(aptos_framework: &signer, admin: &signer) {
+    fun test_receive_idempotent(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
         timestamp::update_global_time_for_test_secs(1000);
 
@@ -251,12 +251,12 @@ module mvmt_intent::outflow_validator_tests {
         assert!(outflow_validator_impl::has_requirements(intent_id), 1);
     }
 
-    /// 5. Test: LzReceive rejects untrusted source
+    /// 5. Test: Receive rejects untrusted source
     /// Verifies that requirements from non-trusted hub chains/addresses are rejected.
     /// Why: Source verification prevents spoofed messages from attackers.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure(abort_code = 2, location = mvmt_intent::outflow_validator_impl)] // EINVALID_SOURCE_CHAIN
-    fun test_lz_receive_rejects_untrusted_source(aptos_framework: &signer, admin: &signer) {
+    fun test_receive_rejects_untrusted_source(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
         timestamp::update_global_time_for_test_secs(1000);
 
@@ -288,12 +288,12 @@ module mvmt_intent::outflow_validator_tests {
         );
     }
 
-    /// 6. Test: LzReceive rejects invalid payload
+    /// 6. Test: Receive rejects invalid payload
     /// Verifies that malformed GMP payloads are rejected.
     /// Why: Prevents processing of corrupted or malicious messages.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure] // gmp_common decode will fail
-    fun test_lz_receive_rejects_invalid_payload(aptos_framework: &signer, admin: &signer) {
+    fun test_receive_rejects_invalid_payload(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
         timestamp::update_global_time_for_test_secs(1000);
 

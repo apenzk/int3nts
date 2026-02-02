@@ -165,11 +165,11 @@ async fn test_set_gmp_config_rejects_unauthorized() {
 // LZ RECEIVE REQUIREMENTS TESTS (Tests 3-5)
 // ============================================================================
 
-/// 3. Test: LzReceiveRequirements stores intent requirements
+/// 3. Test: ReceiveRequirements stores intent requirements
 /// Verifies that requirements from hub are stored correctly.
 /// Why: Requirements must be stored before escrow can be created with validation.
 #[tokio::test]
-async fn test_lz_receive_requirements_stores_requirements() {
+async fn test_receive_requirements_stores_requirements() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -228,11 +228,11 @@ async fn test_lz_receive_requirements_stores_requirements() {
     assert!(!requirements.fulfilled);
 }
 
-/// 4. Test: LzReceiveRequirements is idempotent
+/// 4. Test: ReceiveRequirements is idempotent
 /// Verifies that duplicate requirements message succeeds without error.
 /// Why: Network retries may deliver the same message multiple times.
 #[tokio::test]
-async fn test_lz_receive_requirements_idempotent() {
+async fn test_receive_requirements_idempotent() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -302,11 +302,11 @@ async fn test_lz_receive_requirements_idempotent() {
     context.banks_client.process_transaction(tx).await.unwrap();
 }
 
-/// 5. Test: LzReceiveRequirements rejects untrusted source
+/// 5. Test: ReceiveRequirements rejects untrusted source
 /// Verifies that requirements from wrong chain/address are rejected.
 /// Why: Only hub should be able to send requirements.
 #[tokio::test]
-async fn test_lz_receive_requirements_rejects_untrusted_source() {
+async fn test_receive_requirements_rejects_untrusted_source() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -384,11 +384,11 @@ async fn test_lz_receive_requirements_rejects_untrusted_source() {
 // LZ RECEIVE FULFILLMENT PROOF TESTS (Tests 6-8)
 // ============================================================================
 
-/// 6. Test: LzReceiveFulfillmentProof releases escrow
+/// 6. Test: ReceiveFulfillmentProof releases escrow
 /// Verifies that fulfillment proof auto-releases escrow to solver.
 /// Why: This is the core GMP release mechanism.
 #[tokio::test]
-async fn test_lz_receive_fulfillment_proof_releases_escrow() {
+async fn test_receive_fulfillment_proof_releases_escrow() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -504,11 +504,11 @@ async fn test_lz_receive_fulfillment_proof_releases_escrow() {
     assert!(escrow.is_claimed);
 }
 
-/// 7. Test: LzReceiveFulfillmentProof rejects untrusted source
+/// 7. Test: ReceiveFulfillmentProof rejects untrusted source
 /// Verifies that proof from wrong chain/address is rejected.
 /// Why: Only hub should be able to authorize release.
 #[tokio::test]
-async fn test_lz_receive_fulfillment_proof_rejects_untrusted_source() {
+async fn test_receive_fulfillment_proof_rejects_untrusted_source() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -610,11 +610,11 @@ async fn test_lz_receive_fulfillment_proof_rejects_untrusted_source() {
     assert!(result.is_err(), "Should reject wrong chain ID");
 }
 
-/// 8. Test: LzReceiveFulfillmentProof rejects already fulfilled
+/// 8. Test: ReceiveFulfillmentProof rejects already fulfilled
 /// Verifies that duplicate fulfillment proof is rejected.
 /// Why: Prevents double-spend attacks.
 #[tokio::test]
-async fn test_lz_receive_fulfillment_proof_rejects_already_fulfilled() {
+async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -1240,3 +1240,37 @@ async fn test_full_inflow_gmp_workflow() {
     );
     assert!(req.fulfilled);
 }
+
+// ============================================================================
+// MVM-SPECIFIC TESTS (N/A for SVM)
+// ============================================================================
+//
+// 14. test_create_escrow_rejects_no_requirements - N/A
+//     Why: MVM tests explicit rejection when requirements don't exist, but SVM
+//     handles this via account existence checks in CreateEscrow instruction - the
+//     transaction fails if requirements PDA doesn't exist (covered by test 9).
+//
+// 15. test_create_escrow_rejects_double_create - N/A
+//     Why: MVM tests explicit rejection of duplicate escrow creation, but SVM
+//     prevents this via PDA account initialization semantics - the init constraint
+//     fails if the escrow account already exists (covered by test 9).
+//
+// 16. test_release_escrow_succeeds_after_fulfillment - N/A
+//     Why: MVM uses two-step fulfillment: (1) receive proof marks fulfilled,
+//     (2) manual release transfers tokens. SVM auto-releases tokens in test 6
+//     when fulfillment proof is received - no separate release step exists.
+//
+// 17. test_release_escrow_rejects_without_fulfillment - N/A
+//     Why: MVM tests that manual release requires fulfillment first. SVM doesn't
+//     have a separate release instruction - release happens automatically in
+//     test_receive_fulfillment_proof_releases_escrow (test 6).
+//
+// 18. test_release_escrow_rejects_unauthorized_solver - N/A
+//     Why: MVM tests solver authorization during manual release. SVM validates
+//     solver during LzReceiveFulfillmentProof and auto-releases to the correct
+//     solver immediately (covered in test 6).
+//
+// 19. test_release_escrow_rejects_double_release - N/A
+//     Why: MVM tests that manual release can't happen twice. SVM auto-releases
+//     once in test 6, and the escrow is marked claimed. Double fulfillment is
+//     rejected in test 8 (test_receive_fulfillment_proof_rejects_already_fulfilled).

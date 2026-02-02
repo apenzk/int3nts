@@ -86,10 +86,10 @@ fn test_initialize_instruction_roundtrip() {
     }
 }
 
-/// 2. Test: LzReceive instruction serialization roundtrip
+/// 2. Test: Receive instruction serialization roundtrip
 /// Verifies that LzReceive instruction can be serialized and deserialized.
 #[test]
-fn test_lz_receive_instruction_roundtrip() {
+fn test_receive_instruction_roundtrip() {
     let original_chain_id = DUMMY_HUB_CHAIN_ID;
     let original_addr = dummy_addr_2();
     let original_payload = dummy_payload();

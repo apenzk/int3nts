@@ -561,11 +561,11 @@ async fn test_initialize_rejects_double_init() {
 // LZ_RECEIVE TESTS
 // ============================================================================
 
-/// 3. Test: LzReceive stores intent requirements
+/// 3. Test: Receive stores intent requirements
 /// Verifies that receiving a GMP message creates the requirements PDA.
 /// Why: Intent requirements must be stored for solvers to fulfill.
 #[tokio::test]
-async fn test_lz_receive_stores_requirements() {
+async fn test_receive_stores_requirements() {
     let pt = program_test();
     let mut context = pt.start_with_context().await;
     let admin = context.payer.insecure_clone();
@@ -616,11 +616,11 @@ async fn test_lz_receive_stores_requirements() {
     assert!(!stored.fulfilled);
 }
 
-/// 4. Test: LzReceive is idempotent
+/// 4. Test: Receive is idempotent
 /// Verifies that duplicate messages don't fail or overwrite.
 /// Why: Network retries must not corrupt state or cause failures.
 #[tokio::test]
-async fn test_lz_receive_idempotent() {
+async fn test_receive_idempotent() {
     let pt = program_test();
     let mut context = pt.start_with_context().await;
     let admin = context.payer.insecure_clone();
@@ -663,11 +663,11 @@ async fn test_lz_receive_idempotent() {
     send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await.unwrap();
 }
 
-/// 5. Test: LzReceive rejects untrusted source
+/// 5. Test: Receive rejects untrusted source
 /// Verifies that messages from wrong chain/address are rejected.
 /// Why: Only the trusted hub can send intent requirements.
 #[tokio::test]
-async fn test_lz_receive_rejects_untrusted_source() {
+async fn test_receive_rejects_untrusted_source() {
     let pt = program_test();
     let mut context = pt.start_with_context().await;
     let admin = context.payer.insecure_clone();
@@ -721,11 +721,11 @@ async fn test_lz_receive_rejects_untrusted_source() {
     assert!(result.is_err(), "Wrong source address should be rejected");
 }
 
-/// 6. Test: LzReceive rejects invalid payload
+/// 6. Test: Receive rejects invalid payload
 /// Verifies that malformed GMP messages are rejected.
 /// Why: Prevents processing of corrupted or malicious messages.
 #[tokio::test]
-async fn test_lz_receive_rejects_invalid_payload() {
+async fn test_receive_rejects_invalid_payload() {
     let pt = program_test();
     let mut context = pt.start_with_context().await;
     let admin = context.payer.insecure_clone();

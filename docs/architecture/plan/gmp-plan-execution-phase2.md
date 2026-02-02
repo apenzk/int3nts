@@ -180,14 +180,14 @@
 
 **Tasks:**
 
-- [ ] Create `inflow_escrow_gmp` module with GMP config (hub_chain_id, trusted_hub_addr)
-- [ ] Implement `receive_intent_requirements` - stores requirements from hub (with idempotency)
-- [ ] Implement `create_escrow_with_validation` - validates requirements exist and match escrow details
-- [ ] Implement `receive_fulfillment_proof` - auto-releases escrow on proof receipt
-- [ ] Send `EscrowConfirmation` GMP message back to hub on escrow creation via `gmp_sender::lz_send`
-- [ ] Add routing in `native_gmp_endpoint` for inflow escrow messages
-- [ ] Test all escrow scenarios (create, validate, release)
-- [ ] Update `intent-frameworks/EXTENSION-CHECKLIST.md` with MVM InflowEscrow test status
+- [x] Create `inflow_escrow_gmp` module with GMP config (hub_chain_id, trusted_hub_addr)
+- [x] Implement `receive_intent_requirements` - stores requirements from hub (with idempotency)
+- [x] Implement `create_escrow_with_validation` - validates requirements exist and match escrow details
+- [x] Implement `receive_fulfillment_proof` - marks escrow fulfilled (MVM uses manual release, not auto-release)
+- [x] Send `EscrowConfirmation` GMP message back to hub on escrow creation via `gmp_sender::lz_send`
+- [x] Add routing in `native_gmp_endpoint` for inflow escrow messages
+- [x] Implement MVM tests 8, 12, 13 in `inflow_escrow_gmp_tests.move`
+- [x] Update `intent-frameworks/EXTENSION-CHECKLIST.md` with MVM InflowEscrow test status
 
 **Test:**
 

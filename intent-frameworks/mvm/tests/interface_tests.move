@@ -66,11 +66,11 @@ module mvmt_intent::interface_tests {
     // INTERFACE TESTS (mirrors SVM interface_tests.rs)
     // ============================================================================
 
-    /// 2. Test: LzReceive instruction roundtrip (receive_intent_requirements)
+    /// 2. Test: Receive instruction roundtrip (receive_intent_requirements)
     /// Verifies that the function correctly decodes an IntentRequirements message.
-    /// Mirrors SVM's test_lz_receive_instruction_roundtrip.
+    /// Mirrors SVM's test_receive_instruction_roundtrip.
     #[test]
-    fun test_lz_receive_instruction_roundtrip() {
+    fun test_receive_instruction_roundtrip() {
         // Create a valid IntentRequirements payload
         let msg = gmp_common::new_intent_requirements(
             test_intent_id(),

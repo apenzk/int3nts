@@ -6,11 +6,111 @@ This guide explains how to add a new blockchain framework (e.g., MVM, EVM, SVM) 
 
 When adding a new framework, you must:
 
-1. **Replicate the core escrow functionality** from existing frameworks
-2. **Maintain test alignment** - each test should have a corresponding test in the same position across all frameworks
-3. **Use generic test descriptions** - avoid platform-specific terminology
-4. **Document platform differences** - use N/A comments for tests that don't apply to your platform
-5. **Follow consistent structure** - use the same test file organization and section headers
+1. **Create placeholder test files first** - before implementing any tests, create empty test files with placeholder headers and test descriptions matching existing frameworks
+2. **Replicate the core escrow functionality** from existing frameworks
+3. **Maintain test alignment** - each test should have a corresponding test in the same position across all frameworks
+4. **Use generic test descriptions** - avoid platform-specific terminology
+5. **Document platform differences** - use N/A comments for tests that don't apply to your platform
+6. **Follow consistent structure** - use the same test file organization and section headers
+
+## Step 1: Create Placeholder Test Files
+
+**CRITICAL: Before implementing any functionality, create empty test files with placeholders.**
+
+This establishes the baseline of test names and numbers from the start, preventing misalignment.
+
+### Procedure
+
+1. **Choose a reference framework** (e.g., SVM if adding MVM tests)
+2. **For each test file in the reference framework**, create an equivalent empty file in your new framework
+3. **Copy all test headers and documentation** from the reference framework
+4. **Add placeholder implementations** (empty test bodies or TODO markers)
+5. **Mark N/A tests** with inline comments explaining why they don't apply
+
+### Example: Creating Placeholder Test File
+
+**Reference (SVM):** `intent-frameworks/svm/programs/intent_escrow/tests/gmp.rs`
+
+**New (MVM):** `intent-frameworks/mvm/tests/inflow_escrow_gmp_tests.move`
+
+```move
+#[test_only]
+module mvmt_intent::inflow_escrow_gmp_tests {
+    // ... imports and helpers ...
+
+    // ============================================================================
+    // GMP CONFIG TESTS (Tests 1-2)
+    // ============================================================================
+
+    /// 1. Test: SetGmpConfig creates/updates GMP configuration
+    /// Verifies that admin can set GMP config with hub chain ID, trusted hub address, and endpoint.
+    /// Why: GMP config is required for source validation in all GMP message handlers.
+    #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
+    fun test_set_gmp_config(aptos_framework: &signer, admin: &signer) {
+        // TODO: Implement
+        abort 999
+    }
+
+    /// 2. Test: SetGmpConfig rejects unauthorized caller
+    /// Verifies that only admin can update GMP config after initial setup.
+    /// Why: GMP config controls trusted sources - must be admin-only.
+    #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
+    fun test_set_gmp_config_rejects_unauthorized(aptos_framework: &signer, admin: &signer) {
+        // TODO: Implement
+        abort 999
+    }
+
+    // ============================================================================
+    // LZ RECEIVE REQUIREMENTS TESTS (Tests 3-5)
+    // ============================================================================
+
+    /// 3. Test: LzReceiveRequirements stores intent requirements
+    /// Verifies that requirements from hub are stored correctly.
+    /// Why: Requirements must be stored before escrow can be created with validation.
+    #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
+    fun test_lz_receive_requirements_stores_requirements(aptos_framework: &signer, admin: &signer) {
+        // TODO: Implement
+        abort 999
+    }
+
+    // ... continue for all tests 4-13 ...
+}
+```
+
+### Benefits of Placeholder Files
+
+1. **Clear baseline**: Everyone knows exactly which tests are expected and their numbering
+2. **Prevents drift**: Tests can't be numbered incorrectly if placeholders exist first
+3. **Easy tracking**: Reviewers can easily see which tests are implemented vs placeholders
+4. **Forces alignment**: Developers must consciously decide if a test is N/A rather than accidentally omitting it
+
+### Placeholder Markers
+
+Use these patterns for placeholder tests:
+
+**Move:**
+```move
+fun test_example() {
+    // TODO: Implement
+    abort 999
+}
+```
+
+**Rust:**
+```rust
+#[tokio::test]
+async fn test_example() {
+    todo!("Implement test")
+}
+```
+
+**JavaScript/TypeScript:**
+```javascript
+it("Should test example", async function () {
+    // TODO: Implement
+    throw new Error("Not implemented");
+});
+```
 
 ## Test Structure Requirements
 
@@ -129,21 +229,64 @@ When a test from another framework doesn't apply to your platform, add a comment
 
 ### Platform-Specific Tests
 
-If your platform has tests that don't exist in other frameworks, add them at the end of the appropriate test file (maintaining the numbered sequence):
+If your platform has tests that don't exist in other frameworks, add them to the end of the test list in the checklist (with the next sequential number), and add N/A comment blocks in other frameworks.
 
-**Example (SVM-specific tests in error_conditions.rs):**
+**Example: MVM has manual release tests 16-19 that don't apply to SVM**
 
-```rust
-/// 9. Test: Zero Solver Address Rejection
-/// Verifies that escrows cannot be created with zero/default solver address.
-/// Why: A valid solver must be specified for claims.
-#[tokio::test]
-async fn test_reject_zero_solver_address() {
+**Step 1: Add to checklist** (`intent-frameworks/EXTENSION-CHECKLIST.md`)
+
+```markdown
+| 16 | test_release_escrow_succeeds_after_fulfillment | ✅ | ⚠️ | N/A |
+| 17 | test_release_escrow_rejects_without_fulfillment | ✅ | ⚠️ | N/A |
+| 18 | test_release_escrow_rejects_unauthorized_solver | ✅ | ⚠️ | N/A |
+| 19 | test_release_escrow_rejects_double_release | ✅ | ⚠️ | N/A |
+```
+
+**Step 2: Implement in MVM** (`intent-frameworks/mvm/tests/inflow_escrow_gmp_tests.move`)
+
+```move
+/// 16. Test: Release escrow succeeds after fulfillment (MVM-specific)
+/// Verifies that the solver can successfully claim escrowed tokens after receiving a fulfillment proof from the hub.
+/// Why: This is the final step in the inflow intent lifecycle. The solver must receive payment after fulfilling the intent on the hub.
+/// Note: MVM requires manual release call. SVM auto-releases in test 6.
+#[test(aptos_framework = @0x1, admin = @mvmt_intent, solver = @0x456)]
+fun test_release_escrow_succeeds_after_fulfillment(...) {
     // ... test implementation
 }
 ```
 
-**Critical Rule:** When adding a new test to one framework, you **must** add a corresponding N/A comment description at the **same index/position** in all other frameworks, explaining why that test is not implemented.
+**Step 3: Add N/A comments in SVM** (`intent-frameworks/svm/programs/intent_escrow/tests/gmp.rs`)
+
+```rust
+// ============================================================================
+// MVM-SPECIFIC TESTS (N/A for SVM)
+// ============================================================================
+//
+// 16. test_release_escrow_succeeds_after_fulfillment - N/A
+//     Why: MVM uses two-step fulfillment: (1) receive proof marks fulfilled,
+//     (2) manual release transfers tokens. SVM auto-releases tokens in test 6
+//     when fulfillment proof is received - no separate release step exists.
+//
+// 17. test_release_escrow_rejects_without_fulfillment - N/A
+//     Why: MVM tests that manual release requires fulfillment first. SVM doesn't
+//     have a separate release instruction - release happens automatically in
+//     test_lz_receive_fulfillment_proof_releases_escrow (test 6).
+//
+// 18. test_release_escrow_rejects_unauthorized_solver - N/A
+//     Why: MVM tests solver authorization during manual release. SVM validates
+//     solver during LzReceiveFulfillmentProof and auto-releases to the correct
+//     solver immediately (covered in test 6).
+//
+// 19. test_release_escrow_rejects_double_release - N/A
+//     Why: MVM tests that manual release can't happen twice. SVM auto-releases
+//     once in test 6, and the escrow is marked claimed. Double fulfillment is
+//     rejected in test 8 (test_lz_receive_fulfillment_proof_rejects_already_fulfilled).
+```
+
+**Critical Rule:** When adding a new test to one framework, you **must**:
+1. Add it to the checklist with the next sequential number
+2. Mark it N/A for frameworks where it doesn't apply
+3. Add comment blocks in those frameworks explaining WHY it's N/A
 
 ### Adding New Tests to Existing Frameworks
 

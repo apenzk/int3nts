@@ -32,11 +32,23 @@ All test functions must follow the documentation and section header rules define
 
 ### Steps for Task 1
 
-1. Find new or modified test files using git:
+1. **Extract only new/modified test functions from git diff:**
+
    ```bash
+   # For newly added files
    git diff --name-only HEAD
    git diff --name-only origin/main...HEAD
+
+   # For modified files, extract only the changed lines
+   git diff HEAD
+   git diff origin/main...HEAD
    ```
+
+   **CRITICAL: Use `git diff` output to identify ONLY the new/modified test functions.**
+   - For **new files**: Review all test functions
+   - For **modified files**: Extract and review ONLY the test functions that appear in the diff (marked with `+` lines)
+   - DO NOT read entire test files and review all functions
+   - ONLY review test functions that are new or have been modified
 
    Look for test files in:
    - `intent-frameworks/**/tests/**/*.rs`
@@ -48,8 +60,8 @@ All test functions must follow the documentation and section header rules define
    - `frontend/src/**/*.test.ts`
    - `frontend/src/**/*.test.tsx`
 
-2. For each modified test file:
-   - Check each test function has proper documentation (Rule 10)
+2. For each new/modified test function (from diff):
+   - Check the function has proper documentation (Rule 10)
    - Check section headers are used correctly (Rule 11)
    - Report violations with file path and line number
 
@@ -111,14 +123,26 @@ Check variable and parameter naming:
 
 ### Steps for Task 2
 
-1. For each new/modified test file:
+1. **Use git diff to identify ONLY new/modified code in test files:**
+
+   ```bash
+   git diff HEAD
+   git diff origin/main...HEAD
+   ```
+
+   **CRITICAL: Review ONLY the lines marked with `+` in the diff.**
+   - For **new files**: Review all code
+   - For **modified files**: Review ONLY the added/changed lines (marked with `+`)
+   - DO NOT read entire test files
+
+2. For each new/modified code section (from diff):
    - Check for hardcoded hex values, addresses, IDs (should use constants)
    - Verify constant naming follows conventions
    - Check variable naming follows `_addr` suffix rule
    - Look for unnecessary `let` bindings
    - Check if struct update syntax is used appropriately
 
-2. Report violations:
+3. Report violations:
    - List magic numbers that should be constants
    - List poorly named variables
    - List unnecessary variable bindings
@@ -131,12 +155,13 @@ Check variable and parameter naming:
 ### What to check
 
 Any added or modified code must be well covered by tests. This includes:
+
 - New functions/methods
 - New modules/contracts/programs
 - Modified business logic
 - Edge cases and error conditions
 
-### Steps for Task 2
+### Steps for Task 3
 
 1. Identify recently added or modified code:
    - Use git diff to find changes
@@ -180,11 +205,12 @@ There are 5 checklist files that track test symmetry across frameworks (MVM/EVM/
 ### What to check
 
 Each checklist has tables showing which tests are:
+
 - ✅ = Implemented
 - ⚠️ = Not yet implemented
 - N/A = Not applicable to platform
 
-### Steps for Task 3
+### Steps for Task 4
 
 1. Read all 5 EXTENSION-CHECKLIST.md files
 
@@ -208,11 +234,13 @@ Each checklist has tables showing which tests are:
 Provide a clear report with:
 
 ### Part 1: Test Format Issues (New/Modified Only)
+
 - File path and line number
 - Description of the issue
 - Suggested fix
 
 ### Part 2: Test Code Quality Issues (New/Modified Only)
+
 - Magic numbers that should be constants
 - Poorly named variables (missing `_addr` suffix, etc.)
 - Unnecessary variable bindings
@@ -220,6 +248,7 @@ Provide a clear report with:
 - Suggested improvements
 
 ### Part 3: Test Coverage Analysis (New/Modified Code Only)
+
 - Functions/modules without adequate test coverage
 - Types of tests missing (happy path, edge cases, errors)
 - Suggested test cases to add
@@ -229,6 +258,7 @@ Provide a clear report with:
 - **Tests with weak assertions** - these MUST use strict checks
 
 ### Part 4: Extension Checklist Updates (New/Modified Tests Only)
+
 - Which checklists were updated
 - Tests that changed status (⚠️ → ✅)
 - Tests that are still missing
@@ -243,6 +273,51 @@ Provide a clear report with:
 - Verify test coverage for any new or modified code
 - Any added code should be well covered by tests
 - Update checklists in place - don't just report, make the changes
+
+### Framework Extension Requirement
+
+**CRITICAL: When adding tests for a new framework, placeholder test files must be created FIRST.**
+
+See `docs/intent-frameworks/framework-extension-guide.md` - "Step 1: Create Placeholder Test Files" for the complete procedure.
+
+**Why this matters for test review:**
+- If a new test file doesn't match the expected baseline from existing frameworks, it indicates placeholders were not created first
+- Test numbering misalignment is a sign that placeholders were skipped
+- Missing tests should have been identified during placeholder creation, not during implementation
+
+**During review, check:**
+
+1. Does the new test file have the same test numbers as the reference framework?
+2. Are any tests missing that should be present (or marked N/A)?
+3. Are extra tests properly added at the end with new numbers and marked N/A in other frameworks?
+
+If you find misalignment, refer the developer to the Framework Extension Guide for the proper placeholder-first approach.
+
+### Test Ordering Requirement
+
+**CRITICAL: Test order in framework test files MUST match the order in EXTENSION-CHECKLIST.md.**
+
+The EXTENSION-CHECKLIST.md tables define the canonical ordering of tests. When reviewing framework test files:
+
+1. **Test functions must appear in the same order as listed in the checklist**
+   - Test #1 from checklist should be the first test function in the file
+   - Test #2 from checklist should be the second test function
+   - And so on...
+
+2. **Why this matters:**
+   - Consistent ordering makes it easy to verify coverage across frameworks
+   - Developers can quickly find corresponding tests in different frameworks
+   - Test numbers in the checklist serve as the source of truth for ordering
+
+3. **During review, verify:**
+   - Read the relevant EXTENSION-CHECKLIST.md section for the module being tested
+   - Check that tests in the file appear in the same sequence as the checklist rows
+   - Report any ordering violations with the expected order from the checklist
+
+4. **How to fix ordering issues:**
+   - Reorder test functions in the file to match the checklist
+   - Do NOT change the checklist order to match the file
+   - The checklist defines the order; the file must conform
 
 ### Critical: No Fallbacks Policy
 

@@ -23,6 +23,7 @@ module mvmt_intent::native_gmp_endpoint {
     use mvmt_intent::gmp_common;
     use mvmt_intent::intent_gmp_hub;
     use mvmt_intent::outflow_validator_impl;
+    use mvmt_intent::inflow_escrow_gmp;
 
     // ============================================================================
     // ERROR CODES
@@ -173,12 +174,14 @@ module mvmt_intent::native_gmp_endpoint {
     /// Route a GMP message to the appropriate handler based on payload type.
     ///
     /// Message types:
-    /// - 0x01 (IntentRequirements): Route to outflow_validator_impl::receive_intent_requirements
-    ///   (when MVM is a connected chain receiving requirements from hub)
+    /// - 0x01 (IntentRequirements): Route to BOTH outflow_validator_impl AND inflow_escrow_gmp
+    ///   (MVM as connected chain - outflow for solver delivery, inflow for escrow creation)
     /// - 0x02 (EscrowConfirmation): Route to intent_gmp_hub::receive_escrow_confirmation
     ///   (when MVM is hub receiving escrow confirmations from connected chains)
-    /// - 0x03 (FulfillmentProof): Route to intent_gmp_hub::receive_fulfillment_proof
-    ///   (when MVM is hub receiving fulfillment proofs from connected chains)
+    /// - 0x03 (FulfillmentProof): Route to BOTH intent_gmp_hub AND inflow_escrow_gmp
+    ///   (hub receives from connected chain OR connected chain receives from hub)
+    ///
+    /// Each module handles idempotency and ignores messages not relevant to it.
     fun route_message(
         src_chain_id: u32,
         src_addr: vector<u8>,
@@ -188,14 +191,26 @@ module mvmt_intent::native_gmp_endpoint {
         let msg_type = gmp_common::peek_message_type(&payload);
 
         if (msg_type == MESSAGE_TYPE_INTENT_REQUIREMENTS) {
-            // MVM as connected chain: receive intent requirements from hub
-            outflow_validator_impl::receive_intent_requirements(src_chain_id, src_addr, payload);
+            // MVM as connected chain: route to both outflow validator and inflow escrow
+            // Each module stores requirements relevant to its flow (idempotent)
+            outflow_validator_impl::receive_intent_requirements(
+                src_chain_id, copy src_addr, copy payload
+            );
+            inflow_escrow_gmp::receive_intent_requirements(
+                src_chain_id, src_addr, payload
+            );
         } else if (msg_type == MESSAGE_TYPE_ESCROW_CONFIRMATION) {
             // MVM as hub: connected chain confirms escrow was created
             intent_gmp_hub::receive_escrow_confirmation(src_chain_id, src_addr, payload);
         } else if (msg_type == MESSAGE_TYPE_FULFILLMENT_PROOF) {
-            // MVM as hub: connected chain reports fulfillment (for outflow intents)
-            intent_gmp_hub::receive_fulfillment_proof(src_chain_id, src_addr, payload);
+            // Route to both hub (outflow case) and inflow escrow (inflow case)
+            // Each module checks if intent_id is relevant and handles accordingly
+            intent_gmp_hub::receive_fulfillment_proof(
+                src_chain_id, copy src_addr, copy payload
+            );
+            inflow_escrow_gmp::receive_fulfillment_proof(
+                src_chain_id, src_addr, payload
+            );
         } else {
             abort EUNKNOWN_MESSAGE_TYPE
         };
