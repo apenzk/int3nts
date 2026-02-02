@@ -266,6 +266,28 @@ SVM: `intent-frameworks/svm/programs/outflow-validator/tests/interface_tests.rs`
 | 6 | test_error_conversion | N/A | ⚠️ | ✅ |
 | 7 | test_error_codes_unique | N/A | ⚠️ | ✅ |
 
+### Outflow Validator Integration Tests
+
+MVM: ⚠️
+EVM: ⚠️
+SVM: `intent-frameworks/svm/programs/outflow-validator/tests/validator_tests.rs`
+
+| # | Test | MVM | EVM | SVM |
+| --- | --- | --- | --- | --- |
+| 1 | test_initialize_creates_config | ⚠️ | ⚠️ | ✅ |
+| 2 | test_initialize_rejects_double_init | ⚠️ | ⚠️ | ✅ |
+| 3 | test_lz_receive_stores_requirements | ⚠️ | ⚠️ | ✅ |
+| 4 | test_lz_receive_idempotent | ⚠️ | ⚠️ | ✅ |
+| 5 | test_lz_receive_rejects_untrusted_source | ⚠️ | ⚠️ | ✅ |
+| 6 | test_lz_receive_rejects_invalid_payload | ⚠️ | ⚠️ | ✅ |
+| 7 | test_fulfill_intent_rejects_already_fulfilled | ⚠️ | ⚠️ | ✅ |
+| 8 | test_fulfill_intent_rejects_expired | ⚠️ | ⚠️ | ✅ |
+| 9 | test_fulfill_intent_rejects_unauthorized_solver | ⚠️ | ⚠️ | ✅ |
+| 10 | test_fulfill_intent_rejects_token_mismatch | ⚠️ | ⚠️ | ✅ |
+| 11 | test_fulfill_intent_rejects_requirements_not_found | ⚠️ | ⚠️ | ✅ |
+| 12 | test_fulfill_intent_rejects_recipient_mismatch | ⚠️ | ⚠️ | ✅ |
+| 13 | test_fulfill_intent_succeeds | ⚠️ | ⚠️ | ✅ |
+
 ---
 
 ## Native GMP Endpoint test alignment

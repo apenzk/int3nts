@@ -2777,6 +2777,7 @@ dependencies = [
  "borsh 0.10.4",
  "gmp-common",
  "hex",
+ "native_gmp_endpoint",
  "solana-program",
  "solana-program-test",
  "solana-sdk",

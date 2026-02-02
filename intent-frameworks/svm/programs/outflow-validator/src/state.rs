@@ -23,11 +23,13 @@ pub struct IntentRequirementsAccount {
     pub expiry: u64,
     /// Whether this intent has been fulfilled
     pub fulfilled: bool,
+    /// Bump seed for PDA derivation
+    pub bump: u8,
 }
 
 impl IntentRequirementsAccount {
     pub const DISCRIMINATOR: u8 = 1;
-    pub const SIZE: usize = 1 + 32 + 32 + 8 + 32 + 32 + 8 + 1; // 146 bytes
+    pub const SIZE: usize = 1 + 32 + 32 + 8 + 32 + 32 + 8 + 1 + 1; // 147 bytes
 
     pub fn new(
         intent_id: [u8; 32],
@@ -36,6 +38,7 @@ impl IntentRequirementsAccount {
         token_mint: Pubkey,
         authorized_solver: Pubkey,
         expiry: u64,
+        bump: u8,
     ) -> Self {
         Self {
             discriminator: Self::DISCRIMINATOR,
@@ -46,6 +49,7 @@ impl IntentRequirementsAccount {
             authorized_solver,
             expiry,
             fulfilled: false,
+            bump,
         }
     }
 }
@@ -64,19 +68,28 @@ pub struct ConfigAccount {
     pub hub_chain_id: u32,
     /// The trusted hub address (for GMP message verification)
     pub trusted_hub_addr: [u8; 32],
+    /// Bump seed for PDA derivation
+    pub bump: u8,
 }
 
 impl ConfigAccount {
     pub const DISCRIMINATOR: u8 = 2;
-    pub const SIZE: usize = 1 + 32 + 32 + 4 + 32; // 101 bytes
+    pub const SIZE: usize = 1 + 32 + 32 + 4 + 32 + 1; // 102 bytes (added bump)
 
-    pub fn new(admin: Pubkey, gmp_endpoint: Pubkey, hub_chain_id: u32, trusted_hub_addr: [u8; 32]) -> Self {
+    pub fn new(admin: Pubkey, gmp_endpoint: Pubkey, hub_chain_id: u32, trusted_hub_addr: [u8; 32], bump: u8) -> Self {
         Self {
             discriminator: Self::DISCRIMINATOR,
             admin,
             gmp_endpoint,
             hub_chain_id,
             trusted_hub_addr,
+            bump,
         }
     }
+}
+
+/// Seeds for PDA derivation
+pub mod seeds {
+    pub const CONFIG_SEED: &[u8] = b"config";
+    pub const REQUIREMENTS_SEED: &[u8] = b"requirements";
 }

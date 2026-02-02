@@ -26,3 +26,4 @@ gmp-common = { path = "../gmp-common" }
 solana-program-test = "2.1"
 solana-sdk = "2.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+native_gmp_endpoint = { path = "../native-gmp-endpoint", features = ["no-entrypoint"] }

@@ -27,4 +27,4 @@ pub use solana_program;
 // Re-export for external use
 pub use error::OutflowError;
 pub use instruction::OutflowInstruction;
-pub use state::{ConfigAccount, IntentRequirementsAccount};
+pub use state::{seeds, ConfigAccount, IntentRequirementsAccount};

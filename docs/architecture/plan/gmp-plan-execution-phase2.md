@@ -1,6 +1,6 @@
 # Phase 2: SVM + MVM Core Implementation (2-3 days)
 
-**Status:** Not Started
+**Status:** In Progress
 **Depends On:** Phase 1
 **Blocks:** Phase 3
 
@@ -77,19 +77,19 @@
 
 **Tasks:**
 
-- [ ] Implement GMP receive handler for native GMP endpoint
-- [ ] Implement `lz_receive` to receive intent requirements from hub
-- [ ] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
-- [ ] **If requirements already exist → ignore duplicate message (idempotent)**
-- [ ] **If requirements don't exist → store intent requirements** in PDA (intent_id/step => {requirements, authorizedSolver})
-- [ ] Implement `fulfill_intent` instruction for authorized solvers to call
-- [ ] Instruction pulls tokens from authorized solver's wallet via SPL token transfer
-- [ ] Validate recipient, amount, token match stored requirements
-- [ ] Validate solver matches authorized solver from stored requirements
-- [ ] Forward tokens to user wallet
-- [ ] Send GMP message to hub via `lz_send`
-- [ ] Emit `FulfillmentSucceeded` or `FulfillmentFailed` events
-- [ ] Test all validation scenarios
+- [x] Implement GMP receive handler for native GMP endpoint
+- [x] Implement `lz_receive` to receive intent requirements from hub
+- [x] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
+- [x] **If requirements already exist → ignore duplicate message (idempotent)**
+- [x] **If requirements don't exist → store intent requirements** in PDA (intent_id/step => {requirements, authorizedSolver})
+- [x] Implement `fulfill_intent` instruction for authorized solvers to call
+- [x] Instruction pulls tokens from authorized solver's wallet via SPL token transfer
+- [x] Validate recipient, amount, token match stored requirements
+- [x] Validate solver matches authorized solver from stored requirements
+- [x] Forward tokens to user wallet
+- [x] Send GMP message to hub via `lz_send`
+- [x] Emit `FulfillmentSucceeded` or `FulfillmentFailed` events
+- [x] Test all validation scenarios
 
 **Test:**
 

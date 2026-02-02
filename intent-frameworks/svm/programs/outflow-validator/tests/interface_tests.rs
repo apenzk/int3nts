@@ -152,6 +152,7 @@ fn test_intent_requirements_account_roundtrip() {
     let original_token = Pubkey::new_unique();
     let original_solver = Pubkey::new_unique();
     let original_expiry = DUMMY_EXPIRY;
+    let original_bump = 255u8;
 
     let account = IntentRequirementsAccount::new(
         original_intent_id,
@@ -160,6 +161,7 @@ fn test_intent_requirements_account_roundtrip() {
         original_token,
         original_solver,
         original_expiry,
+        original_bump,
     );
 
     let serialized = account.try_to_vec().unwrap();
@@ -172,6 +174,7 @@ fn test_intent_requirements_account_roundtrip() {
     assert_eq!(deserialized.authorized_solver, original_solver);
     assert_eq!(deserialized.expiry, original_expiry);
     assert!(!deserialized.fulfilled);
+    assert_eq!(deserialized.bump, original_bump);
 }
 
 /// 5. Test: ConfigAccount serialization roundtrip
@@ -182,12 +185,14 @@ fn test_config_account_roundtrip() {
     let original_endpoint = Pubkey::new_unique();
     let original_chain_id = DUMMY_HUB_CHAIN_ID;
     let original_hub_addr = dummy_addr_1();
+    let original_bump = 254u8;
 
     let account = ConfigAccount::new(
         original_admin,
         original_endpoint,
         original_chain_id,
         original_hub_addr,
+        original_bump,
     );
 
     let serialized = account.try_to_vec().unwrap();
@@ -197,6 +202,7 @@ fn test_config_account_roundtrip() {
     assert_eq!(deserialized.gmp_endpoint, original_endpoint);
     assert_eq!(deserialized.hub_chain_id, original_chain_id);
     assert_eq!(deserialized.trusted_hub_addr, original_hub_addr);
+    assert_eq!(deserialized.bump, original_bump);
 }
 
 // ============================================================================
