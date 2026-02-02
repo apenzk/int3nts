@@ -48,12 +48,15 @@
 
 **Tasks:**
 
-- [ ] Extend `native_gmp_endpoint` with CPI to destination module's receive handler
-- [ ] Add trusted remote verification (source chain + address validation)
-- [ ] Add replay protection with nonce tracking per source
-- [ ] Implement message routing based on payload type
-- [ ] Test send/receive flow end-to-end
-- [ ] Test relay authorization and replay protection
+- [x] Extend `native_gmp_endpoint` with CPI to destination module's receive handler
+- [x] Add trusted remote verification (source chain + address validation)
+- [x] Add replay protection with nonce tracking per source
+- [x] Implement message routing based on payload type
+- [x] Test Send emits correct event with payload
+- [x] Test send/receive flow end-to-end
+- [x] Test relay authorization and replay protection
+- [x] Update `intent-frameworks/EXTENSION-CHECKLIST.md` with MVM test status (tests 13-15)
+- [x] Verify SVM and MVM test alignment in EXTENSION-CHECKLIST.md (all shared tests have matching status)
 
 **Test:**
 

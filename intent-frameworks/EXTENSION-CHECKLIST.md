@@ -274,7 +274,7 @@ Native GMP endpoint provides a standardized interface for cross-chain messaging.
 
 ### Native GMP Endpoint Interface Tests
 
-MVM: `intent-frameworks/mvm/tests/native_gmp_endpoint_tests.move` ⚠️
+MVM: `intent-frameworks/mvm/tests/native_gmp_endpoint_tests.move`
 EVM: `intent-frameworks/evm/test/native-gmp-endpoint/` ⚠️
 SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs`
 
@@ -292,6 +292,12 @@ SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs
 | 10 | test_inbound_nonce_account_replay_detection | N/A | ⚠️ | ✅ |
 | 11 | test_error_conversion | N/A | ⚠️ | ✅ |
 | 12 | test_error_codes_unique | N/A | ⚠️ | ✅ |
-| 13 | test_send_updates_nonce_state | ⚠️ | ⚠️ | ✅ |
-| 14 | test_deliver_message_calls_receiver | ⚠️ | ⚠️ | ✅ |
-| 15 | test_deliver_message_rejects_replay | ⚠️ | ⚠️ | ✅ |
+| 13 | test_send_updates_nonce_state | ✅ | ⚠️ | ✅ |
+| 14 | test_deliver_message_calls_receiver | ✅ | ⚠️ | ✅ |
+| 15 | test_deliver_message_rejects_replay | ✅ | ⚠️ | ✅ |
+| 16 | test_deliver_message_rejects_unauthorized_relay | ✅ | ⚠️ | ✅ |
+| 17 | test_deliver_message_authorized_relay | ✅ | ⚠️ | ✅ |
+| 18 | test_deliver_message_rejects_untrusted_remote | ✅ | ⚠️ | ✅ |
+| 19 | test_deliver_message_rejects_no_trusted_remote | ✅ | ⚠️ | ✅ |
+| 20 | test_set_trusted_remote_unauthorized | ✅ | ⚠️ | ✅ |
+| 21 | test_deliver_message_rejects_lower_nonce | ✅ | ⚠️ | ✅ |

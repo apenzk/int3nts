@@ -747,4 +747,241 @@ mod integration {
         let result = send_tx(&mut context, &relay, &[deliver_replay], &[]).await;
         assert!(result.is_err(), "Replay should be rejected");
     }
+
+    /// 16. Test: Unauthorized relay rejected
+    /// Verifies that only authorized relays can deliver messages.
+    /// Why: Relay authorization prevents malicious actors from injecting fake messages.
+    #[tokio::test]
+    async fn test_deliver_message_rejects_unauthorized_relay() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let unauthorized_relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund unauthorized relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &unauthorized_relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize and set trusted remote, but do NOT add relay
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let src_addr = [0x33; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
+        send_tx(&mut context, &admin, &[init_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Try to deliver message with unauthorized relay - should fail
+        let payload = vec![0x01, 0x02];
+        let deliver_ix = create_deliver_message_ix(
+            program_id,
+            unauthorized_relay.pubkey(), // not authorized
+            unauthorized_relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM,
+            src_addr,
+            payload,
+            1, // nonce
+        );
+        let result = send_tx(&mut context, &unauthorized_relay, &[deliver_ix], &[]).await;
+        assert!(result.is_err(), "Unauthorized relay should be rejected");
+    }
+
+    /// 17. Test: Authorized relay succeeds
+    /// Verifies that explicitly authorized relays can deliver messages.
+    /// Why: The relay authorization system must correctly grant access to approved relays.
+    #[tokio::test]
+    async fn test_deliver_message_authorized_relay() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let authorized_relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund authorized relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &authorized_relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize, add relay, set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), authorized_relay.pubkey());
+        let src_addr = [0x44; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Verify relay is authorized by successfully delivering a message
+        let payload = vec![0x01, 0x02];
+        let deliver_ix = create_deliver_message_ix(
+            program_id,
+            authorized_relay.pubkey(), // explicitly authorized
+            authorized_relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM,
+            src_addr,
+            payload,
+            1, // nonce
+        );
+        send_tx(&mut context, &authorized_relay, &[deliver_ix], &[]).await.unwrap();
+
+        // Verify inbound nonce was updated (proves message was delivered)
+        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
+        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], &program_id);
+        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
+        assert_eq!(nonce_account.last_nonce, 1, "Message should have been delivered");
+    }
+
+    /// 18. Test: Untrusted remote address rejected
+    /// Verifies that messages from non-trusted source addresses are rejected.
+    /// Why: Trusted remote verification prevents spoofed cross-chain messages.
+    #[tokio::test]
+    async fn test_deliver_message_rejects_untrusted_remote() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize, add relay, set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        let trusted_addr = [0x55; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, trusted_addr);
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Try to deliver message from untrusted address
+        let untrusted_addr = [0xFF; 32]; // different from trusted_addr
+        let payload = vec![0x01, 0x02];
+        let deliver_ix = create_deliver_message_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM,
+            untrusted_addr, // not the trusted address
+            payload,
+            1, // nonce
+        );
+        let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
+        assert!(result.is_err(), "Untrusted remote should be rejected");
+    }
+
+    /// 19. Test: No trusted remote configured
+    /// Verifies that messages fail when no trusted remote is configured for the source chain.
+    /// Why: Missing configuration must be caught early to prevent security holes.
+    #[tokio::test]
+    async fn test_deliver_message_rejects_no_trusted_remote() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize and add relay, but do NOT set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix], &[]).await.unwrap();
+
+        // Try to deliver message - should fail because no trusted remote is configured
+        let src_addr = [0x66; 32];
+        let payload = vec![0x01, 0x02];
+        let deliver_ix = create_deliver_message_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM, // no trusted remote configured for this chain
+            src_addr,
+            payload,
+            1, // nonce
+        );
+        let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
+        assert!(result.is_err(), "Message from chain with no trusted remote should be rejected");
+    }
+
+    /// 20. Test: Non-admin cannot set trusted remote
+    /// Verifies that only the admin can configure trusted remote addresses.
+    /// Why: Admin-only access prevents unauthorized trust configuration changes.
+    #[tokio::test]
+    async fn test_set_trusted_remote_unauthorized() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let non_admin = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund non-admin
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &non_admin.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize endpoint
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        send_tx(&mut context, &admin, &[init_ix], &[]).await.unwrap();
+
+        // Non-admin tries to set trusted remote - should fail
+        let trusted_addr = [0x77; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, non_admin.pubkey(), non_admin.pubkey(), CHAIN_ID_MVM, trusted_addr);
+        let result = send_tx(&mut context, &non_admin, &[set_trusted_ix], &[]).await;
+        assert!(result.is_err(), "Non-admin should not be able to set trusted remote");
+    }
+
+    /// 21. Test: Lower nonce rejected
+    /// Verifies that delivering a message with a nonce lower than the last processed fails.
+    /// Why: Strictly increasing nonces prevent out-of-order message processing attacks.
+    #[tokio::test]
+    async fn test_deliver_message_rejects_lower_nonce() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize, add relay, set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        let src_addr = [0x88; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Deliver message with nonce = 5
+        let payload1 = vec![0x01];
+        let deliver_ix = create_deliver_message_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM,
+            src_addr,
+            payload1,
+            5, // nonce
+        );
+        send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
+
+        // Warp to a new slot to ensure transaction uniqueness in test framework
+        context.warp_to_slot(100).unwrap();
+
+        // Try to deliver with lower nonce = 3 - should fail
+        let payload2 = vec![0x02];
+        let deliver_ix_lower = create_deliver_message_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),
+            CHAIN_ID_MVM,
+            src_addr,
+            payload2,
+            3, // lower than 5 - should fail
+        );
+        let result = send_tx(&mut context, &relay, &[deliver_ix_lower], &[]).await;
+        assert!(result.is_err(), "Lower nonce should be rejected");
+    }
 }
