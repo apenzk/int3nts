@@ -292,6 +292,93 @@ impl ConnectedMvmClient {
         anyhow::bail!("Could not extract transaction hash from output: {}", output_str)
     }
 
+    /// Fulfills an outflow intent via the GMP flow on the connected chain.
+    ///
+    /// Calls `outflow_validator::fulfill_intent` which:
+    /// 1. Validates the solver is authorized and requirements exist
+    /// 2. Transfers tokens from solver to recipient
+    /// 3. Sends FulfillmentProof back to hub via GMP
+    ///
+    /// The hub will automatically release tokens when it receives the FulfillmentProof.
+    ///
+    /// # Arguments
+    ///
+    /// * `intent_id` - 32-byte intent identifier (0x-prefixed hex)
+    /// * `token_metadata` - Token metadata object address
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transaction hash
+    /// * `Err(anyhow::Error)` - Failed to fulfill intent
+    pub fn fulfill_outflow_via_gmp(
+        &self,
+        intent_id: &str,
+        token_metadata: &str,
+    ) -> Result<String> {
+        use tracing::info;
+
+        info!(
+            "Calling outflow_validator::fulfill_intent - intent_id: {}, token_metadata: {}",
+            intent_id, token_metadata
+        );
+
+        // Use aptos CLI for compatibility with E2E tests which create aptos profiles
+        // Function signature: fulfill_intent(solver: &signer, intent_id: vector<u8>, token_metadata: Object<Metadata>)
+        let output = Command::new("aptos")
+            .args(&[
+                "move",
+                "run",
+                "--profile",
+                &self.profile,
+                "--assume-yes",
+                "--function-id",
+                &format!("{}::outflow_validator_impl::fulfill_intent", self.module_addr),
+                "--args",
+                &format!("hex:{}", intent_id.strip_prefix("0x").unwrap_or(intent_id)),
+                &format!("address:{}", token_metadata),
+            ])
+            .output()
+            .context("Failed to execute aptos move run")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "outflow_validator::fulfill_intent failed:\nstderr: {}\nstdout: {}",
+                stderr,
+                stdout
+            );
+        }
+
+        // Extract transaction hash from output
+        let output_str = String::from_utf8_lossy(&output.stdout);
+
+        // Try to parse as JSON first (aptos CLI outputs JSON with Result wrapper)
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output_str) {
+            if let Some(hash) = json
+                .get("Result")
+                .and_then(|r| r.get("transaction_hash"))
+                .and_then(|h| h.as_str())
+            {
+                return Ok(hash.to_string());
+            }
+        }
+
+        // Fallback: line-based parsing
+        if let Some(hash_line) = output_str.lines().find(|l| l.contains("hash") || l.contains("Hash")) {
+            if let Some(hash) = hash_line.split_whitespace().find(|s| s.starts_with("0x")) {
+                return Ok(hash.to_string());
+            }
+            if let Some(start) = hash_line.find("\"0x") {
+                if let Some(end) = hash_line[start + 1..].find('"') {
+                    return Ok(hash_line[start + 1..start + 1 + end].to_string());
+                }
+            }
+        }
+
+        anyhow::bail!("Could not extract transaction hash from output: {}", output_str)
+    }
+
     /// Completes an escrow by releasing funds to the solver with trusted-gmp approval
     ///
     /// Calls the `complete_escrow_from_fa` entry function which:

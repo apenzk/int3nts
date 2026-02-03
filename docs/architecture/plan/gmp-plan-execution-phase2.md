@@ -323,16 +323,20 @@ RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet"
 **Files:**
 
 - `solver/src/service/outflow.rs` (update to use outflow_validator)
-- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
+- `solver/src/chains/connected_mvm.rs` (add fulfill_outflow_via_gmp method)
+- `testing-infra/ci-e2e/e2e-tests-mvm/` (no changes needed - solver handles flow)
 
 **Tasks:**
 
-- [ ] Update solver outflow service to call `outflow_validator::fulfill_intent` on connected chain
-- [ ] Start native GMP relay in background during tests (run-tests scripts)
-- [ ] Update `run-tests-outflow.sh` to use GMP flow
-- [ ] Update `run-tests-inflow.sh` to use GMP flow
-- [ ] Verify GMP messages are sent and received correctly (MVM hub ↔ MVM connected)
-- [ ] Ensure existing test assertions still pass
+- [x] Update solver outflow service to call `outflow_validator::fulfill_intent` on connected chain
+  - Added `fulfill_outflow_via_gmp()` method to `ConnectedMvmClient`
+  - Updated `OutflowService::execute_connected_transfer()` to use GMP flow for MVM
+  - Updated `OutflowService::run()` to skip trusted-gmp approval for GMP flow (hub auto-releases)
+- [x] Start native GMP relay in background during tests (already done via `start_trusted_gmp`)
+- [x] Update `run-tests-outflow.sh` to use GMP flow (no changes needed - solver handles flow internally)
+- [x] Update `run-tests-inflow.sh` to use GMP flow (no changes needed - MVM inflow uses existing mechanism)
+- [ ] Verify GMP messages are sent and received correctly (MVM hub ↔ MVM connected) - requires E2E testing in CI
+- [ ] Ensure existing test assertions still pass - requires E2E testing in CI
 
 **Test:**
 

@@ -1,4 +1,7 @@
-//! Unit tests for EVM chain clients
+//! Unit tests for EVM Connected chain client
+//!
+//! Test ordering matches EXTENSION-CHECKLIST.md for cross-VM synchronization.
+//! Tests marked N/A in the checklist are skipped in this file.
 
 use hex;
 use serde_json::json;
@@ -31,19 +34,29 @@ fn create_test_evm_config() -> EvmChainConfig {
 }
 
 // ============================================================================
-// CONNECTED EVM CLIENT TESTS
+// CLIENT INITIALIZATION
 // ============================================================================
 
-/// What is tested: ConnectedEvmClient::new() creates a client with correct config
-/// Why: Ensure client initialization works correctly
+/// 1. Test: ConnectedEvmClient Initialization
+/// Verifies that ConnectedEvmClient::new() creates a client with correct config.
+/// Why: Client initialization is the entry point for all EVM operations. A failure
+/// here would prevent any solver operations on connected EVM chains.
 #[test]
 fn test_evm_client_new() {
     let config = create_test_evm_config();
     let _client = ConnectedEvmClient::new(&config).unwrap();
 }
 
-/// What is tested: get_escrow_events() parses EscrowInitialized events correctly
-/// Why: Ensure we can extract escrow events from EVM chain via JSON-RPC
+// #2: client_new_rejects_invalid - N/A for EVM (no config validation like SVM pubkey)
+
+// ============================================================================
+// ESCROW EVENT QUERYING
+// ============================================================================
+
+/// 3. Test: Get Escrow Events Success
+/// Verifies that get_escrow_events() parses EscrowInitialized events correctly.
+/// Why: The solver needs to parse escrow events from connected EVM chains to
+/// identify fulfillment opportunities. A parsing bug would cause missed escrows.
 #[tokio::test]
 async fn test_get_escrow_events_evm_success() {
     let mock_server = MockServer::start().await;
@@ -98,8 +111,10 @@ async fn test_get_escrow_events_evm_success() {
     assert_eq!(events[0].reserved_solver_addr, DUMMY_SOLVER_ADDR_EVM);
 }
 
-/// What is tested: get_escrow_events() handles empty log list
-/// Why: Ensure we handle no events gracefully
+/// 4. Test: Get Escrow Events Empty
+/// Verifies that get_escrow_events() handles empty log list correctly.
+/// Why: A chain with no escrows should return an empty list, not an error.
+/// The solver should handle this gracefully and continue polling.
 #[tokio::test]
 async fn test_get_escrow_events_evm_empty() {
     let mock_server = MockServer::start().await;
@@ -123,8 +138,10 @@ async fn test_get_escrow_events_evm_empty() {
     assert_eq!(events.len(), 0);
 }
 
-/// What is tested: get_escrow_events() handles JSON-RPC errors
-/// Why: Ensure we handle RPC errors correctly
+/// 5. Test: Get Escrow Events Error
+/// Verifies that get_escrow_events() handles JSON-RPC errors correctly.
+/// Why: RPC errors should be propagated to the caller, not silently ignored.
+/// The solver needs to know when queries fail to retry or alert operators.
 #[tokio::test]
 async fn test_get_escrow_events_evm_error() {
     let mock_server = MockServer::start().await;
@@ -151,12 +168,16 @@ async fn test_get_escrow_events_evm_error() {
     assert!(result.unwrap_err().to_string().contains("JSON-RPC error"));
 }
 
+// #6: escrow_event_deserialization - N/A for EVM (parses directly in get_escrow_events)
+
 // ============================================================================
-// claim_escrow() TESTS
+// FULFILLMENT OPERATIONS
 // ============================================================================
 
-/// What is tested: claim_escrow() validates intent_id format and converts to EVM format
-/// Why: Ensure intent_id is properly formatted before passing to Hardhat script
+/// 7. Test: Claim Escrow Intent ID Formatting
+/// Verifies that intent_id is correctly formatted for Hardhat script.
+/// Why: EVM expects 0x-prefixed hex strings. Missing prefix would cause the
+/// Hardhat script to fail with a parse error.
 #[test]
 fn test_claim_escrow_intent_id_formatting() {
     // Test that intent_id with 0x prefix is preserved
@@ -178,8 +199,10 @@ fn test_claim_escrow_intent_id_formatting() {
     assert_eq!(formatted, "0x1234567890abcdef");
 }
 
-/// What is tested: claim_escrow() signature encoding to hex
-/// Why: Ensure signature bytes are correctly converted to hex string for Hardhat script
+/// 8. Test: Claim Escrow Signature Encoding
+/// Verifies that signature bytes are correctly converted to hex string.
+/// Why: The Hardhat script expects a hex-encoded signature. Wrong encoding
+/// would cause signature verification to fail on the smart contract.
 #[test]
 fn test_claim_escrow_signature_encoding() {
     use hex;
@@ -201,8 +224,10 @@ fn test_claim_escrow_signature_encoding() {
     assert!(signature_hex.ends_with("34"));
 }
 
-/// What is tested: claim_escrow() command building logic
-/// Why: Ensure command arguments are correctly formatted for Hardhat script
+/// 9. Test: Claim Escrow Command Building
+/// Verifies that the Hardhat command is built correctly with all required arguments.
+/// Why: The claim_escrow function invokes a Hardhat script with environment variables.
+/// Wrong command formatting would cause the script to fail or use wrong parameters.
 #[test]
 fn test_claim_escrow_command_building() {
     let escrow_addr = DUMMY_ESCROW_CONTRACT_ADDR_EVM;
@@ -230,8 +255,10 @@ fn test_claim_escrow_command_building() {
     assert!(command.contains("--network localhost"));
 }
 
-/// What is tested: claim_escrow() transaction hash extraction from output
-/// Why: Ensure we can correctly parse transaction hash from Hardhat script output
+/// 10. Test: Claim Escrow Hash Extraction
+/// Verifies that transaction hash is correctly extracted from Hardhat output.
+/// Why: The solver needs the transaction hash to track fulfillment status.
+/// Wrong extraction would cause the solver to lose track of pending fulfillments.
 #[test]
 fn test_claim_escrow_hash_extraction() {
     // Test successful output format from Hardhat script
@@ -257,8 +284,10 @@ fn test_claim_escrow_hash_extraction() {
     }
 }
 
-/// What is tested: claim_escrow() error handling for missing intent-frameworks/evm directory
-/// Why: Ensure proper error message when directory structure is incorrect
+/// 11. Test: Claim Escrow Missing Directory Error
+/// Verifies that proper error is returned when intent-frameworks/evm directory is missing.
+/// Why: A clear error message helps operators diagnose deployment issues.
+/// Silent failures would make debugging much harder.
 #[test]
 fn test_claim_escrow_missing_directory_error() {
     // Simulate the directory check logic
@@ -271,3 +300,6 @@ fn test_claim_escrow_missing_directory_error() {
     // We're just verifying the path construction logic here
     assert!(evm_framework_dir.to_string_lossy().contains("intent-frameworks/evm"));
 }
+
+// #12: pubkey_from_hex_with_leading_zeros - N/A for EVM (SVM-specific)
+// #13: pubkey_from_hex_no_leading_zeros - N/A for EVM (SVM-specific)

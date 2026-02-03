@@ -1,11 +1,16 @@
 //! Outflow Fulfillment Service
 //!
-//! Executes transfers on connected chains and fulfills outflow intents on the hub chain.
+//! Executes fulfillments on connected chains via the GMP flow.
 //!
-//! Flow:
-//! 1. **Execute Transfer**: Transfer tokens on connected chain to requester_addr_connected_chain
-//! 2. **Get Trusted-GMP Approval**: Call trusted-gmp `/validate-outflow-fulfillment` with transaction hash
-//! 3. **Fulfill Intent**: Call hub chain `fulfill_outflow_intent` with trusted-gmp signature
+//! GMP Flow (MVM connected chain - Commit 11):
+//! 1. Hub creates intent → sends IntentRequirements via GMP to connected chain
+//! 2. Native GMP relay delivers requirements to connected chain's outflow_validator
+//! 3. Solver calls `outflow_validator::fulfill_intent` on connected chain
+//! 4. outflow_validator transfers tokens and sends FulfillmentProof via GMP
+//! 5. Native GMP relay delivers FulfillmentProof to hub
+//! 6. Hub auto-releases tokens to solver
+//!
+//! EVM/SVM: Will be updated to GMP flow in Commits 12-13.
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
 use crate::config::SolverConfig;
@@ -102,16 +107,19 @@ impl OutflowService {
         None
     }
 
-    /// Polls for pending outflow intents and executes transfers on connected chain
+    /// Polls for pending outflow intents and executes fulfillments on connected chain
     ///
     /// This function queries the tracker for pending outflow intents (Created state, offered_chain_id == hub_chain_id)
-    /// and executes token transfers on the connected chain to the requester's address.
+    /// and executes fulfillments on the connected chain.
+    ///
+    /// For MVM chains, uses the GMP flow (outflow_validator::fulfill_intent).
+    /// For EVM/SVM chains, uses direct transfer (will be updated to GMP in Commits 12-13).
     ///
     /// # Returns
     ///
-    /// * `Ok(Vec<(TrackedIntent, String)>)` - List of (intent, transaction_hash) pairs for transfers executed
+    /// * `Ok(Vec<(TrackedIntent, String, bool)>)` - List of (intent, transaction_hash, uses_gmp) tuples
     /// * `Err(anyhow::Error)` - Failed to execute transfers
-    pub async fn poll_and_execute_transfers(&self) -> Result<Vec<(TrackedIntent, String)>> {
+    pub async fn poll_and_execute_transfers(&self) -> Result<Vec<(TrackedIntent, String, bool)>> {
         // Get pending outflow intents (Created state, offered_chain_id == hub_chain_id)
         let pending_intents = self
             .tracker
@@ -134,9 +142,6 @@ impl OutflowService {
             }
 
             // Get requester_addr_connected_chain from intent
-            // TODO: Query intent object on hub chain to get requester_addr_connected_chain
-            // For now, we'll need to store this in TrackedIntent or query it
-            // This is a placeholder - we need to implement intent object querying
             let requester_addr_connected_chain = match self.get_requester_address_connected_chain(&intent).await {
                 Ok(addr) => addr,
                 Err(e) => {
@@ -153,23 +158,30 @@ impl OutflowService {
                 continue;
             }
 
-            // Execute transfer on connected chain
-            let tx_hash = match self.execute_connected_transfer(&intent, &requester_addr_connected_chain).await {
-                Ok(hash) => hash,
+            // Execute fulfillment on connected chain
+            let (tx_hash, uses_gmp) = match self.execute_connected_transfer(&intent, &requester_addr_connected_chain).await {
+                Ok(result) => result,
                 Err(e) => {
-                    error!("Failed to execute transfer for intent {}: {}", intent.intent_id, e);
+                    error!("Failed to execute fulfillment for intent {}: {}", intent.intent_id, e);
                     continue;
                 }
             };
 
-            info!("Executed outflow transfer for intent {}: tx_hash={}", intent.intent_id, tx_hash);
-            executed_transfers.push((intent, tx_hash));
+            if uses_gmp {
+                info!("Executed GMP outflow fulfillment for intent {}: tx_hash={}", intent.intent_id, tx_hash);
+            } else {
+                info!("Executed outflow transfer for intent {}: tx_hash={}", intent.intent_id, tx_hash);
+            }
+            executed_transfers.push((intent, tx_hash, uses_gmp));
         }
 
         Ok(executed_transfers)
     }
 
-    /// Executes a token transfer on the connected chain with intent_id embedded
+    /// Executes outflow fulfillment on the connected chain.
+    ///
+    /// For MVM chains, uses the GMP flow via outflow_validator::fulfill_intent.
+    /// For EVM/SVM chains, uses direct transfer (will be updated to GMP in Commits 12-13).
     ///
     /// # Arguments
     ///
@@ -178,13 +190,13 @@ impl OutflowService {
     ///
     /// # Returns
     ///
-    /// * `Ok(String)` - Transaction hash
+    /// * `Ok((String, bool))` - (transaction_hash, uses_gmp_flow)
     /// * `Err(anyhow::Error)` - Failed to execute transfer
     async fn execute_connected_transfer(
         &self,
         intent: &TrackedIntent,
         recipient: &str,
-    ) -> Result<String> {
+    ) -> Result<(String, bool)> {
         let desired_token = &intent.draft_data.desired_token;
         let desired_amount = intent.draft_data.desired_amount;
 
@@ -194,21 +206,32 @@ impl OutflowService {
 
         match chain_type {
             "mvm" => {
+                // GMP Flow: Call outflow_validator::fulfill_intent
+                // The outflow_validator will:
+                // 1. Validate solver is authorized
+                // 2. Transfer tokens from solver to recipient
+                // 3. Send FulfillmentProof via GMP to hub
+                // The hub will auto-release tokens when it receives the proof
                 let client = self.mvm_client.as_ref()
                     .context("MVM client not configured")?;
-                client.transfer_with_intent_id(recipient, desired_token, desired_amount, &intent.intent_id)
+                let tx_hash = client.fulfill_outflow_via_gmp(&intent.intent_id, desired_token)?;
+                Ok((tx_hash, true)) // true = uses GMP flow
             }
             "evm" => {
+                // TODO(Commit 12): Update to GMP flow
                 let client = self.evm_client.as_ref()
                     .context("EVM client not configured")?;
-                client.transfer_with_intent_id(desired_token, recipient, desired_amount, &intent.intent_id).await
+                let tx_hash = client.transfer_with_intent_id(desired_token, recipient, desired_amount, &intent.intent_id).await?;
+                Ok((tx_hash, false)) // false = not using GMP yet
             }
             "svm" => {
+                // TODO(Commit 12): Update to GMP flow
                 let client = self.svm_client.as_ref()
                     .context("SVM client not configured")?;
-                client
+                let tx_hash = client
                     .transfer_with_intent_id(recipient, desired_token, desired_amount, &intent.intent_id)
-                    .await
+                    .await?;
+                Ok((tx_hash, false)) // false = not using GMP yet
             }
             _ => anyhow::bail!("Unknown chain type: {}", chain_type),
         }
@@ -323,9 +346,9 @@ impl OutflowService {
     /// Main service loop that continuously processes outflow intents
     ///
     /// This loop:
-    /// 1. Polls for pending outflow intents and executes transfers
-    /// 2. Gets trusted-gmp approval for executed transfers
-    /// 3. Fulfills hub intents with trusted-gmp signatures
+    /// 1. Polls for pending outflow intents and executes fulfillments
+    /// 2. For GMP flow (MVM): Marks as fulfilled (hub release happens via GMP)
+    /// 3. For EVM/SVM (pending GMP update): Gets trusted-gmp approval and fulfills hub intent
     ///
     /// # Arguments
     ///
@@ -336,8 +359,25 @@ impl OutflowService {
         loop {
             match self.poll_and_execute_transfers().await {
                 Ok(executed_transfers) => {
-                    for (intent, tx_hash) in executed_transfers {
-                        // Get trusted-gmp approval - determine chain type from intent's desired_chain_id
+                    for (intent, tx_hash, uses_gmp) in executed_transfers {
+                        if uses_gmp {
+                            // GMP Flow: The outflow_validator sent FulfillmentProof via GMP.
+                            // The native GMP relay will deliver it to the hub, which auto-releases tokens.
+                            // We just need to mark the intent as fulfilled in our tracker.
+                            info!(
+                                "Successfully fulfilled outflow intent {} via GMP: fulfill_tx={}",
+                                intent.intent_id, tx_hash
+                            );
+                            info!(
+                                "Hub will auto-release tokens when FulfillmentProof is delivered via GMP"
+                            );
+                            if let Err(e) = self.tracker.mark_fulfilled(&intent.draft_id).await {
+                                error!("Failed to mark intent {} as fulfilled: {}", intent.draft_id, e);
+                            }
+                            continue;
+                        }
+
+                        // EVM/SVM (pending GMP update): Get trusted-gmp approval and fulfill on hub
                         let chain_type = match self.get_target_chain_for_intent(&intent) {
                             Some((ct, _)) => ct,
                             None => {
