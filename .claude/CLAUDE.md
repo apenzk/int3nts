@@ -13,6 +13,7 @@
 **ALL test commands MUST use the exact format from root README.md "Testing" section.**
 
 Pattern:
+
 ```bash
 nix develop ./nix -c bash -c "<test command>"
 ```

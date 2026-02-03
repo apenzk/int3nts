@@ -11,6 +11,7 @@ description: Create a commit based on staged files, following project commit rul
 **Read the commit rules**: `.claude/rules.md` - "Commit Message Conventions" section
 
 This file contains:
+
 - Commit message format (with/without tests)
 - When to run tests
 - Critical rules (NEVER git add, NO AI references, etc.)
@@ -26,9 +27,16 @@ git diff --cached --stat
 git diff --cached
 ```
 
+**If markdown files are staged**, verify they follow markdown guidelines from `.claude/rules.md`:
+- Code blocks have language specifiers (MD040)
+- Blank lines around headings (MD022)
+- Blank lines around lists (MD032)
+- No multiple blank lines (MD012)
+
 ## Step 3: Determine Test Requirements
 
 Based on what you read in `.claude/rules.md`:
+
 - Do these changes require running tests?
 - If yes, which test commands should be run?
 - If no, proceed without tests
@@ -36,6 +44,7 @@ Based on what you read in `.claude/rules.md`:
 ## Step 4: Create Commit Message
 
 Follow the exact format specified in `.claude/rules.md`:
+
 - Use appropriate type (feat, fix, refactor, test, docs, chore)
 - Base description ONLY on `git diff --cached`
 - Include details if helpful (optional bullet points)

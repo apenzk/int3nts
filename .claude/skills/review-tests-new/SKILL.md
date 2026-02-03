@@ -281,6 +281,7 @@ Provide a clear report with:
 See `docs/intent-frameworks/framework-extension-guide.md` - "Step 1: Create Placeholder Test Files" for the complete procedure.
 
 **Why this matters for test review:**
+
 - If a new test file doesn't match the expected baseline from existing frameworks, it indicates placeholders were not created first
 - Test numbering misalignment is a sign that placeholders were skipped
 - Missing tests should have been identified during placeholder creation, not during implementation

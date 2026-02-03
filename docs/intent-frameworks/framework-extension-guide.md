@@ -89,6 +89,7 @@ module mvmt_intent::inflow_escrow_gmp_tests {
 Use these patterns for placeholder tests:
 
 **Move:**
+
 ```move
 fun test_example() {
     // TODO: Implement
@@ -97,6 +98,7 @@ fun test_example() {
 ```
 
 **Rust:**
+
 ```rust
 #[tokio::test]
 async fn test_example() {
@@ -105,6 +107,7 @@ async fn test_example() {
 ```
 
 **JavaScript/TypeScript:**
+
 ```javascript
 it("Should test example", async function () {
     // TODO: Implement
@@ -284,6 +287,7 @@ fun test_release_escrow_succeeds_after_fulfillment(...) {
 ```
 
 **Critical Rule:** When adding a new test to one framework, you **must**:
+
 1. Add it to the checklist with the next sequential number
 2. Mark it N/A for frameworks where it doesn't apply
 3. Add comment blocks in those frameworks explaining WHY it's N/A

@@ -32,6 +32,7 @@ Search for code duplication across all implementation files (not tests):
 ### How to identify
 
 Use code search to find:
+
 - Repeated string literals (error messages, constants)
 - Similar function signatures
 - Matching code structure patterns
@@ -40,12 +41,14 @@ Use code search to find:
 ### What to do
 
 For each duplication found:
+
 1. **Extract to common module**: Move shared code to appropriate common location
 2. **Create helper function**: Replace repeated blocks with reusable function
 3. **Define shared constants**: Move magic numbers/strings to constant files
 4. **Document the refactor**: Explain why consolidation improves maintainability
 
 **Common locations for shared code**:
+
 - `intent-frameworks/common/` - Cross-chain shared types/logic
 - Helper modules within each framework
 - Utility files in Rust services (`utils.rs`, `helpers.rs`)
@@ -64,6 +67,7 @@ grep -r "XXX" --include="*.rs" --include="*.move" --include="*.sol" --include="*
 ### What to do
 
 For each TODO/FIXME/HACK found:
+
 1. **Either complete it** - Implement the missing functionality
 2. **Or remove it** - If no longer needed, delete the comment
 3. **Never leave it** - Per "No Fallbacks Policy", no placeholders allowed
@@ -75,6 +79,7 @@ For each TODO/FIXME/HACK found:
 ### Magic numbers and strings
 
 Find hardcoded values that should be constants:
+
 - Hardcoded addresses (not in test helpers)
 - Repeated numeric literals
 - Hardcoded URLs or identifiers
@@ -82,6 +87,7 @@ Find hardcoded values that should be constants:
 ### Dead code
 
 Find unused code:
+
 - Unused imports
 - Commented-out code blocks
 - Unreachable functions or modules
@@ -89,6 +95,7 @@ Find unused code:
 ### Poor error handling
 
 Find weak error handling:
+
 - Empty catch blocks: `catch (e) {}`
 - Generic error messages without context
 - Ignored errors (especially in Rust with `let _ = ...`)
@@ -100,6 +107,7 @@ Check if implementations are out of sync:
 ### Compare framework implementations
 
 For shared functionality that should exist across MVM/EVM/SVM:
+
 1. Check if all three have equivalent implementations
 2. Verify they use the same logic/algorithms
 3. Ensure test coverage is symmetric (check EXTENSION-CHECKLIST.md files)
@@ -132,27 +140,32 @@ Find missing or outdated docs:
 Provide a structured report:
 
 ### Section 1: Code Duplication
+
 - **Location**: File paths where duplication exists
 - **Pattern**: What is duplicated (function, logic, constants)
 - **Recommendation**: Where to extract/consolidate
 - **Estimated savings**: Lines of code that can be eliminated
 
 ### Section 2: TODO/FIXME Items
+
 - **Location**: File path and line number
 - **Context**: What needs to be done
 - **Action**: Complete, remove, or create issue
 
 ### Section 3: Code Smells
+
 - **Issue**: What the problem is
 - **Location**: Where it occurs
 - **Fix**: Suggested remediation
 
 ### Section 4: Framework Symmetry
+
 - **Missing**: Features implemented in some frameworks but not others
 - **Inconsistent**: Logic that differs unnecessarily
 - **Recommendation**: How to achieve symmetry
 
 ### Section 5: Documentation Gaps
+
 - **Missing**: What documentation is absent
 - **Outdated**: What needs updating
 - **Priority**: High/Medium/Low

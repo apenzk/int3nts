@@ -17,6 +17,7 @@ git diff --cached
 ```
 
 Understand:
+
 - What files changed?
 - What functionality is affected?
 - Which frameworks (MVM/EVM/SVM)?
@@ -27,11 +28,13 @@ Understand:
 Based on the changes, ask the user questions in these categories:
 
 ### Completeness
+
 - Did you implement this across all relevant frameworks (MVM/EVM/SVM)?
 - Did you update all EXTENSION-CHECKLIST.md files?
 - Are there related files that should also be updated?
 
 ### Testing
+
 - Did new functions or features in this commit receive sufficient tests?
 - Where are the tests for this change?
 - Did you test happy path, edge cases, and error conditions?
@@ -40,6 +43,7 @@ Based on the changes, ask the user questions in these categories:
 - Are tests hard failures (no TODOs, no fallbacks)?
 
 ### Code Quality
+
 - Why did you make this change?
 - What edge cases does this handle?
 - What happens if [error condition X] occurs?
@@ -47,11 +51,15 @@ Based on the changes, ask the user questions in these categories:
 - Are variable names following conventions (_addr suffix, etc.)?
 
 ### Documentation
+
 - Did you update relevant README files?
 - Are public functions documented?
 - Did you update architecture diagrams if needed?
+- **If markdown files changed**: Do all code blocks have language specifiers? (MD040)
+  - Check for bare ` ``` ` without language like `json`, `bash`, `rust`, etc.
 
 ### Symmetry (for framework changes)
+
 - If you added this to MVM, does EVM need it? Does SVM?
 - Are the implementations equivalent across frameworks?
 - Did you verify test numbering matches across frameworks?
@@ -59,6 +67,7 @@ Based on the changes, ask the user questions in these categories:
 ## Step 3: Evaluate Answers
 
 After each answer:
+
 - Point out gaps or issues
 - Ask follow-up questions if answers are unclear
 - Challenge assumptions
@@ -67,6 +76,7 @@ After each answer:
 ## Step 4: Pass/Fail Decision
 
 **Pass criteria:**
+
 - All questions answered satisfactorily
 - No obvious gaps in implementation
 - Tests are comprehensive
@@ -74,6 +84,7 @@ After each answer:
 - Framework symmetry maintained (if applicable)
 
 **Fail criteria:**
+
 - New functions/features without tests
 - Missing tests for changed functionality
 - Incomplete implementation
@@ -83,6 +94,7 @@ After each answer:
 ## Output Format
 
 Start with:
+
 ```
 🔍 REVIEWING YOUR CHANGES
 
@@ -95,6 +107,7 @@ Let me ask you some questions...
 Then ask questions one category at a time, wait for answers.
 
 End with either:
+
 ```
 ✅ PASS - These changes look good. Ready to commit.
 ```

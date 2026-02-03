@@ -6,9 +6,10 @@
 
 > **IMPORTANT: Verify all addresses, EIDs, and API details before implementation.**
 > This document is based on research up to January 2026. Always cross-reference with:
-> - https://docs.layerzero.network/v2
-> - https://github.com/LayerZero-Labs/LayerZero-v2
-> - https://layerzeroscan.com
+>
+> - <https://docs.layerzero.network/v2>
+> - <https://github.com/LayerZero-Labs/LayerZero-v2>
+> - <https://layerzeroscan.com>
 > - Movement Labs announcements
 
 ---
@@ -269,6 +270,7 @@ module your_addr::your_oapp {
 ```
 
 **IMPORTANT CAVEATS about this example:**
+
 - The actual LZ V2 Aptos API may differ in function signatures. The above is a conceptual illustration based on the known LZ V2 architecture pattern for Aptos.
 - The real LZ V2 Aptos SDK uses resource accounts and specific module patterns. Check the actual SDK.
 - The `lz_receive` function's exact parameters and calling convention depend on the LZ endpoint implementation.
@@ -524,7 +526,7 @@ fun get_resource_signer(): signer acquires OAppResourceAccount {
 
 | Network | Endpoint Address | Status |
 |---------|-----------------|--------|
-| **Aptos Mainnet** | `0x54ad3d30af77b60d939ae356e6606de9a4da67583f02b962d2d3f2e481484e90` | **VERIFY** - This is the known LZ V2 endpoint on Aptos mainnet. Verify on https://docs.layerzero.network |
+| **Aptos Mainnet** | `0x54ad3d30af77b60d939ae356e6606de9a4da67583f02b962d2d3f2e481484e90` | **VERIFY** - This is the known LZ V2 endpoint on Aptos mainnet. Verify on <https://docs.layerzero.network> |
 | **Aptos Testnet** | `0x...` (check docs) | **VERIFY** - Aptos testnet endpoint exists but address should be confirmed |
 
 **Important:** Aptos addresses are 32 bytes (64 hex chars), not 20 bytes like EVM.
@@ -573,6 +575,7 @@ LayerZero V2 assigns each chain a unique 32-bit Endpoint ID (EID). These are use
 ### 5.2 EID Format
 
 LZ V2 EIDs follow a convention:
+
 - **Mainnet:** `30xxx` (e.g., 30101 for Ethereum, 30108 for Aptos)
 - **Testnet:** `40xxx` (e.g., 40108 for Aptos testnet)
 
@@ -866,6 +869,7 @@ fun ensure_not_processed(intent_id: vector<u8>, step: u8) acquires ProcessedMess
 ### 8.1 No Inheritance / No Interface Contracts
 
 Move does not support inheritance. Your OApp cannot "extend" a base OApp contract. Instead:
+
 - Import the LZ endpoint module
 - Call its functions directly
 - Implement the expected `lz_receive()` function signature
@@ -882,6 +886,7 @@ Move uses a resource model instead of contract storage:
 - **No dynamic dispatch** -- you cannot call arbitrary functions by address
 
 **Impact on int3nts:**
+
 - OApp state (peers, processed messages, intent requirements) stored as resources
 - Resource account needed to act as the OApp "contract address"
 - Cannot dynamically dispatch to different handler modules
@@ -896,6 +901,7 @@ Move modules are published to an account address. Key considerations:
 - **Friend declarations:** Modules can declare friends that can call private/friend functions.
 
 **Impact on int3nts:**
+
 - The GMP module must be a friend of intent modules (or vice versa) for internal function access
 - Module address must be consistent across deployments (use named addresses in `Move.toml`)
 
@@ -920,6 +926,7 @@ public entry fun my_function(caller: &signer) {
 Move does not have try/catch. Failed transactions abort entirely.
 
 **Impact on int3nts:** If `lz_receive()` aborts, the message delivery transaction fails. The LZ executor will retry, but if the abort is deterministic (e.g., invalid payload), the message will be stuck. Consider:
+
 - Validating all inputs carefully
 - Using a "store then process" pattern (store the raw message, process later)
 - The LZ V2 "lzCompose" pattern for multi-step processing
@@ -949,6 +956,7 @@ struct MessageSent has store, drop {
 ### 8.8 BCS Serialization
 
 Aptos uses BCS (Binary Canonical Serialization) as its standard serialization format. However, for cross-chain messages, we should **NOT** use BCS because:
+
 - BCS is Aptos-specific
 - EVM and Solana do not natively support BCS
 - Cross-chain payloads must use a format all chains can encode/decode
@@ -962,6 +970,7 @@ Aptos uses BCS (Binary Canonical Serialization) as its standard serialization fo
 ### 9.1 Movement Architecture Overview
 
 Movement is an Aptos-compatible L2 that:
+
 - Uses the **Move language** (same as Aptos)
 - Runs the **Aptos framework** (same Move modules: `aptos_framework`, `aptos_std`, etc.)
 - Has its own **consensus layer** (based on the Movement SDK)
@@ -995,6 +1004,7 @@ Movement uses its own chain IDs, not Aptos chain IDs. When building cross-chain 
 #### 9.3.2 Framework Version
 
 Movement may lag behind Aptos in framework version. Some newer Aptos framework features may not be available. Check:
+
 - `aptos_framework::dispatchable_fungible_asset` -- may or may not be available
 - `aptos_framework::function_info` -- may or may not be available
 - Latest object model features
@@ -1012,6 +1022,7 @@ Movement may have different gas pricing. LZ executor options (gas limit) need to
 #### 9.3.5 RPC Endpoints
 
 Movement has its own RPC endpoints (different from Aptos):
+
 - **Movement Mainnet:** `https://mainnet.movementnetwork.xyz/v1`
 - **Movement Testnet:** `https://aptos.testnet.suzuka.movementlabs.xyz/v1` (or similar -- verify)
 
@@ -1045,11 +1056,13 @@ Movement has its own RPC endpoints (different from Aptos):
 If LZ modules are not yet deployed on Movement, there are two approaches:
 
 **Option A: LZ deploys their modules** (preferred)
+
 - LayerZero Labs deploys their endpoint, ULN, executor modules on Movement
 - You deploy your OApp modules that reference LZ's deployed modules
 - Same as how it works on Aptos
 
 **Option B: Deploy LZ modules yourself** (if LZ hasn't deployed yet)
+
 - Clone LZ V2 Aptos packages from GitHub
 - Modify `Move.toml` named addresses to match Movement deployment
 - Deploy the endpoint and protocol modules to Movement
@@ -1144,9 +1157,9 @@ Before implementation, the following must be verified against current LayerZero 
 
 | Item | What to Verify | Where to Check |
 |------|---------------|----------------|
-| **Aptos endpoint address** | Exact deployed address on Aptos mainnet | https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts |
-| **Movement endpoint deployment** | Whether LZ endpoint is deployed on Movement mainnet | https://docs.layerzero.network or LayerZero Discord |
-| **Movement EID** | Confirm EID 30325 for Movement mainnet | https://docs.layerzero.network |
+| **Aptos endpoint address** | Exact deployed address on Aptos mainnet | <https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts> |
+| **Movement endpoint deployment** | Whether LZ endpoint is deployed on Movement mainnet | <https://docs.layerzero.network> or LayerZero Discord |
+| **Movement EID** | Confirm EID 30325 for Movement mainnet | <https://docs.layerzero.network> |
 | **Movement testnet LZ** | Confirm LZ is NOT on Movement testnet | LayerZero Discord / docs |
 | **lz_receive signature** | Exact function signature expected by LZ endpoint on Aptos | LZ V2 Aptos SDK source code on GitHub |
 | **Send function API** | Exact parameters for endpoint::send() on Aptos | LZ V2 Aptos SDK source code |
@@ -1160,7 +1173,7 @@ Before implementation, the following must be verified against current LayerZero 
    - Look in `packages/layerzero-v2/aptos/` for Move source code
    - Study `endpoint.move`, `oapp_core.move`, and any OFT examples
 
-2. **Check LayerZero scan** for Movement: https://layerzeroscan.com
+2. **Check LayerZero scan** for Movement: <https://layerzeroscan.com>
    - Search for transactions on Movement (chain EID 30325)
    - Verify if messages are flowing
 
@@ -1224,13 +1237,13 @@ Trust Assumptions:
 
 ## Appendix C: References
 
-- LayerZero V2 Documentation: https://docs.layerzero.network/v2
-- LayerZero V2 GitHub: https://github.com/LayerZero-Labs/LayerZero-v2
-- LayerZero Scan: https://layerzeroscan.com
-- Aptos Move Documentation: https://aptos.dev/en/build/smart-contracts
-- Movement Documentation: https://docs.movementlabs.xyz
-- LayerZero Supported Chains: https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts
-- LayerZero Discord: https://discord.gg/layerzero (for Movement-specific questions)
+- LayerZero V2 Documentation: <https://docs.layerzero.network/v2>
+- LayerZero V2 GitHub: <https://github.com/LayerZero-Labs/LayerZero-v2>
+- LayerZero Scan: <https://layerzeroscan.com>
+- Aptos Move Documentation: <https://aptos.dev/en/build/smart-contracts>
+- Movement Documentation: <https://docs.movementlabs.xyz>
+- LayerZero Supported Chains: <https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts>
+- LayerZero Discord: <https://discord.gg/layerzero> (for Movement-specific questions)
 
 ---
 

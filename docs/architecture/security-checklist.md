@@ -131,6 +131,7 @@ No logs means no answers. Not for bugs, not for breaches, not for refunds.
 ### Requirements
 
 - [ ] **Structured Logging**: Use consistent log format
+
   ```
   {
     "timestamp": "2026-01-13T10:00:00Z",
@@ -174,6 +175,7 @@ Third-party services will fail. Design for it.
 ### Requirements
 
 - [ ] **Retries with Limits**: Implement exponential backoff
+
   ```
   Max retries: 3-5
   Initial delay: 100ms
@@ -215,6 +217,7 @@ API keys in code will leak. Not maybe. Will.
   - Different secrets per environment
 
 - [ ] **Proper .gitignore**: Exclude sensitive files
+
   ```
   .env
   .env.local

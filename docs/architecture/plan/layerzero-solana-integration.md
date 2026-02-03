@@ -6,9 +6,10 @@
 
 > **IMPORTANT: Verify all addresses, EIDs, and API details before implementation.**
 > This document is based on research up to January 2026. Always cross-reference with:
-> - https://docs.layerzero.network/v2/developers/solana/oapp/overview
-> - https://github.com/LayerZero-Labs/LayerZero-v2
-> - https://layerzeroscan.com
+>
+> - <https://docs.layerzero.network/v2/developers/solana/oapp/overview>
+> - <https://github.com/LayerZero-Labs/LayerZero-v2>
+> - <https://layerzeroscan.com>
 
 ---
 
@@ -281,6 +282,7 @@ Source: [LayerZero-v2 verify-contracts.md](https://github.com/LayerZero-Labs/Lay
 ### 5.2 Solana Program IDs (Devnet)
 
 Devnet program IDs are **not listed** in the verification guide. The LZ devtools scaffold uses different endpoint addresses for devnet. **VERIFY** devnet addresses from:
+
 - `@layerzerolabs/lz-definitions` npm package
 - LZ devtools example configs
 
@@ -649,7 +651,7 @@ intent-frameworks/svm/programs/
    - Study the generated program structure, CPI calls, and account setup
 
 2. **Study the devtools examples:**
-   - https://github.com/LayerZero-Labs/devtools/tree/main/examples/oapp-solana
+   - <https://github.com/LayerZero-Labs/devtools/tree/main/examples/oapp-solana>
    - Focus on send, receive, and account discovery patterns
 
 3. **Build native-gmp-endpoint first** (as planned in Phase 1)
@@ -674,13 +676,13 @@ Mainnet Programs:
 
 ## Appendix B: References
 
-- LZ V2 Solana OApp Overview: https://docs.layerzero.network/v2/developers/solana/oapp/overview
-- LZ V2 Solana Getting Started: https://docs.layerzero.network/v2/developers/solana/getting-started
-- LZ V2 Solana Guidance: https://docs.layerzero.network/v2/developers/solana/technical-reference/solana-guidance
-- LZ V2 GitHub: https://github.com/LayerZero-Labs/LayerZero-v2
-- LZ V2 Devtools (examples): https://github.com/LayerZero-Labs/devtools
-- LZ Scan: https://layerzeroscan.com
-- Verify Contracts: https://github.com/LayerZero-Labs/LayerZero-v2/blob/main/packages/layerzero-v2/solana/programs/verify-contracts.md
+- LZ V2 Solana OApp Overview: <https://docs.layerzero.network/v2/developers/solana/oapp/overview>
+- LZ V2 Solana Getting Started: <https://docs.layerzero.network/v2/developers/solana/getting-started>
+- LZ V2 Solana Guidance: <https://docs.layerzero.network/v2/developers/solana/technical-reference/solana-guidance>
+- LZ V2 GitHub: <https://github.com/LayerZero-Labs/LayerZero-v2>
+- LZ V2 Devtools (examples): <https://github.com/LayerZero-Labs/devtools>
+- LZ Scan: <https://layerzeroscan.com>
+- Verify Contracts: <https://github.com/LayerZero-Labs/LayerZero-v2/blob/main/packages/layerzero-v2/solana/programs/verify-contracts.md>
 
 ---
 
