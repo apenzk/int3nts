@@ -20,7 +20,7 @@ pub enum EscrowInstruction {
     /// 1. `[signer]` Admin (must match state approver or be initial setup)
     /// 2. `[]` System program
     SetGmpConfig {
-        /// The hub chain ID (LayerZero endpoint ID)
+        /// The hub chain ID (LZ endpoint ID)
         hub_chain_id: u32,
         /// The trusted hub address (32 bytes)
         trusted_hub_addr: [u8; 32],

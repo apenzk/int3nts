@@ -29,7 +29,7 @@ Ask the user or infer from context:
 
 Read the plan file:
 
-```
+```text
 docs/architecture/plan/gmp-plan-execution-phase{N}.md
 ```
 
@@ -80,7 +80,7 @@ Present a markdown table to the user:
 
 After presenting the table, ask the user:
 
-```
+```text
 Which tasks should be marked as done?
 
 Options:
@@ -101,7 +101,7 @@ Only after user approval, update the plan file to tick the approved boxes:
 
 ### Summary section
 
-```
+```text
 ## Review Summary
 
 **Phase:** 2
@@ -120,7 +120,7 @@ See Step 5 format above.
 
 ### Recommendation
 
-```
+```text
 ## Recommendation
 
 Based on the review:
@@ -150,7 +150,7 @@ Suggested action: Mark DONE tasks, document PARTIAL/STUBBED in commit message
 
 ## Example session
 
-```
+```text
 User: /review-commit-tasks
 
 Claude: I'll review the tasks for the current commit. Which phase and commit are you working on?

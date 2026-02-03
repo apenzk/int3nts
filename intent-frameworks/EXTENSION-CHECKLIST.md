@@ -292,7 +292,7 @@ SVM: `intent-frameworks/svm/programs/outflow-validator/tests/validator_tests.rs`
 
 ## Native GMP Endpoint test alignment
 
-Native GMP endpoint provides a standardized interface for cross-chain messaging. Can be used for local testing, CI, or production with your own relay infrastructure. In production, this can also be replaced by LayerZero's endpoint.
+Native GMP endpoint provides a standardized interface for cross-chain messaging. Can be used for local testing, CI, or production with your own relay infrastructure. In production, this can also be replaced by LZ's endpoint.
 
 ### Native GMP Endpoint Interface Tests
 

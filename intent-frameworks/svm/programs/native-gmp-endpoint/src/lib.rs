@@ -6,7 +6,7 @@
 //! ## Purpose
 //!
 //! This endpoint provides a standardized interface for cross-chain messaging.
-//! In production, this can be replaced by LayerZero's endpoint or used directly
+//! In production, this can be replaced by LZ's endpoint or used directly
 //! with your own relay infrastructure.
 //!
 //! ## Instructions

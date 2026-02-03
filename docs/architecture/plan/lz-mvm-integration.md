@@ -8,7 +8,7 @@
 > This document is based on research up to January 2026. Always cross-reference with:
 >
 > - <https://docs.layerzero.network/v2>
-> - <https://github.com/LayerZero-Labs/LayerZero-v2>
+> - <https://github.com/LZ-Labs/LZ-v2>
 > - <https://layerzeroscan.com>
 > - Movement Labs announcements
 
@@ -35,7 +35,7 @@
 
 | Topic | Finding |
 |-------|---------|
-| **LZ V2 on Aptos** | LayerZero V2 has full Aptos mainnet support. The integration uses native Move modules, not EVM-style contracts. |
+| **LZ V2 on Aptos** | LZ V2 has full Aptos mainnet support. The integration uses native Move modules, not EVM-style contracts. |
 | **LZ V2 on Movement** | **Movement mainnet is supported** (EID 30325). **Movement testnet support is uncertain** -- may require using mock endpoints + Trusted GMP for testnet. Verify current status. |
 | **OApp Pattern** | Different from EVM. Move modules use friend functions and resource accounts rather than inheritance. OApp is a module that interacts with the LZ endpoint module via function calls. |
 | **lz_send / lz_receive** | Move does not have `msg.sender` or inheritance. `lz_send` is called via the LZ endpoint module. `lz_receive` is a function in your module called by the LZ executor via the endpoint. |
@@ -57,11 +57,11 @@ On EVM, an OApp inherits from `OApp.sol` and overrides `_lzSend()` and `_lzRecei
 
 ### 2.2 Move Module Structure for an OApp
 
-The LayerZero V2 Aptos SDK provides a set of Move modules that your application interacts with. The key pattern is:
+The LZ V2 Aptos SDK provides a set of Move modules that your application interacts with. The key pattern is:
 
 ```text
 your_oapp/
-├── Move.toml                    # Dependencies include LayerZero packages
+├── Move.toml                    # Dependencies include LZ packages
 ├── sources/
 │   ├── oapp.move                # Your OApp module (main logic)
 │   ├── oapp_config.move         # Configuration (peers, DVN settings)
@@ -555,7 +555,7 @@ For the connected EVM chains in int3nts:
 
 ## 5. LZ Endpoint IDs (EIDs)
 
-LayerZero V2 assigns each chain a unique 32-bit Endpoint ID (EID). These are used in `lz_send()` as `dst_eid` and in `lz_receive()` as `src_eid`.
+LZ V2 assigns each chain a unique 32-bit Endpoint ID (EID). These are used in `lz_send()` as `dst_eid` and in `lz_receive()` as `src_eid`.
 
 ### 5.1 Known EIDs
 
@@ -599,7 +599,7 @@ let dst_eid: u32 = 30101; // Ethereum mainnet
 
 ### 6.1 LZ Packet Format
 
-LayerZero wraps your application payload in a **Packet** structure:
+LZ wraps your application payload in a **Packet** structure:
 
 ```text
 LZ V2 Packet (internal format, handled by LZ):
@@ -614,7 +614,7 @@ LZ V2 Packet (internal format, handled by LZ):
 └─────────────────────────────────────────────────┘
 ```
 
-**You only control the `message` field.** Everything else is added by LayerZero.
+**You only control the `message` field.** Everything else is added by LZ.
 
 ### 6.2 Your Application Payload
 
@@ -1057,7 +1057,7 @@ If LZ modules are not yet deployed on Movement, there are two approaches:
 
 **Option A: LZ deploys their modules** (preferred)
 
-- LayerZero Labs deploys their endpoint, ULN, executor modules on Movement
+- LZ Labs deploys their endpoint, ULN, executor modules on Movement
 - You deploy your OApp modules that reference LZ's deployed modules
 - Same as how it works on Aptos
 
@@ -1153,31 +1153,31 @@ intent-frameworks/mvm/sources/
 
 ### 10.4 Items Requiring Verification
 
-Before implementation, the following must be verified against current LayerZero documentation and deployments:
+Before implementation, the following must be verified against current LZ documentation and deployments:
 
 | Item | What to Verify | Where to Check |
 |------|---------------|----------------|
 | **Aptos endpoint address** | Exact deployed address on Aptos mainnet | <https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts> |
-| **Movement endpoint deployment** | Whether LZ endpoint is deployed on Movement mainnet | <https://docs.layerzero.network> or LayerZero Discord |
+| **Movement endpoint deployment** | Whether LZ endpoint is deployed on Movement mainnet | <https://docs.layerzero.network> or LZ Discord |
 | **Movement EID** | Confirm EID 30325 for Movement mainnet | <https://docs.layerzero.network> |
-| **Movement testnet LZ** | Confirm LZ is NOT on Movement testnet | LayerZero Discord / docs |
+| **Movement testnet LZ** | Confirm LZ is NOT on Movement testnet | LZ Discord / docs |
 | **lz_receive signature** | Exact function signature expected by LZ endpoint on Aptos | LZ V2 Aptos SDK source code on GitHub |
 | **Send function API** | Exact parameters for endpoint::send() on Aptos | LZ V2 Aptos SDK source code |
 | **Fee payment** | How fees are paid on Aptos (Coin<AptosCoin> vs u64) | LZ V2 Aptos SDK source code |
 | **Options encoding** | Exact encoding for executor options | LZ V2 docs for Aptos |
-| **OApp SDK for Move** | Whether LZ provides an OApp SDK for Move or just raw endpoint | GitHub: LayerZero-Labs/LayerZero-v2 |
+| **OApp SDK for Move** | Whether LZ provides an OApp SDK for Move or just raw endpoint | GitHub: LZ-Labs/LZ-v2 |
 
 ### 10.5 Recommended Next Steps
 
-1. **Clone and examine** the LZ V2 repo: `https://github.com/LayerZero-Labs/LayerZero-v2`
+1. **Clone and examine** the LZ V2 repo: `https://github.com/LZ-Labs/LZ-v2`
    - Look in `packages/layerzero-v2/aptos/` for Move source code
    - Study `endpoint.move`, `oapp_core.move`, and any OFT examples
 
-2. **Check LayerZero scan** for Movement: <https://layerzeroscan.com>
+2. **Check LZ scan** for Movement: <https://layerzeroscan.com>
    - Search for transactions on Movement (chain EID 30325)
    - Verify if messages are flowing
 
-3. **Contact LayerZero team** or check their Discord for:
+3. **Contact LZ team** or check their Discord for:
    - Movement testnet timeline
    - Any Movement-specific documentation
    - Known issues with Movement compatibility
@@ -1188,10 +1188,10 @@ Before implementation, the following must be verified against current LayerZero 
 
 ---
 
-## Appendix A: LayerZero V2 Architecture Quick Reference
+## Appendix A: LZ V2 Architecture Quick Reference
 
 ```text
-LayerZero V2 Message Lifecycle:
+LZ V2 Message Lifecycle:
 
 1. Source Chain:
    OApp calls endpoint.send(dstEid, receiver, message, options)
@@ -1219,7 +1219,7 @@ Trust Assumptions:
 
 1. DVN Security:
    - Messages are verified by configurable DVN sets
-   - Default: Google Cloud + LayerZero Labs DVN (2-of-2)
+   - Default: Google Cloud + LZ Labs DVN (2-of-2)
    - Custom: Configure any DVN combination
    - OApp owner chooses their security configuration
 
@@ -1237,13 +1237,13 @@ Trust Assumptions:
 
 ## Appendix C: References
 
-- LayerZero V2 Documentation: <https://docs.layerzero.network/v2>
-- LayerZero V2 GitHub: <https://github.com/LayerZero-Labs/LayerZero-v2>
-- LayerZero Scan: <https://layerzeroscan.com>
+- LZ V2 Documentation: <https://docs.layerzero.network/v2>
+- LZ V2 GitHub: <https://github.com/LZ-Labs/LZ-v2>
+- LZ Scan: <https://layerzeroscan.com>
 - Aptos Move Documentation: <https://aptos.dev/en/build/smart-contracts>
 - Movement Documentation: <https://docs.movementlabs.xyz>
-- LayerZero Supported Chains: <https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts>
-- LayerZero Discord: <https://discord.gg/layerzero> (for Movement-specific questions)
+- LZ Supported Chains: <https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts>
+- LZ Discord: <https://discord.gg/layerzero> (for Movement-specific questions)
 
 ---
 

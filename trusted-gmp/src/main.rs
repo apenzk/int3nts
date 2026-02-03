@@ -8,8 +8,10 @@
 //!
 //! ## Security Requirements
 //!
-//! **CRITICAL**: This service has operator wallet keys and can forge messages.
-//! Only use for testing. Production should use real LayerZero.
+//! **CRITICAL**: This service has operator wallet keys and can deliver arbitrary messages.
+//! Ensure proper key management and access controls for production use.
+//! In production, this can be used directly with your own relay infrastructure,
+//! or replaced by LZ's endpoint.
 
 use anyhow::Result;
 use tracing::info;
