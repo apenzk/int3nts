@@ -28,9 +28,9 @@ SOLVER_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd solver && car
 SOLVER_PASSED=$(echo "$SOLVER_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
 SOLVER_FAILED=$(echo "$SOLVER_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
 
-echo "Running Move tests..."
+echo "Running MVM tests..."
 MOVE_TEST_OUTPUT=$(nix develop ./nix -c bash -c "cd intent-frameworks/mvm && movement move test --dev --named-addresses mvmt_intent=0x123" 2>&1) || {
-    echo "Move tests failed:"
+    echo "MVM tests failed:"
     echo "$MOVE_TEST_OUTPUT"
 }
 MOVE_PASSED=$(echo "$MOVE_TEST_OUTPUT" | grep -oE "passed: [0-9]+" | awk '{print $2}' | head -1)

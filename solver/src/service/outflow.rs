@@ -225,13 +225,16 @@ impl OutflowService {
                 Ok((tx_hash, false)) // false = not using GMP yet
             }
             "svm" => {
-                // TODO(Commit 12): Update to GMP flow
+                // GMP Flow: Call outflow_validator::fulfill_intent
+                // The outflow_validator will:
+                // 1. Validate solver is authorized
+                // 2. Transfer tokens from solver to recipient
+                // 3. Send FulfillmentProof via GMP to hub
+                // The hub will auto-release tokens when it receives the proof
                 let client = self.svm_client.as_ref()
                     .context("SVM client not configured")?;
-                let tx_hash = client
-                    .transfer_with_intent_id(recipient, desired_token, desired_amount, &intent.intent_id)
-                    .await?;
-                Ok((tx_hash, false)) // false = not using GMP yet
+                let tx_hash = client.fulfill_outflow_via_gmp(&intent.intent_id, desired_token).await?;
+                Ok((tx_hash, true)) // true = uses GMP flow
             }
             _ => anyhow::bail!("Unknown chain type: {}", chain_type),
         }

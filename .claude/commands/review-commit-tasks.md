@@ -22,12 +22,19 @@ The command expects you to identify which commit you're working on. It will:
 
 ### Step 1: Identify the current commit
 
-Ask the user or infer from context:
+**ALWAYS use AskUserQuestion to ask the user which phase and commit they're working on:**
 
-- Which phase? (1-6)
-- Which commit number within that phase?
+Use AskUserQuestion with options:
 
-Read the plan file:
+- Phase options: 1, 2, 3, 4, 5, 6
+- Then ask which commit number within that phase
+
+Example question flow:
+
+1. "Which GMP plan phase are you working on?" → Options: Phase 1, Phase 2, Phase 3, Phase 4, Phase 5, Phase 6
+2. "Which commit number in Phase N?" → Options based on commits in that phase file
+
+After getting user input, read the plan file:
 
 ```text
 docs/architecture/plan/gmp-plan-execution-phase{N}.md

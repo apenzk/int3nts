@@ -27,6 +27,10 @@ if [ -z "$SVM_PROGRAM_ID" ]; then
     exit 1
 fi
 
+# Use GMP endpoint ID if available, otherwise fall back to escrow program ID
+# The native GMP relay uses this to know which program to monitor for MessageSent events
+GMP_PROGRAM_ID="${SVM_GMP_ENDPOINT_ID:-$SVM_PROGRAM_ID}"
+
 TRUSTED_GMP_E2E_CI_TESTING_CONFIG="$PROJECT_ROOT/trusted-gmp/config/trusted-gmp-e2e-ci-testing.toml"
 if [ ! -f "$TRUSTED_GMP_E2E_CI_TESTING_CONFIG" ]; then
     log_and_echo "   ERROR: Config file not found. Run chain-hub/configure-trusted-gmp.sh first."
@@ -39,7 +43,7 @@ cat > "$TEMP_FILE" << EOF
 [connected_chain_svm]
 name = "Connected SVM Chain"
 rpc_url = "http://127.0.0.1:8899"
-escrow_program_id = "$SVM_PROGRAM_ID"
+escrow_program_id = "$GMP_PROGRAM_ID"
 chain_id = 4
 EOF
 
@@ -54,4 +58,5 @@ rm -f "$TEMP_FILE"
 export TRUSTED_GMP_CONFIG_PATH="$TRUSTED_GMP_E2E_CI_TESTING_CONFIG"
 
 log_and_echo "   Added Connected SVM Chain section to trusted-gmp config"
+log_and_echo "   GMP program ID: $GMP_PROGRAM_ID"
 log_and_echo ""

@@ -9,10 +9,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use reqwest::Client;
 use serde::Deserialize;
 use solana_client::rpc_client::RpcClient;
-use solana_program::{
-    program_pack::Pack,
-    pubkey::Pubkey,
-};
+use solana_program::pubkey::Pubkey;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     ed25519_instruction::new_ed25519_instruction_with_signature,
@@ -22,14 +19,12 @@ use solana_sdk::{
     transaction::Transaction,
 };
 use solana_sdk_ids::system_program;
-use spl_token::{instruction::transfer_checked, state::{Account as TokenAccount, Mint}};
 use std::str::FromStr;
 use std::time::Duration;
 
 use crate::config::SvmChainConfig;
 
 // Well-known program IDs from Solana mainnet/devnet docs.
-const MEMO_PROGRAM_ID: &str = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
 const ASSOCIATED_TOKEN_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
 #[derive(BorshDeserialize, BorshSerialize, Debug, Clone)]
@@ -94,6 +89,10 @@ pub struct ConnectedSvmClient {
     /// - EVM: read the private key from an env var at call time for the Hardhat signer.
     /// Here we keep the env var name and decode the base58 key when we need to sign.
     private_key_env: String,
+    /// Program ID of the native GMP endpoint (optional, for GMP flow)
+    gmp_endpoint_program_id: Option<String>,
+    /// Program ID of the outflow validator (optional, for GMP flow)
+    outflow_validator_program_id: Option<String>,
 }
 
 impl ConnectedSvmClient {
@@ -128,6 +127,8 @@ impl ConnectedSvmClient {
             program_id,
             rpc_client,
             private_key_env: config.private_key_env.clone(),
+            gmp_endpoint_program_id: config.gmp_endpoint_program_id.clone(),
+            outflow_validator_program_id: config.outflow_validator_program_id.clone(),
         })
     }
 
@@ -289,99 +290,148 @@ impl ConnectedSvmClient {
         Ok(sig.to_string())
     }
 
-    /// Transfers SPL tokens with an intent_id memo for outflow fulfillment.
+    /// Fulfills an outflow intent via the GMP flow on SVM.
+    ///
+    /// Builds and submits the `outflow_validator::FulfillIntent` instruction which:
+    /// 1. Validates the solver is authorized and requirements exist
+    /// 2. Transfers tokens from solver to recipient
+    /// 3. Sends FulfillmentProof back to hub via GMP
+    ///
+    /// The hub will automatically release tokens when it receives the FulfillmentProof.
     ///
     /// # Arguments
     ///
-    /// * `recipient` - Recipient wallet address
-    /// * `mint` - SPL token mint address
-    /// * `amount` - Amount in base units
-    /// * `intent_id` - 0x-prefixed intent id
+    /// * `intent_id` - 32-byte intent identifier (0x-prefixed hex)
+    /// * `_token_mint` - SPL token mint (currently unused, stored in requirements)
     ///
     /// # Returns
     ///
     /// * `Ok(String)` - Transaction signature
-    /// * `Err(anyhow::Error)` - RPC or signing failure
-    pub async fn transfer_with_intent_id(
+    /// * `Err(anyhow::Error)` - Failed to fulfill intent
+    pub async fn fulfill_outflow_via_gmp(
         &self,
-        recipient: &str,
-        mint: &str,
-        amount: u64,
         intent_id: &str,
+        _token_mint: &str,
     ) -> Result<String> {
-        let payer = self.load_solver_keypair()?;
-        let mint_pubkey = parse_svm_pubkey(mint).context("Invalid SPL mint address")?;
-        let recipient_pubkey = parse_svm_pubkey(recipient)
-            .context("Invalid recipient pubkey")?;
+        // Check that GMP config is available
+        let outflow_program_id_str = self.outflow_validator_program_id.as_ref()
+            .context("outflow_validator_program_id not configured for SVM GMP flow")?;
+        let gmp_endpoint_id_str = self.gmp_endpoint_program_id.as_ref()
+            .context("gmp_endpoint_program_id not configured for SVM GMP flow")?;
 
-        let memo = format!("intent_id={}", intent_id);
-        let memo_ix = build_memo_instruction(memo.as_bytes())?;
+        let outflow_program_id = Pubkey::from_str(outflow_program_id_str)
+            .context("Invalid outflow_validator_program_id")?;
+        let gmp_endpoint_id = Pubkey::from_str(gmp_endpoint_id_str)
+            .context("Invalid gmp_endpoint_program_id")?;
 
-        let payer_token = get_associated_token_address(&payer.pubkey(), &mint_pubkey)?;
-        let recipient_token = get_associated_token_address(&recipient_pubkey, &mint_pubkey)?;
+        let intent_bytes = parse_intent_id(intent_id)?;
 
-        if let Ok(account) = self.rpc_client.get_account(&payer_token) {
-            if let Ok(token_state) = TokenAccount::unpack(&account.data) {
-                tracing::info!(
-                    "SVM transfer solver={} solver_balance={} token_account={} mint={}",
-                    payer.pubkey(),
-                    token_state.amount,
-                    payer_token,
-                    mint_pubkey
-                );
-            }
-        } else {
-            tracing::info!(
-                "SVM transfer solver={} token_account={} not found",
-                payer.pubkey(),
-                payer_token
-            );
+        tracing::info!(
+            "Calling outflow_validator::fulfill_intent - intent_id: {}, outflow_program: {}",
+            intent_id, outflow_program_id
+        );
+
+        let solver = self.load_solver_keypair()?;
+
+        // Derive outflow_validator PDAs
+        let (requirements_pda, _) = Pubkey::find_program_address(
+            &[b"requirements", &intent_bytes],
+            &outflow_program_id,
+        );
+        let (config_pda, _) = Pubkey::find_program_address(
+            &[b"config"],
+            &outflow_program_id,
+        );
+
+        // Read requirements account to get token_mint and recipient
+        let requirements_data = self.rpc_client
+            .get_account_data(&requirements_pda)
+            .context("Failed to fetch requirements account - intent may not exist on connected chain")?;
+
+        // Parse requirements: discriminator(1) + intent_id(32) + recipient(32) + amount(8) + token_mint(32) + solver(32) + expiry(8) + fulfilled(1) + bump(1)
+        if requirements_data.len() < 147 {
+            anyhow::bail!("Requirements account data too short");
         }
+        let recipient = Pubkey::try_from(&requirements_data[33..65])
+            .context("Failed to parse recipient from requirements")?;
+        let token_mint = Pubkey::try_from(&requirements_data[73..105])
+            .context("Failed to parse token_mint from requirements")?;
 
-        let mut instructions = vec![memo_ix];
-
-        if self.rpc_client.get_account(&recipient_token).is_err() {
-            let create_ata_ix = create_associated_token_account_instruction(
-                &payer.pubkey(),
-                &recipient_pubkey,
-                &mint_pubkey,
-            )?;
-            instructions.push(create_ata_ix);
+        // Read config to get hub_chain_id for GMP nonce derivation
+        let config_data = self.rpc_client
+            .get_account_data(&config_pda)
+            .context("Failed to fetch outflow config account")?;
+        
+        // Parse config: discriminator(1) + admin(32) + gmp_endpoint(32) + hub_chain_id(4) + trusted_hub_addr(32) + bump(1)
+        if config_data.len() < 102 {
+            anyhow::bail!("Config account data too short");
         }
+        let hub_chain_id = u32::from_le_bytes(
+            config_data[65..69].try_into().context("Failed to parse hub_chain_id")?
+        );
 
-        let mint_account = self
-            .rpc_client
-            .get_account(&mint_pubkey)
-            .context("Failed to fetch mint account")?;
-        let mint_state = Mint::unpack(&mint_account.data)
-            .context("Failed to parse mint account")?;
+        // Derive token accounts (ATAs)
+        let solver_token = get_associated_token_address(&solver.pubkey(), &token_mint)?;
+        let recipient_token = get_associated_token_address(&recipient, &token_mint)?;
 
-        let transfer_ix = transfer_checked(
-            &spl_token::id(),
-            &payer_token,
-            &mint_pubkey,
-            &recipient_token,
-            &payer.pubkey(),
-            &[],
-            amount,
-            mint_state.decimals,
-        )?;
-        instructions.push(transfer_ix);
+        // Derive GMP endpoint PDAs
+        let (gmp_config_pda, _) = Pubkey::find_program_address(
+            &[b"config"],
+            &gmp_endpoint_id,
+        );
+        let (gmp_nonce_out_pda, _) = Pubkey::find_program_address(
+            &[b"nonce_out", &hub_chain_id.to_le_bytes()],
+            &gmp_endpoint_id,
+        );
 
-        let blockhash = self.rpc_client.get_latest_blockhash()?;
+        tracing::info!(
+            "Building FulfillIntent tx: solver={}, recipient={}, token_mint={}, amount=from_requirements",
+            solver.pubkey(), recipient, token_mint
+        );
+
+        // Build FulfillIntent instruction
+        // Instruction data: variant(1) + intent_id(32)
+        let mut instruction_data = vec![2u8]; // FulfillIntent variant index
+        instruction_data.extend_from_slice(&intent_bytes);
+
+        let fulfill_ix = Instruction {
+            program_id: outflow_program_id,
+            accounts: vec![
+                // FulfillIntent accounts
+                AccountMeta::new(requirements_pda, false),
+                AccountMeta::new_readonly(config_pda, false),
+                AccountMeta::new_readonly(solver.pubkey(), true),
+                AccountMeta::new(solver_token, false),
+                AccountMeta::new(recipient_token, false),
+                AccountMeta::new_readonly(token_mint, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+                AccountMeta::new_readonly(gmp_endpoint_id, false),
+                // GMP Send accounts (passed through to CPI)
+                AccountMeta::new_readonly(gmp_config_pda, false),
+                AccountMeta::new(gmp_nonce_out_pda, false),
+                AccountMeta::new_readonly(solver.pubkey(), true), // sender
+                AccountMeta::new(solver.pubkey(), true),          // payer
+                AccountMeta::new_readonly(system_program::id(), false),
+            ],
+            data: instruction_data,
+        };
+
+        let blockhash = self.rpc_client
+            .get_latest_blockhash()
+            .context("Failed to get latest blockhash")?;
+
         let tx = Transaction::new_signed_with_payer(
-            &instructions,
-            Some(&payer.pubkey()),
-            &[&payer],
+            &[fulfill_ix],
+            Some(&solver.pubkey()),
+            &[&solver],
             blockhash,
         );
 
-        let signature = self
-            .rpc_client
+        let sig = self.rpc_client
             .send_and_confirm_transaction(&tx)
-            .map_err(|e| anyhow::anyhow!("Failed to submit SVM transfer: {}", e))?;
+            .context("Failed to send FulfillIntent transaction")?;
 
-        Ok(signature.to_string())
+        Ok(sig.to_string())
     }
 }
 
@@ -441,15 +491,6 @@ fn pubkey_to_hex(pubkey_str: &str) -> Result<String> {
     let pubkey = Pubkey::from_str(pubkey_str)
         .context("Invalid pubkey string")?;
     Ok(format!("0x{}", hex::encode(pubkey.to_bytes())))
-}
-
-/// Parses a pubkey from base58 or 0x-hex into a Pubkey.
-fn parse_svm_pubkey(value: &str) -> Result<Pubkey> {
-    if value.starts_with("0x") {
-        pubkey_from_hex(value)
-    } else {
-        Pubkey::from_str(value).context("Invalid base58 pubkey")
-    }
 }
 
 /// Parses a 0x-prefixed hex pubkey into a Pubkey.
@@ -593,41 +634,9 @@ fn associated_token_program_id() -> Result<Pubkey> {
         .context("Invalid associated token program id")
 }
 
-/// Builds a memo instruction for the SPL memo program.
-///
-/// # Arguments
-///
-/// * `data` - Memo bytes
-///
-/// # Returns
-///
-/// * `Ok(Instruction)` - Memo instruction
-/// * `Err(anyhow::Error)` - Invalid memo program id
-fn build_memo_instruction(data: &[u8]) -> Result<Instruction> {
-    let program_id = Pubkey::from_str(MEMO_PROGRAM_ID)
-        .context("Invalid memo program id")?;
-
-    Ok(Instruction {
-        program_id,
-        accounts: Vec::new(),
-        data: data.to_vec(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Test that memo instructions use the expected program id and payload
-    /// Why: Memo data must be encoded correctly for outflow verification
-    #[test]
-    fn test_build_memo_instruction() {
-        let memo = b"intent_id=0x01";
-        let ix = build_memo_instruction(memo).expect("build memo instruction");
-        assert_eq!(ix.program_id.to_string(), MEMO_PROGRAM_ID);
-        assert!(ix.accounts.is_empty(), "Memo instruction has no accounts");
-        assert_eq!(ix.data, memo);
-    }
 
     /// Test that associated token program id parses to a valid pubkey
     /// Why: ATA derivation depends on a correct program id

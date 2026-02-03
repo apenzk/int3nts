@@ -26,6 +26,8 @@ fn test_new_accepts_valid_program_id() {
         chain_id: 4,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
     };
 
     let result = ConnectedSvmClient::new(&config);
@@ -44,6 +46,8 @@ fn test_new_rejects_invalid_program_id() {
         chain_id: 4,
         escrow_program_id: "not-a-pubkey".to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
     };
 
     let result = ConnectedSvmClient::new(&config);
@@ -58,7 +62,45 @@ fn test_new_rejects_invalid_program_id() {
 // #8: fulfillment_signature_encoding - N/A for SVM (uses different mechanism)
 // #9: fulfillment_command_building - TODO: implement for SVM
 // #10: fulfillment_hash_extraction - TODO: implement for SVM
-// #11: fulfillment_error_handling - TODO: implement for SVM
+
+// ============================================================================
+// GMP FULFILLMENT
+// ============================================================================
+
+/// 11. Test: Fulfill Outflow Via GMP Returns Error When Not Configured
+/// Verifies that fulfill_outflow_via_gmp returns an error when GMP config is missing.
+/// Why: The GMP flow for SVM requires outflow_validator_program_id and gmp_endpoint_program_id
+/// to be configured. If not configured, the function should return a clear error message.
+#[tokio::test]
+async fn test_fulfill_outflow_via_gmp_requires_config() {
+    let config = SvmChainConfig {
+        name: "svm".to_string(),
+        rpc_url: "http://127.0.0.1:8899".to_string(),
+        chain_id: 4,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    };
+
+    let client = ConnectedSvmClient::new(&config).unwrap();
+
+    // Call fulfill_outflow_via_gmp - should return error since GMP config is missing
+    let result = client
+        .fulfill_outflow_via_gmp(
+            "0x0000000000000000000000000000000000000000000000000000000000001234",
+            DUMMY_SVM_ESCROW_PROGRAM_ID,
+        )
+        .await;
+
+    assert!(result.is_err());
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not configured"),
+        "Expected 'not configured' error, got: {}",
+        err_msg
+    );
+}
 
 // ============================================================================
 // INPUT PARSING

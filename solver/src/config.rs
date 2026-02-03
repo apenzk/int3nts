@@ -200,6 +200,12 @@ pub struct SvmChainConfig {
     pub escrow_program_id: String,
     /// Environment variable name containing the solver private key (base58)
     pub private_key_env: String,
+    /// Program ID of the native GMP endpoint (optional, for GMP flow)
+    #[serde(default)]
+    pub gmp_endpoint_program_id: Option<String>,
+    /// Program ID of the outflow validator (optional, for GMP flow)
+    #[serde(default)]
+    pub outflow_validator_program_id: Option<String>,
 }
 
 fn default_network_name() -> String {

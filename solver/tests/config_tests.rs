@@ -110,6 +110,8 @@ fn test_config_validation_rejects_svm_invalid_hex_length() {
         chain_id: 901,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
     }));
     config.acceptance.token_pairs = vec![TokenPairConfig {
         source_chain_id: 1,
@@ -135,6 +137,8 @@ fn test_config_validation_rejects_invalid_svm_base58_token() {
         chain_id: 901,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
         private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
     }));
     config.acceptance.token_pairs = vec![TokenPairConfig {
         source_chain_id: 1,

@@ -39,8 +39,17 @@ echo "[build.sh] Environment:"
 echo "  cargo-build-sbf: $(which cargo-build-sbf 2>/dev/null || echo 'not found')"
 echo "  solana: $(solana --version 2>/dev/null || echo 'not found')"
 
-echo "[build.sh] Running cargo build-sbf..."
+echo "[build.sh] Running cargo build-sbf for intent_escrow..."
 cargo build-sbf --manifest-path programs/intent_escrow/Cargo.toml -- --locked
 
+echo "[build.sh] Running cargo build-sbf for native-gmp-endpoint..."
+cargo build-sbf --manifest-path programs/native-gmp-endpoint/Cargo.toml -- --locked
+
+echo "[build.sh] Running cargo build-sbf for outflow-validator..."
+cargo build-sbf --manifest-path programs/outflow-validator/Cargo.toml -- --locked
+
 echo "[build.sh] Build complete!"
-echo "[build.sh] Output: target/deploy/intent_escrow.so"
+echo "[build.sh] Output:"
+echo "  - target/deploy/intent_escrow.so"
+echo "  - target/deploy/native_gmp_endpoint.so"
+echo "  - target/deploy/outflow_validator.so"

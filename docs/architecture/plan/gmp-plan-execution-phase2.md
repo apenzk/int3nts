@@ -356,15 +356,28 @@ RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet"
 
 **Files:**
 
-- `testing-infra/ci-e2e/e2e-tests-svm/` (update existing)
+- `testing-infra/ci-e2e/chain-connected-svm/deploy-contract.sh` (deploy GMP programs)
+- `testing-infra/ci-e2e/chain-connected-svm/configure-trusted-gmp.sh` (add GMP endpoint)
+- `intent-frameworks/svm/scripts/build.sh` (build all GMP programs)
+- `solver/src/config.rs` (add optional GMP program IDs to SvmChainConfig)
+- `solver/src/chains/connected_svm.rs` (add fulfill_outflow_via_gmp method)
+- `solver/src/service/outflow.rs` (attempt GMP flow for SVM)
 
 **Tasks:**
 
-- [ ] Update SVM e2e test environment to use native GMP endpoints
-- [ ] Start native GMP relay in background during tests
-- [ ] Update outflow test to use GMP flow (solver calls validation contract)
-- [ ] Verify GMP messages are sent and received correctly
-- [ ] Ensure existing test assertions still pass
+- [x] Update SVM e2e test environment to use native GMP endpoints
+  - Build script now builds native-gmp-endpoint and outflow-validator
+  - Deploy script deploys all 3 programs and configures trusted remotes
+  - Configure-trusted-gmp uses GMP endpoint program ID for relay
+- [x] Start native GMP relay in background during tests (already done via `start_trusted_gmp`)
+- [x] Update outflow test to use GMP flow (solver calls validation contract)
+  - Implemented `fulfill_outflow_via_gmp()` in ConnectedSvmClient (builds FulfillIntent tx directly)
+  - OutflowService uses GMP-only flow for SVM (no fallback to direct transfer)
+  - Removed dead code: `transfer_with_intent_id()`, `build_memo_instruction()`, `MEMO_PROGRAM_ID`
+- [ ] Verify GMP messages are sent and received correctly - requires E2E testing in CI
+- [ ] Ensure existing test assertions still pass - requires E2E testing in CI
+
+**Note:** SVM GMP flow implementation complete. The solver builds and submits `outflow_validator::FulfillIntent` transactions directly using Solana RPC. Commit 13 will complete the SVM inflow flow.
 
 **Test:**
 

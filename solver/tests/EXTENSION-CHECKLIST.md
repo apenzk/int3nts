@@ -38,6 +38,6 @@ SVM: `solver/tests/svm/chain_client_tests.rs`
 | 8 | fulfillment_signature_encoding | N/A | ✅ | N/A |
 | 9 | fulfillment_command_building | ✅ | ✅ | ⚠️ |
 | 10 | fulfillment_hash_extraction | ⚠️ | ✅ | ⚠️ |
-| 11 | fulfillment_error_handling | ⚠️ | ✅ | ⚠️ |
+| 11 | fulfillment_error_handling | ⚠️ | ✅ | ✅ |
 | 12 | pubkey_from_hex_with_leading_zeros | N/A | N/A | ✅ |
 | 13 | pubkey_from_hex_no_leading_zeros | N/A | N/A | ✅ |
