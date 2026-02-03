@@ -55,10 +55,28 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
   - Document minimal required dependencies
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 2: Extract minimal connected chain package (if beneficial)**
-  - Assess whether connected chain modules can be a separate Move package
-  - Evaluate deployment complexity vs code isolation benefits
-  - Document recommendation (separate package vs single package with clear boundaries)
+- [ ] **Commit 2: Split MVM package into three separate packages (REQUIRED)**
+  - **NOTE: This is now REQUIRED, not optional.** The combined MVM package is 108KB, exceeding Movement's 60KB single-transaction limit. While `--chunked-publish` works as a temporary workaround, splitting into separate packages is the proper solution.
+  - Create three packages with the following dependency structure:
+    - `mvmt_intent_gmp` is the base layer (deploy first)
+    - `mvmt_intent_hub` and `mvmt_intent_connected` both depend on `mvmt_intent_gmp`
+  - **`mvmt_intent_gmp`** - GMP infrastructure (deploy to both hub and connected chains)
+    - gmp_common (message encoding/decoding)
+    - gmp_sender (outbound message sending)
+    - native_gmp_endpoint (inbound message receiving)
+  - **`mvmt_intent_hub`** - Hub-only modules (deploy to hub chain only)
+    - fa_intent, fa_intent_with_oracle
+    - fa_intent_inflow, fa_intent_outflow
+    - intent_gmp_hub, solver_registry, intent_registry
+    - Depends on: mvmt_intent_gmp
+  - **`mvmt_intent_connected`** - Connected chain modules (deploy to connected MVM chains only)
+    - outflow_validator, outflow_validator_impl
+    - inflow_escrow_gmp
+    - Depends on: mvmt_intent_gmp
+  - Update deployment scripts:
+    - Hub chain: deploy mvmt_intent_gmp first, then mvmt_intent_hub
+    - Connected chain: deploy mvmt_intent_gmp first, then mvmt_intent_connected
+  - Verify each package is under 60KB limit
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
 - [ ] **Commit 3: Minimize connected chain module dependencies**

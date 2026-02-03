@@ -146,9 +146,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // INTEGRATION TESTS
     // ============================================================================
 
-    /// 13. Test: Send updates nonce state
-    /// Verifies that gmp_sender::lz_send increments the outbound nonce correctly for each message.
-    /// Why: Nonce tracking prevents message reordering and provides unique message IDs.
+    // 13. Test: Send updates nonce state
+    // Verifies that gmp_sender::lz_send increments the outbound nonce correctly for each message.
+    // Why: Nonce tracking prevents message reordering and provides unique message IDs.
     #[test]
     fun test_send_updates_nonce_state() {
         let admin = setup_test();
@@ -193,9 +193,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
         assert!(after_second == 3, 5);
     }
 
-    /// 14. Test: DeliverMessage calls receiver
-    /// Verifies that deliver_message routes to the destination module handler after validation.
-    /// Why: Message routing is the core delivery mechanism; messages must reach their handlers.
+    // 14. Test: DeliverMessage calls receiver
+    // Verifies that deliver_message routes to the destination module handler after validation.
+    // Why: Message routing is the core delivery mechanism; messages must reach their handlers.
     #[test]
     fun test_deliver_message_calls_receiver() {
         let admin = setup_test();
@@ -230,9 +230,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
         assert!(inbound_nonce == 1, 3);
     }
 
-    /// 15. Test: DeliverMessage rejects replay
-    /// Verifies that delivering a message with an already-used nonce fails.
-    /// Why: Replay protection prevents attackers from re-submitting old messages.
+    // 15. Test: DeliverMessage rejects replay
+    // Verifies that delivering a message with an already-used nonce fails.
+    // Why: Replay protection prevents attackers from re-submitting old messages.
     #[test]
     #[expected_failure(abort_code = 2)] // ENONCE_ALREADY_USED
     fun test_deliver_message_rejects_replay() {
@@ -271,9 +271,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // RELAY AUTHORIZATION TESTS
     // ============================================================================
 
-    /// 16. Test: Unauthorized relay rejected
-    /// Verifies that only authorized relays can deliver messages.
-    /// Why: Relay authorization prevents malicious actors from injecting fake messages.
+    // 16. Test: Unauthorized relay rejected
+    // Verifies that only authorized relays can deliver messages.
+    // Why: Relay authorization prevents malicious actors from injecting fake messages.
     #[test]
     #[expected_failure(abort_code = 1)] // EUNAUTHORIZED_RELAY
     fun test_deliver_message_rejects_unauthorized_relay() {
@@ -300,9 +300,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    /// 17. Test: Authorized relay succeeds
-    /// Verifies that explicitly authorized relays can deliver messages.
-    /// Why: The relay authorization system must correctly grant access to approved relays.
+    // 17. Test: Authorized relay succeeds
+    // Verifies that explicitly authorized relays can deliver messages.
+    // Why: The relay authorization system must correctly grant access to approved relays.
     #[test]
     fun test_deliver_message_authorized_relay() {
         let admin = setup_test();
@@ -336,9 +336,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // TRUSTED REMOTE VERIFICATION TESTS
     // ============================================================================
 
-    /// 18. Test: Untrusted remote address rejected
-    /// Verifies that messages from non-trusted source addresses are rejected.
-    /// Why: Trusted remote verification prevents spoofed cross-chain messages.
+    // 18. Test: Untrusted remote address rejected
+    // Verifies that messages from non-trusted source addresses are rejected.
+    // Why: Trusted remote verification prevents spoofed cross-chain messages.
     #[test]
     #[expected_failure(abort_code = 4)] // EUNTRUSTED_REMOTE
     fun test_deliver_message_rejects_untrusted_remote() {
@@ -372,9 +372,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    /// 19. Test: No trusted remote configured
-    /// Verifies that messages fail when no trusted remote is configured for the source chain.
-    /// Why: Missing configuration must be caught early to prevent security holes.
+    // 19. Test: No trusted remote configured
+    // Verifies that messages fail when no trusted remote is configured for the source chain.
+    // Why: Missing configuration must be caught early to prevent security holes.
     #[test]
     #[expected_failure(abort_code = 5)] // ENO_TRUSTED_REMOTE
     fun test_deliver_message_rejects_no_trusted_remote() {
@@ -398,9 +398,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // ADMIN FUNCTION TESTS
     // ============================================================================
 
-    /// 20. Test: Non-admin cannot set trusted remote
-    /// Verifies that only the admin can configure trusted remote addresses.
-    /// Why: Admin-only access prevents unauthorized trust configuration changes.
+    // 20. Test: Non-admin cannot set trusted remote
+    // Verifies that only the admin can configure trusted remote addresses.
+    // Why: Admin-only access prevents unauthorized trust configuration changes.
     #[test]
     #[expected_failure(abort_code = 6)] // EUNAUTHORIZED_ADMIN
     fun test_set_trusted_remote_unauthorized() {
@@ -417,9 +417,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    /// 21. Test: Lower nonce rejected
-    /// Verifies that delivering a message with a nonce lower than the last processed fails.
-    /// Why: Strictly increasing nonces prevent out-of-order message processing attacks.
+    // 21. Test: Lower nonce rejected
+    // Verifies that delivering a message with a nonce lower than the last processed fails.
+    // Why: Strictly increasing nonces prevent out-of-order message processing attacks.
     #[test]
     #[expected_failure(abort_code = 2)] // ENONCE_ALREADY_USED
     fun test_deliver_message_rejects_lower_nonce() {

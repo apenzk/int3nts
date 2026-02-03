@@ -125,9 +125,9 @@ module mvmt_intent::outflow_validator_tests {
     // INITIALIZATION TESTS
     // ============================================================================
 
-    /// 1. Test: Initialize creates config
-    /// Verifies that initialize correctly sets up the outflow validator configuration.
-    /// Why: Proper initialization is required before any other operations can succeed.
+    // 1. Test: Initialize creates config
+    // Verifies that initialize correctly sets up the outflow validator configuration.
+    // Why: Proper initialization is required before any other operations can succeed.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_initialize_creates_config(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -144,9 +144,9 @@ module mvmt_intent::outflow_validator_tests {
         assert!(stored_hub_addr == expected_hub_addr, 3);
     }
 
-    /// 2. Test: Double initialization fails
-    /// Verifies that trying to initialize twice fails.
-    /// Why: Config must only be set once to prevent admin takeover.
+    // 2. Test: Double initialization fails
+    // Verifies that trying to initialize twice fails.
+    // Why: Config must only be set once to prevent admin takeover.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure] // Already exists
     fun test_initialize_rejects_double_init(aptos_framework: &signer, admin: &signer) {
@@ -164,9 +164,9 @@ module mvmt_intent::outflow_validator_tests {
     // LZ_RECEIVE TESTS
     // ============================================================================
 
-    /// 3. Test: Receive stores intent requirements
-    /// Verifies that receive_intent_requirements correctly stores requirements.
-    /// Why: Storing requirements is essential for validating fulfillments later.
+    // 3. Test: Receive stores intent requirements
+    // Verifies that receive_intent_requirements correctly stores requirements.
+    // Why: Storing requirements is essential for validating fulfillments later.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_receive_stores_requirements(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -205,9 +205,9 @@ module mvmt_intent::outflow_validator_tests {
         assert!(outflow_validator_impl::get_amount_required(intent_id) == amount, 3);
     }
 
-    /// 4. Test: Receive is idempotent (duplicate ignored)
-    /// Verifies that receiving the same requirements twice doesn't fail or overwrite.
-    /// Why: Idempotency prevents issues with duplicate GMP message delivery.
+    // 4. Test: Receive is idempotent (duplicate ignored)
+    // Verifies that receiving the same requirements twice doesn't fail or overwrite.
+    // Why: Idempotency prevents issues with duplicate GMP message delivery.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_receive_idempotent(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -251,9 +251,9 @@ module mvmt_intent::outflow_validator_tests {
         assert!(outflow_validator_impl::has_requirements(intent_id), 1);
     }
 
-    /// 5. Test: Receive rejects untrusted source
-    /// Verifies that requirements from non-trusted hub chains/addresses are rejected.
-    /// Why: Source verification prevents spoofed messages from attackers.
+    // 5. Test: Receive rejects untrusted source
+    // Verifies that requirements from non-trusted hub chains/addresses are rejected.
+    // Why: Source verification prevents spoofed messages from attackers.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure(abort_code = 2, location = mvmt_intent::outflow_validator_impl)] // EINVALID_SOURCE_CHAIN
     fun test_receive_rejects_untrusted_source(aptos_framework: &signer, admin: &signer) {
@@ -288,9 +288,9 @@ module mvmt_intent::outflow_validator_tests {
         );
     }
 
-    /// 6. Test: Receive rejects invalid payload
-    /// Verifies that malformed GMP payloads are rejected.
-    /// Why: Prevents processing of corrupted or malicious messages.
+    // 6. Test: Receive rejects invalid payload
+    // Verifies that malformed GMP payloads are rejected.
+    // Why: Prevents processing of corrupted or malicious messages.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure] // gmp_common decode will fail
     fun test_receive_rejects_invalid_payload(aptos_framework: &signer, admin: &signer) {
@@ -315,9 +315,9 @@ module mvmt_intent::outflow_validator_tests {
     // FULFILL INTENT TESTS
     // ============================================================================
 
-    /// 7. Test: Fulfill intent rejects already fulfilled
-    /// Verifies that double fulfillment is rejected.
-    /// Why: Prevents solver from claiming payment twice.
+    // 7. Test: Fulfill intent rejects already fulfilled
+    // Verifies that double fulfillment is rejected.
+    // Why: Prevents solver from claiming payment twice.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     #[expected_failure(abort_code = 6, location = mvmt_intent::outflow_validator_impl)] // EALREADY_FULFILLED
     fun test_fulfill_intent_rejects_already_fulfilled(
@@ -365,9 +365,9 @@ module mvmt_intent::outflow_validator_tests {
         outflow_validator_impl::fulfill_intent(solver, intent_id, token_metadata);
     }
 
-    /// 8. Test: Fulfill intent rejects expired intent
-    /// Verifies that expired intents cannot be fulfilled.
-    /// Why: Protects solver from fulfilling intents user no longer wants.
+    // 8. Test: Fulfill intent rejects expired intent
+    // Verifies that expired intents cannot be fulfilled.
+    // Why: Protects solver from fulfilling intents user no longer wants.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     #[expected_failure(abort_code = 7, location = mvmt_intent::outflow_validator_impl)] // EINTENT_EXPIRED
     fun test_fulfill_intent_rejects_expired(
@@ -412,9 +412,9 @@ module mvmt_intent::outflow_validator_tests {
         outflow_validator_impl::fulfill_intent(solver, intent_id, token_metadata);
     }
 
-    /// 9. Test: Fulfill intent rejects unauthorized solver
-    /// Verifies that only the authorized solver can fulfill.
-    /// Why: Ensures intent creator's solver preference is respected.
+    // 9. Test: Fulfill intent rejects unauthorized solver
+    // Verifies that only the authorized solver can fulfill.
+    // Why: Ensures intent creator's solver preference is respected.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     #[expected_failure(abort_code = 8, location = mvmt_intent::outflow_validator_impl)] // EUNAUTHORIZED_SOLVER
     fun test_fulfill_intent_rejects_unauthorized_solver(
@@ -467,9 +467,9 @@ module mvmt_intent::outflow_validator_tests {
         outflow_validator_impl::fulfill_intent(solver, intent_id, token_metadata);
     }
 
-    /// 10. Test: Fulfill intent rejects token mismatch
-    /// Verifies that wrong token mint is rejected.
-    /// Why: Prevents solver from fulfilling with different token.
+    // 10. Test: Fulfill intent rejects token mismatch
+    // Verifies that wrong token mint is rejected.
+    // Why: Prevents solver from fulfilling with different token.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     #[expected_failure(abort_code = 9, location = mvmt_intent::outflow_validator_impl)] // ETOKEN_MISMATCH
     fun test_fulfill_intent_rejects_token_mismatch(
@@ -521,9 +521,9 @@ module mvmt_intent::outflow_validator_tests {
         outflow_validator_impl::fulfill_intent(solver, intent_id, token_metadata);
     }
 
-    /// 11. Test: Fulfill intent rejects requirements not found
-    /// Verifies that fulfilling unknown intent_id fails.
-    /// Why: Prevents fulfillment of intents that were never created.
+    // 11. Test: Fulfill intent rejects requirements not found
+    // Verifies that fulfilling unknown intent_id fails.
+    // Why: Prevents fulfillment of intents that were never created.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     #[expected_failure(abort_code = 5, location = mvmt_intent::outflow_validator_impl)] // EREQUIREMENTS_NOT_FOUND
     fun test_fulfill_intent_rejects_requirements_not_found(
@@ -553,9 +553,9 @@ module mvmt_intent::outflow_validator_tests {
         outflow_validator_impl::fulfill_intent(solver, unknown_intent_id, token_metadata);
     }
 
-    /// 12. Test: Fulfill intent validates recipient
-    /// Verifies that tokens go to the correct recipient as stored in requirements.
-    /// Why: Ensures funds are delivered to the intended recipient.
+    // 12. Test: Fulfill intent validates recipient
+    // Verifies that tokens go to the correct recipient as stored in requirements.
+    // Why: Ensures funds are delivered to the intended recipient.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     fun test_fulfill_intent_rejects_recipient_mismatch(
         aptos_framework: &signer,
@@ -607,9 +607,9 @@ module mvmt_intent::outflow_validator_tests {
         assert!(solver_balance == 100 - amount, 2);
     }
 
-    /// 13. Test: Fulfill intent succeeds with valid inputs
-    /// Verifies the happy path: tokens transferred, state updated, GMP message sent.
-    /// Why: Ensures the core fulfillment flow works end-to-end.
+    // 13. Test: Fulfill intent succeeds with valid inputs
+    // Verifies the happy path: tokens transferred, state updated, GMP message sent.
+    // Why: Ensures the core fulfillment flow works end-to-end.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, solver = @0x456)]
     fun test_fulfill_intent_succeeds(
         aptos_framework: &signer,

@@ -1,5 +1,5 @@
 #[test_only]
-/// Tests for the outflow_validator module (MVM as connected chain).
+// Tests for the outflow_validator module (MVM as connected chain).
 module mvmt_intent::interface_tests {
     use std::vector;
     use mvmt_intent::outflow_validator;
@@ -66,9 +66,9 @@ module mvmt_intent::interface_tests {
     // INTERFACE TESTS (mirrors SVM interface_tests.rs)
     // ============================================================================
 
-    /// 2. Test: Receive instruction roundtrip (receive_intent_requirements)
-    /// Verifies that the function correctly decodes an IntentRequirements message.
-    /// Mirrors SVM's test_receive_instruction_roundtrip.
+    // 2. Test: Receive instruction roundtrip (receive_intent_requirements)
+    // Verifies that the function correctly decodes an IntentRequirements message.
+    // Mirrors SVM's test_receive_instruction_roundtrip.
     #[test]
     fun test_receive_instruction_roundtrip() {
         // Create a valid IntentRequirements payload

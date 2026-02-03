@@ -101,8 +101,8 @@ module mvmt_intent::intent_gmp_tests {
     // SEND INTENT REQUIREMENTS TESTS
     // ============================================================================
 
-    /// 1. Test: send_intent_requirements sends GMP message with correct encoding
-    /// Verifies that the function sends a properly encoded IntentRequirements message via GMP.
+    // 1. Test: send_intent_requirements sends GMP message with correct encoding
+    // Verifies that the function sends a properly encoded IntentRequirements message via GMP.
     #[test(admin = @mvmt_intent)]
     fun test_send_intent_requirements_sends_message(admin: &signer) {
         // Initialize configs
@@ -148,8 +148,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(*vector::borrow(&expected_payload, 0) == 0x01, 3); // Discriminator
     }
 
-    /// 2. Test: send_intent_requirements payload roundtrip
-    /// Verifies roundtrip: encode via send function, decode and verify all fields.
+    // 2. Test: send_intent_requirements payload roundtrip
+    // Verifies roundtrip: encode via send function, decode and verify all fields.
     #[test]
     fun test_send_intent_requirements_roundtrip() {
         let intent_id = test_intent_id();
@@ -186,8 +186,8 @@ module mvmt_intent::intent_gmp_tests {
     // SEND FULFILLMENT PROOF TESTS
     // ============================================================================
 
-    /// 3. Test: send_fulfillment_proof sends GMP message with correct encoding
-    /// Verifies that the function sends a properly encoded FulfillmentProof message via GMP.
+    // 3. Test: send_fulfillment_proof sends GMP message with correct encoding
+    // Verifies that the function sends a properly encoded FulfillmentProof message via GMP.
     #[test(admin = @mvmt_intent)]
     fun test_send_fulfillment_proof_sends_message(admin: &signer) {
         // Initialize configs
@@ -227,8 +227,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(*vector::borrow(&expected_payload, 0) == 0x03, 3); // Discriminator
     }
 
-    /// 4. Test: send_fulfillment_proof payload roundtrip
-    /// Verifies roundtrip: encode via send function, decode and verify all fields.
+    // 4. Test: send_fulfillment_proof payload roundtrip
+    // Verifies roundtrip: encode via send function, decode and verify all fields.
     #[test]
     fun test_send_fulfillment_proof_roundtrip() {
         let intent_id = test_intent_id();
@@ -259,8 +259,8 @@ module mvmt_intent::intent_gmp_tests {
     // RECEIVE ESCROW CONFIRMATION TESTS
     // ============================================================================
 
-    /// 5. Test: receive_escrow_confirmation decodes valid payload from trusted source
-    /// Verifies that the function correctly decodes an EscrowConfirmation message with source validation.
+    // 5. Test: receive_escrow_confirmation decodes valid payload from trusted source
+    // Verifies that the function correctly decodes an EscrowConfirmation message with source validation.
     #[test(admin = @mvmt_intent)]
     fun test_receive_escrow_confirmation_decodes_payload(admin: &signer) {
         // Initialize config
@@ -295,8 +295,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(*gmp_common::escrow_confirmation_creator_addr(&decoded) == test_creator_addr(), 5);
     }
 
-    /// 6. Test: receive_escrow_confirmation rejects untrusted source
-    /// Verifies that messages from untrusted sources are rejected.
+    // 6. Test: receive_escrow_confirmation rejects untrusted source
+    // Verifies that messages from untrusted sources are rejected.
     #[test(admin = @mvmt_intent)]
     #[expected_failure(abort_code = 0x50003, location = mvmt_intent::intent_gmp_hub)]
     fun test_receive_escrow_confirmation_rejects_untrusted_source(admin: &signer) {
@@ -328,8 +328,8 @@ module mvmt_intent::intent_gmp_tests {
     // RECEIVE FULFILLMENT PROOF TESTS
     // ============================================================================
 
-    /// 7. Test: receive_fulfillment_proof decodes valid payload from trusted source
-    /// Verifies that the function correctly decodes a FulfillmentProof message with source validation.
+    // 7. Test: receive_fulfillment_proof decodes valid payload from trusted source
+    // Verifies that the function correctly decodes a FulfillmentProof message with source validation.
     #[test(admin = @mvmt_intent)]
     fun test_receive_fulfillment_proof_decodes_payload(admin: &signer) {
         // Initialize config
@@ -362,8 +362,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(gmp_common::fulfillment_proof_timestamp(&decoded) == DUMMY_TIMESTAMP, 4);
     }
 
-    /// 8. Test: receive_fulfillment_proof rejects untrusted source
-    /// Verifies that messages from untrusted sources are rejected.
+    // 8. Test: receive_fulfillment_proof rejects untrusted source
+    // Verifies that messages from untrusted sources are rejected.
     #[test(admin = @mvmt_intent)]
     #[expected_failure(abort_code = 0x50003, location = mvmt_intent::intent_gmp_hub)]
     fun test_receive_fulfillment_proof_rejects_untrusted_source(admin: &signer) {
@@ -394,8 +394,8 @@ module mvmt_intent::intent_gmp_tests {
     // HELPER FUNCTION TESTS
     // ============================================================================
 
-    /// 9. Test: bytes_to_bytes32 pads short input
-    /// Verifies that inputs shorter than 32 bytes are left-padded with zeros.
+    // 9. Test: bytes_to_bytes32 pads short input
+    // Verifies that inputs shorter than 32 bytes are left-padded with zeros.
     #[test]
     fun test_bytes_to_bytes32_pads_short_input() {
         let short = vector::empty<u8>();
@@ -417,8 +417,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(*vector::borrow(&result, 31) == 0xCD, 4);
     }
 
-    /// 10. Test: bytes_to_bytes32 truncates long input
-    /// Verifies that inputs longer than 32 bytes are truncated to first 32.
+    // 10. Test: bytes_to_bytes32 truncates long input
+    // Verifies that inputs longer than 32 bytes are truncated to first 32.
     #[test]
     fun test_bytes_to_bytes32_truncates_long_input() {
         let long = vector::empty<u8>();
@@ -440,8 +440,8 @@ module mvmt_intent::intent_gmp_tests {
         };
     }
 
-    /// 11. Test: bytes_to_bytes32 returns exact 32 bytes unchanged
-    /// Verifies that 32-byte inputs are returned unchanged.
+    // 11. Test: bytes_to_bytes32 returns exact 32 bytes unchanged
+    // Verifies that 32-byte inputs are returned unchanged.
     #[test]
     fun test_bytes_to_bytes32_exact_length() {
         let exact = test_intent_id(); // Already 32 bytes
@@ -452,8 +452,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(result == test_intent_id(), 2);
     }
 
-    /// 12. Test: bytes_to_bytes32 handles empty input
-    /// Verifies that empty input results in 32 zero bytes.
+    // 12. Test: bytes_to_bytes32 handles empty input
+    // Verifies that empty input results in 32 zero bytes.
     #[test]
     fun test_bytes_to_bytes32_empty_input() {
         let empty = vector::empty<u8>();
@@ -472,8 +472,8 @@ module mvmt_intent::intent_gmp_tests {
     // INTEGRATION TESTS
     // ============================================================================
 
-    /// 13. Test: Full send-receive roundtrip for IntentRequirements
-    /// Simulates the full flow: hub sends requirements via GMP, connected chain receives.
+    // 13. Test: Full send-receive roundtrip for IntentRequirements
+    // Simulates the full flow: hub sends requirements via GMP, connected chain receives.
     #[test(admin = @mvmt_intent)]
     fun test_intent_requirements_full_flow(admin: &signer) {
         // Initialize configs
@@ -521,8 +521,8 @@ module mvmt_intent::intent_gmp_tests {
         assert!(gmp_common::intent_requirements_expiry(&decoded) == DUMMY_EXPIRY, 6);
     }
 
-    /// 14. Test: Full send-receive roundtrip for FulfillmentProof
-    /// Simulates the full flow: hub sends proof via GMP, connected chain receives and decodes.
+    // 14. Test: Full send-receive roundtrip for FulfillmentProof
+    // Simulates the full flow: hub sends proof via GMP, connected chain receives and decodes.
     #[test(admin = @mvmt_intent)]
     fun test_fulfillment_proof_full_flow(admin: &signer) {
         // Initialize configs
