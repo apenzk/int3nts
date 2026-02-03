@@ -30,7 +30,7 @@ pub enum OutflowInstruction {
     /// 3. `[signer]` Payer for account creation
     /// 4. `[]` System program
     LzReceive {
-        /// Source chain ID (LayerZero endpoint ID)
+        /// Source chain ID (LZ endpoint ID)
         src_chain_id: u32,
         /// Source address (hub contract)
         src_addr: [u8; 32],

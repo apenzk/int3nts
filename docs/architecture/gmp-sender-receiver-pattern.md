@@ -4,7 +4,7 @@
 **Date:** 2026-02-02
 **Applies to:** MVM, SVM
 
-This document explains the architectural pattern used for GMP (Generic Message Passing) in both MVM and SVM, why it was chosen, and how it mirrors LayerZero's design.
+This document explains the architectural pattern used for GMP (Generic Message Passing) in both MVM and SVM, why it was chosen, and how it mirrors LZ's design.
 
 ---
 
@@ -36,11 +36,11 @@ Application ──imports──> GMP Endpoint (for sending messages)
 
 ---
 
-## Solution: LayerZero's Sender/Receiver Split
+## Solution: LZ's Sender/Receiver Split
 
-LayerZero V2 solves this by **separating send and receive into distinct components**:
+LZ V2 solves this by **separating send and receive into distinct components**:
 
-### LayerZero on Aptos/Movement
+### LZ on Aptos/Movement
 
 ```text
 ┌─────────────────────────┐     ┌─────────────────────────┐
@@ -59,7 +59,7 @@ LayerZero V2 solves this by **separating send and receive into distinct componen
 └─────────────────────────────────────────────────────────┘
 ```
 
-### LayerZero on Solana
+### LZ on Solana
 
 ```text
 ┌─────────────────────────┐     ┌─────────────────────────┐
@@ -143,7 +143,7 @@ The sender module (`gmp_sender`) has **zero imports of application modules**. It
 
 This makes it safe for any application module to import without creating cycles.
 
-### 2. Matches LayerZero's Production Architecture
+### 2. Matches LZ's Production Architecture
 
 By following LZ's pattern, our code structure mirrors what we'll use in production:
 
@@ -245,6 +245,6 @@ Tests must follow the same order - see `setup_test()` functions in test files.
 
 ## References
 
-- [LayerZero V2 Aptos OApp Architecture](../architecture/plan/layerzero-movement-integration.md)
-- [LayerZero V2 Solana OApp Architecture](../architecture/plan/layerzero-solana-integration.md)
+- [LZ V2 MVM OApp Architecture](../architecture/plan/lz-mvm-integration.md)
+- [LZ V2 SVM OApp Architecture](../architecture/plan/lz-svm-integration.md)
 - [GMP Architecture Integration](../architecture/plan/gmp-architecture-integration.md)

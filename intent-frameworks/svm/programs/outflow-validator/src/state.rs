@@ -64,7 +64,7 @@ pub struct ConfigAccount {
     pub admin: Pubkey,
     /// The trusted GMP endpoint program ID
     pub gmp_endpoint: Pubkey,
-    /// The hub chain ID (LayerZero endpoint ID)
+    /// The hub chain ID (LZ endpoint ID)
     pub hub_chain_id: u32,
     /// The trusted hub address (for GMP message verification)
     pub trusted_hub_addr: [u8; 32],

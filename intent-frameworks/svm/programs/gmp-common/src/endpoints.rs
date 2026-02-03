@@ -1,10 +1,10 @@
-/// GMP endpoint configuration for LayerZero V2 and local testing.
+/// GMP endpoint configuration for LZ V2 and local testing.
 ///
 /// Addresses and EIDs sourced from LZ documentation and the project's
-/// layerzero-solana-integration.md / layerzero-movement-integration.md.
+/// lz-svm-integration.md / lz-mvm-integration.md.
 
 // ---------------------------------------------------------------------------
-// LayerZero V2 chain endpoint IDs (EIDs)
+// LZ V2 chain endpoint IDs (EIDs)
 // ---------------------------------------------------------------------------
 
 pub const SOLANA_MAINNET_EID: u32 = 30168;

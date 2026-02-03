@@ -135,7 +135,7 @@ pub struct GmpConfig {
     pub discriminator: [u8; 8],
     /// Admin who can update config
     pub admin: Pubkey,
-    /// The hub chain ID (LayerZero endpoint ID, e.g., Movement = 30106)
+    /// The hub chain ID (LZ endpoint ID, e.g., Movement = 30106)
     pub hub_chain_id: u32,
     /// The trusted hub address (32 bytes, for GMP message verification)
     pub trusted_hub_addr: [u8; 32],

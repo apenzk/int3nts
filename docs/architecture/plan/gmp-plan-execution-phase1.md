@@ -50,8 +50,8 @@
 
 **Files:**
 
-- `docs/architecture/plan/layerzero-solana-integration.md`
-- `docs/architecture/plan/layerzero-movement-integration.md`
+- `docs/architecture/plan/lz-svm-integration.md`
+- `docs/architecture/plan/lz-mvm-integration.md`
 
 **Tasks:**
 
