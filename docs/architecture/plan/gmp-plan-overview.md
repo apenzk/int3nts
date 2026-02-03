@@ -378,6 +378,7 @@ On-chain contract validates → Sends GMP message → Receiving contract accepts
 **FINAL SELECTION:** LayerZero v2 has been selected as the GMP protocol for this implementation.
 
 **Rationale:**
+
 - Best cross-chain coverage (MVM, EVM, SVM)
 - Mature Aptos integration (similar to Movement)
 - Flexible executor network

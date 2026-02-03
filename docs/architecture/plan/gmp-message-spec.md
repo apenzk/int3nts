@@ -101,6 +101,7 @@ Offset  Size   Field              Type       Description
 ## Message Type 0x03: FulfillmentProof
 
 **Direction:** Either direction
+
 - **Outflow:** Connected chain → Hub (solver fulfilled on connected chain, hub releases locked tokens)
 - **Inflow:** Hub → Connected chain (solver fulfilled on hub, connected chain releases escrow)
 

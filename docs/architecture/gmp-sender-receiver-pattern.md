@@ -108,6 +108,7 @@ LayerZero V2 solves this by **separating send and receive into distinct componen
 ```
 
 **Dependency graph (no cycles):**
+
 ```
 gmp_sender ← outflow_validator_impl
                       ↑
@@ -135,6 +136,7 @@ gmp_sender ← outflow_validator_impl
 ### 1. Eliminates Circular Dependencies
 
 The sender module (`gmp_sender`) has **zero imports of application modules**. It only contains:
+
 - Send function
 - Event emission
 - Nonce tracking
@@ -144,6 +146,7 @@ This makes it safe for any application module to import without creating cycles.
 ### 2. Matches LayerZero's Production Architecture
 
 By following LZ's pattern, our code structure mirrors what we'll use in production:
+
 - Same mental model
 - Easy to swap native GMP with real LZ endpoint
 - Consistent patterns across MVM and SVM
@@ -159,6 +162,7 @@ By following LZ's pattern, our code structure mirrors what we'll use in producti
 ### 4. Testability
 
 Each component can be tested independently:
+
 - Test sender without receiver
 - Test receiver without sender
 - Mock either for application tests
@@ -197,6 +201,7 @@ event::emit(FulfillmentProofPayload { dst_chain_id, dst_addr, payload });
 ```
 
 **Rejected because:**
+
 - Extra indirection
 - Relay must monitor additional event type
 - Doesn't match LZ pattern
@@ -207,6 +212,7 @@ event::emit(FulfillmentProofPayload { dst_chain_id, dst_addr, payload });
 Keep all GMP functionality in one module.
 
 **Rejected because:**
+
 - Creates circular dependency in MVM
 - Violates single responsibility
 - Harder to test
@@ -216,6 +222,7 @@ Keep all GMP functionality in one module.
 Use Move's friend mechanism to break the cycle.
 
 **Rejected because:**
+
 - More complex
 - Doesn't apply to SVM
 - LZ's split pattern is cleaner

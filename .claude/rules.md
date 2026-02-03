@@ -95,6 +95,9 @@ See `docs/docs-guide.md` for documentation organization.
 - **Blank lines around headings**: There must be a blank line before and after all headings (MD022)
 - **Blank lines around lists**: There must be a blank line before bullet lists and numbered lists (MD032)
 - **No multiple blank lines**: Use only one blank line between sections (MD012)
+- **Code block language specifiers**: All fenced code blocks MUST specify a language (MD040)
+  - Use appropriate language: `bash`, `json`, `typescript`, `rust`, `move`, `solidity`, `text`, etc.
+  - Never use bare triple backticks without a language
 
 These rules ensure consistent formatting and prevent linting errors. Always check linting errors before committing documentation changes.
 
