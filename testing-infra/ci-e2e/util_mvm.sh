@@ -182,22 +182,22 @@ cleanup_aptos_profile() {
     fi
 }
 
-# Wait for Aptos chain to be ready
-# Usage: wait_for_aptos_chain_ready <chain_number> [max_attempts] [sleep_seconds]
-# Example: wait_for_aptos_chain_ready "1"
-#          wait_for_aptos_chain_ready "2" "30" "5"
+# Wait for MVM chain to be ready
+# Usage: wait_for_mvm_chain_ready <chain_number> [max_attempts] [sleep_seconds]
+# Example: wait_for_mvm_chain_ready "1"
+#          wait_for_mvm_chain_ready "2" "30" "5"
 # Waits for both REST API and faucet to be ready:
 #   - Hub: checks ports 8080 (REST) and 8081 (faucet)
 #   - Chain 2: checks ports 8082 (REST) and 8083 (faucet)
 # Default: 30 attempts with 5 second intervals
 # Returns 0 if chain is ready, exits with error if timeout
-wait_for_aptos_chain_ready() {
+wait_for_mvm_chain_ready() {
     local chain_num="$1"
     local max_attempts="${2:-30}"
     local sleep_seconds="${3:-5}"
     
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: wait_for_aptos_chain_ready() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: wait_for_mvm_chain_ready() requires a chain number (1 or 2)"
         exit 1
     fi
     
@@ -232,21 +232,21 @@ wait_for_aptos_chain_ready() {
     exit 1
 }
 
-# Verify Aptos chain services are running
-# Usage: verify_aptos_chain_services <chain_number>
-# Example: verify_aptos_chain_services "1"
-#          verify_aptos_chain_services "2"
+# Verify MVM chain services are running
+# Usage: verify_mvm_chain_services <chain_number>
+# Example: verify_mvm_chain_services "1"
+#          verify_mvm_chain_services "2"
 # Verifies both REST API and faucet are responding correctly:
 #   - REST API: checks http://127.0.0.1:<rest_port>/v1
 #   - Faucet: checks http://127.0.0.1:<faucet_port>/ should return "tap:ok"
 #   - Hub: ports 8080 (REST) and 8081 (faucet)
 #   - Chain 2: ports 8082 (REST) and 8083 (faucet)
 # Exits with error if any service is not responding correctly
-verify_aptos_chain_services() {
+verify_mvm_chain_services() {
     local chain_num="$1"
     
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: verify_aptos_chain_services() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: verify_mvm_chain_services() requires a chain number (1 or 2)"
         exit 1
     fi
     

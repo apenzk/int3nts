@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -13,6 +14,11 @@ cd "$PROJECT_ROOT"
 log " DEPLOY CONTRACTS - HUB"
 log "=========================================="
 log_and_echo " All output logged to: $LOG_FILE"
+
+# Verify chain is ready before deployment (exits on failure)
+log ""
+log "⏳ Verifying Hub chain is ready..."
+wait_for_mvm_chain_ready "1"
 
 log ""
 log "️  Configuring Aptos CLI for Hub..."

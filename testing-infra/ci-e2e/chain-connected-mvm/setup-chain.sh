@@ -26,13 +26,13 @@ log ""
 log "⏳ Waiting for Chain 2 to start..."
 
 # Wait for Chain 2
-wait_for_aptos_chain_ready "2"
+wait_for_mvm_chain_ready "2"
 
 log ""
 log " Verifying Chain 2..."
 
 # Verify Chain 2 services
-verify_aptos_chain_services "2"
+verify_mvm_chain_services "2"
 
 # Show chain status
 log ""

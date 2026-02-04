@@ -26,13 +26,13 @@ log ""
 log "⏳ Waiting for Hub to start..."
 
 # Wait for Hub
-wait_for_aptos_chain_ready "1"
+wait_for_mvm_chain_ready "1"
 
 log ""
 log " Verifying Hub..."
 
 # Verify Hub services
-verify_aptos_chain_services "1"
+verify_mvm_chain_services "1"
 
 # Show chain status
 log ""

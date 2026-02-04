@@ -138,9 +138,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // INITIALIZATION TESTS
     // ============================================================================
 
-    /// 1. Test: Initialize creates config
-    /// Verifies that initialize correctly sets up the inflow escrow GMP configuration with hub chain ID and trusted hub address.
-    /// Why: Proper initialization is required before any GMP operations can succeed. Without correct config, all cross-chain messages will be rejected.
+    // 1. Test: Initialize creates config
+    // Verifies that initialize correctly sets up the inflow escrow GMP configuration with hub chain ID and trusted hub address.
+    // Why: Proper initialization is required before any GMP operations can succeed. Without correct config, all cross-chain messages will be rejected.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_initialize_creates_config(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -157,9 +157,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(stored_hub_addr == expected_hub_addr, 3);
     }
 
-    /// 2. Test: Initialize rejects double initialization
-    /// Verifies that trying to initialize twice fails with an error.
-    /// Why: Config must only be set once to prevent admin takeover or config manipulation attacks.
+    // 2. Test: Initialize rejects double initialization
+    // Verifies that trying to initialize twice fails with an error.
+    // Why: Config must only be set once to prevent admin takeover or config manipulation attacks.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure] // Already exists
     fun test_initialize_rejects_double_init(aptos_framework: &signer, admin: &signer) {
@@ -177,9 +177,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // RECEIVE INTENT REQUIREMENTS TESTS
     // ============================================================================
 
-    /// 3. Test: Receive requirements stores requirements
-    /// Verifies that receiving intent requirements from the hub correctly stores them for later validation during escrow creation.
-    /// Why: Requirements must be stored before escrow creation so that amount, token, and solver can be validated against hub expectations.
+    // 3. Test: Receive requirements stores requirements
+    // Verifies that receiving intent requirements from the hub correctly stores them for later validation during escrow creation.
+    // Why: Requirements must be stored before escrow creation so that amount, token, and solver can be validated against hub expectations.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_receive_requirements_stores_requirements(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -209,9 +209,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(inflow_escrow_gmp::get_amount_required(intent_id) == amount, 2);
     }
 
-    /// 4. Test: Receive requirements is idempotent
-    /// Verifies that receiving the same requirements message twice doesn't fail or overwrite existing data.
-    /// Why: GMP messages may be delivered multiple times due to retries. Idempotency prevents duplicate message errors and ensures reliable delivery.
+    // 4. Test: Receive requirements is idempotent
+    // Verifies that receiving the same requirements message twice doesn't fail or overwrite existing data.
+    // Why: GMP messages may be delivered multiple times due to retries. Idempotency prevents duplicate message errors and ensures reliable delivery.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     fun test_receive_requirements_idempotent(aptos_framework: &signer, admin: &signer) {
         timestamp::set_time_has_started_for_testing(aptos_framework);
@@ -255,9 +255,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(inflow_escrow_gmp::has_requirements(intent_id), 1);
     }
 
-    /// 5. Test: Receive requirements rejects untrusted source
-    /// Verifies that requirements from non-trusted chain IDs or addresses are rejected.
-    /// Why: Source verification prevents spoofed messages from malicious actors who could inject fake requirements and steal escrowed funds.
+    // 5. Test: Receive requirements rejects untrusted source
+    // Verifies that requirements from non-trusted chain IDs or addresses are rejected.
+    // Why: Source verification prevents spoofed messages from malicious actors who could inject fake requirements and steal escrowed funds.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
     #[expected_failure(abort_code = 2, location = mvmt_intent::inflow_escrow_gmp)] // EINVALID_SOURCE_CHAIN
     fun test_receive_requirements_rejects_untrusted_source(aptos_framework: &signer, admin: &signer) {
@@ -296,10 +296,10 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // RECEIVE FULFILLMENT PROOF TESTS
     // ============================================================================
 
-    /// 6. Test: Receive fulfillment proof marks fulfilled (MVM: manual release)
-    /// Verifies that receiving a fulfillment proof from the hub marks the escrow as fulfilled and ready for release.
-    /// Why: Fulfillment proof from hub confirms the solver delivered tokens on the hub side, allowing safe release of escrowed tokens.
-    /// Note: MVM uses manual release (see tests 16-19). SVM auto-releases in this test.
+    // 6. Test: Receive fulfillment proof marks fulfilled (MVM: manual release)
+    // Verifies that receiving a fulfillment proof from the hub marks the escrow as fulfilled and ready for release.
+    // Why: Fulfillment proof from hub confirms the solver delivered tokens on the hub side, allowing safe release of escrowed tokens.
+    // Note: MVM uses manual release (see tests 16-19). SVM auto-releases in this test.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     fun test_receive_fulfillment_proof_marks_fulfilled(
         aptos_framework: &signer,
@@ -366,9 +366,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(inflow_escrow_gmp::is_fulfilled(intent_id), 2);
     }
 
-    /// 7. Test: Receive fulfillment proof rejects untrusted source
-    /// Verifies that fulfillment proofs from non-trusted chain IDs are rejected.
-    /// Why: Only the trusted hub can send fulfillment proofs. Accepting proofs from untrusted sources would allow attackers to steal escrowed funds.
+    // 7. Test: Receive fulfillment proof rejects untrusted source
+    // Verifies that fulfillment proofs from non-trusted chain IDs are rejected.
+    // Why: Only the trusted hub can send fulfillment proofs. Accepting proofs from untrusted sources would allow attackers to steal escrowed funds.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     #[expected_failure(abort_code = 2, location = mvmt_intent::inflow_escrow_gmp)] // EINVALID_SOURCE_CHAIN
     fun test_receive_fulfillment_rejects_untrusted_source(
@@ -430,9 +430,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 8. Test: Receive fulfillment proof rejects already fulfilled
-    /// Verifies that receiving a fulfillment proof twice is rejected.
-    /// Why: Prevents replay attacks and double-spending.
+    // 8. Test: Receive fulfillment proof rejects already fulfilled
+    // Verifies that receiving a fulfillment proof twice is rejected.
+    // Why: Prevents replay attacks and double-spending.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, solver = @0x456)]
     #[expected_failure(abort_code = 12, location = mvmt_intent::inflow_escrow_gmp)] // EALREADY_FULFILLED
     fun test_receive_fulfillment_proof_rejects_already_fulfilled(
@@ -517,9 +517,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // CREATE ESCROW TESTS
     // ============================================================================
 
-    /// 9. Test: Create escrow validates against requirements
-    /// Verifies that creating an escrow validates amount and token against previously received requirements from the hub.
-    /// Why: Validation ensures the escrow matches hub expectations, and sends confirmation back to hub for coordination.
+    // 9. Test: Create escrow validates against requirements
+    // Verifies that creating an escrow validates amount and token against previously received requirements from the hub.
+    // Why: Validation ensures the escrow matches hub expectations, and sends confirmation back to hub for coordination.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     fun test_create_escrow_validates_requirements(
         aptos_framework: &signer,
@@ -572,9 +572,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(nonce == 2, 2); // Started at 1, now 2
     }
 
-    /// 10. Test: Create escrow rejects amount mismatch
-    /// Verifies that creating an escrow with a different amount than required is rejected.
-    /// Why: Amount validation prevents users from creating under/over-funded escrows that don't match hub expectations.
+    // 10. Test: Create escrow rejects amount mismatch
+    // Verifies that creating an escrow with a different amount than required is rejected.
+    // Why: Amount validation prevents users from creating under/over-funded escrows that don't match hub expectations.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     #[expected_failure(abort_code = 8, location = mvmt_intent::inflow_escrow_gmp)] // EAMOUNT_MISMATCH
     fun test_create_escrow_rejects_amount_mismatch(
@@ -621,9 +621,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 11. Test: Create escrow rejects token mismatch
-    /// Verifies that creating an escrow with a different token than required is rejected.
-    /// Why: Token validation prevents users from locking wrong tokens that can't be used to fulfill the intent on the hub.
+    // 11. Test: Create escrow rejects token mismatch
+    // Verifies that creating an escrow with a different token than required is rejected.
+    // Why: Token validation prevents users from locking wrong tokens that can't be used to fulfill the intent on the hub.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     #[expected_failure(abort_code = 9, location = mvmt_intent::inflow_escrow_gmp)] // ETOKEN_MISMATCH
     fun test_create_escrow_rejects_token_mismatch(
@@ -677,9 +677,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 12. Test: Create escrow sends EscrowConfirmation
-    /// Verifies that EscrowConfirmation GMP message is sent to hub on escrow creation.
-    /// Why: Hub needs confirmation to proceed with intent processing.
+    // 12. Test: Create escrow sends EscrowConfirmation
+    // Verifies that EscrowConfirmation GMP message is sent to hub on escrow creation.
+    // Why: Hub needs confirmation to proceed with intent processing.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     fun test_create_escrow_sends_escrow_confirmation(
         aptos_framework: &signer,
@@ -736,9 +736,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(inflow_escrow_gmp::has_escrow(intent_id), 3);
     }
 
-    /// 13. Test: Full inflow GMP workflow
-    /// Verifies complete flow: requirements → escrow → fulfillment proof → release.
-    /// Why: Integration test for the entire inflow GMP flow.
+    // 13. Test: Full inflow GMP workflow
+    // Verifies complete flow: requirements → escrow → fulfillment proof → release.
+    // Why: Integration test for the entire inflow GMP flow.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, solver = @0x456)]
     fun test_full_inflow_gmp_workflow(
         aptos_framework: &signer,
@@ -843,9 +843,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(solver_balance == initial_solver_balance + amount, 9);
     }
 
-    /// 14. Test: Create escrow rejects no requirements (MVM-specific)
-    /// Verifies that creating an escrow without receiving requirements first is rejected.
-    /// Why: Requirements must exist before escrow creation to ensure the hub has coordinated this intent and validation is possible.
+    // 14. Test: Create escrow rejects no requirements (MVM-specific)
+    // Verifies that creating an escrow without receiving requirements first is rejected.
+    // Why: Requirements must exist before escrow creation to ensure the hub has coordinated this intent and validation is possible.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     #[expected_failure(abort_code = 5, location = mvmt_intent::inflow_escrow_gmp)] // EREQUIREMENTS_NOT_FOUND
     fun test_create_escrow_rejects_no_requirements(
@@ -880,9 +880,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 15. Test: Create escrow rejects double creation (MVM-specific)
-    /// Verifies that creating an escrow twice for the same intent_id is rejected.
-    /// Why: One intent should have exactly one escrow. Double creation could lead to double-spending or fund locking issues.
+    // 15. Test: Create escrow rejects double creation (MVM-specific)
+    // Verifies that creating an escrow twice for the same intent_id is rejected.
+    // Why: One intent should have exactly one escrow. Double creation could lead to double-spending or fund locking issues.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789)]
     #[expected_failure(abort_code = 6, location = mvmt_intent::inflow_escrow_gmp)] // EESCROW_ALREADY_CREATED
     fun test_create_escrow_rejects_double_create(
@@ -941,10 +941,10 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // RELEASE ESCROW TESTS (MVM-specific manual release)
     // ============================================================================
 
-    /// 16. Test: Release escrow succeeds after fulfillment (MVM-specific)
-    /// Verifies that the solver can successfully claim escrowed tokens after receiving a fulfillment proof from the hub.
-    /// Why: This is the final step in the inflow intent lifecycle. The solver must receive payment after fulfilling the intent on the hub.
-    /// Note: MVM requires manual release call. SVM auto-releases in test 6.
+    // 16. Test: Release escrow succeeds after fulfillment (MVM-specific)
+    // Verifies that the solver can successfully claim escrowed tokens after receiving a fulfillment proof from the hub.
+    // Why: This is the final step in the inflow intent lifecycle. The solver must receive payment after fulfilling the intent on the hub.
+    // Note: MVM requires manual release call. SVM auto-releases in test 6.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, solver = @0x456)]
     fun test_release_escrow_succeeds_after_fulfillment(
         aptos_framework: &signer,
@@ -1027,9 +1027,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         assert!(inflow_escrow_gmp::is_released(intent_id), 2);
     }
 
-    /// 17. Test: Release escrow rejects without fulfillment (MVM-specific)
-    /// Verifies that attempting to release an escrow before receiving a fulfillment proof is rejected.
-    /// Why: Tokens must not be released until the hub confirms the solver fulfilled the intent. Early release allows theft without fulfillment.
+    // 17. Test: Release escrow rejects without fulfillment (MVM-specific)
+    // Verifies that attempting to release an escrow before receiving a fulfillment proof is rejected.
+    // Why: Tokens must not be released until the hub confirms the solver fulfilled the intent. Early release allows theft without fulfillment.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, solver = @0x456)]
     #[expected_failure(abort_code = 13, location = mvmt_intent::inflow_escrow_gmp)] // ENOT_FULFILLED
     fun test_release_escrow_rejects_without_fulfillment(
@@ -1086,9 +1086,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 18. Test: Release escrow rejects unauthorized solver (MVM-specific)
-    /// Verifies that only the solver specified in requirements can release the escrow.
-    /// Why: Prevents unauthorized actors from stealing escrowed funds intended for a specific solver.
+    // 18. Test: Release escrow rejects unauthorized solver (MVM-specific)
+    // Verifies that only the solver specified in requirements can release the escrow.
+    // Why: Prevents unauthorized actors from stealing escrowed funds intended for a specific solver.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, unauthorized = @0xDEAD)]
     #[expected_failure(abort_code = 14, location = mvmt_intent::inflow_escrow_gmp)] // EUNAUTHORIZED_SOLVER
     fun test_release_escrow_rejects_unauthorized_solver(
@@ -1162,9 +1162,9 @@ module mvmt_intent::inflow_escrow_gmp_tests {
         );
     }
 
-    /// 19. Test: Release escrow rejects double release (MVM-specific)
-    /// Verifies that attempting to release the same escrow twice is rejected.
-    /// Why: Prevents double-spending where the solver could claim the same escrowed tokens multiple times.
+    // 19. Test: Release escrow rejects double release (MVM-specific)
+    // Verifies that attempting to release the same escrow twice is rejected.
+    // Why: Prevents double-spending where the solver could claim the same escrowed tokens multiple times.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent, token_creator = @0xABC, requester = @0x789, solver = @0x456)]
     #[expected_failure(abort_code = 15, location = mvmt_intent::inflow_escrow_gmp)] // EESCROW_ALREADY_RELEASED
     fun test_release_escrow_rejects_double_release(
