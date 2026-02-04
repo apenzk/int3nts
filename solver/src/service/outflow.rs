@@ -8,7 +8,7 @@
 //! 3. Solver calls `outflow_validator::fulfill_intent` on connected chain
 //! 4. outflow_validator transfers tokens and sends FulfillmentProof via GMP
 //! 5. Native GMP relay delivers FulfillmentProof to hub
-//! 6. Hub auto-releases tokens to solver
+//! 6. Solver calls fulfill_outflow_intent on hub to claim locked tokens
 //!
 //! EVM/SVM: Will be updated to GMP flow in Commits 12-13.
 
@@ -178,6 +178,125 @@ impl OutflowService {
         Ok(executed_transfers)
     }
 
+    /// Waits for GMP IntentRequirements to arrive on the MVM connected chain,
+    /// then executes `outflow_validator::fulfill_intent`.
+    ///
+    /// The hub sends IntentRequirements via GMP when the outflow intent is created.
+    /// The native GMP relay delivers them to the connected chain's `outflow_validator_impl`.
+    /// This function polls `has_outflow_requirements` until they arrive, then fulfills.
+    async fn execute_mvm_gmp_fulfillment(
+        &self,
+        intent: &TrackedIntent,
+    ) -> Result<String> {
+        let client = self.mvm_client.as_ref()
+            .context("MVM client not configured")?;
+        let desired_token = &intent.draft_data.desired_token;
+        let poll_interval = Duration::from_secs(2);
+        let expiry_time = intent.expiry_time;
+
+        // Poll until requirements are available on connected chain
+        loop {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            if current_time >= expiry_time {
+                anyhow::bail!(
+                    "Intent expired while waiting for GMP requirements delivery (expiry: {})",
+                    expiry_time
+                );
+            }
+
+            match client.has_outflow_requirements(&intent.intent_id).await {
+                Ok(true) => {
+                    info!(
+                        "GMP requirements delivered for outflow intent {}, fulfilling on connected chain",
+                        intent.intent_id
+                    );
+                    break;
+                }
+                Ok(false) => {
+                    // Requirements not yet delivered, wait and retry
+                }
+                Err(e) => {
+                    return Err(e.context(format!(
+                        "Failed to check outflow requirements for intent {}",
+                        intent.intent_id
+                    )));
+                }
+            }
+
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        // Requirements are available, execute fulfillment
+        client.fulfill_outflow_via_gmp(&intent.intent_id, desired_token)
+    }
+
+    /// Waits for FulfillmentProof to be delivered to the hub via GMP, then calls
+    /// `fulfill_outflow_intent` on the hub to claim locked tokens.
+    ///
+    /// After the solver fulfills on the connected chain, the connected chain sends a
+    /// FulfillmentProof via GMP. The native GMP relay delivers it to the hub. Once the
+    /// hub records the proof, the solver can call `fulfill_outflow_intent` to claim tokens.
+    async fn wait_for_proof_and_fulfill_hub(
+        &self,
+        intent: &TrackedIntent,
+    ) -> Result<String> {
+        let intent_addr = intent.intent_addr.as_ref()
+            .context("Intent address not set (intent not created on-chain)")?;
+        let poll_interval = Duration::from_secs(2);
+        let expiry_time = intent.expiry_time;
+
+        // Poll until FulfillmentProof is received on hub
+        loop {
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            if current_time >= expiry_time {
+                anyhow::bail!(
+                    "Intent expired while waiting for FulfillmentProof delivery to hub (expiry: {})",
+                    expiry_time
+                );
+            }
+
+            let hub_client = HubChainClient::new(&self.config.hub_chain)?;
+            match hub_client.is_fulfillment_proof_received(&intent.intent_id).await {
+                Ok(true) => {
+                    info!(
+                        "FulfillmentProof received on hub for outflow intent {}, claiming tokens",
+                        intent.intent_id
+                    );
+                    break;
+                }
+                Ok(false) => {
+                    // Proof not yet delivered, wait and retry
+                }
+                Err(e) => {
+                    return Err(e.context(format!(
+                        "Failed to check FulfillmentProof status for intent {}",
+                        intent.intent_id
+                    )));
+                }
+            }
+
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        // FulfillmentProof received, call fulfill_outflow_intent on hub
+        let intent_addr_clone = intent_addr.clone();
+        let hub_config = self.config.hub_chain.clone();
+        tokio::task::spawn_blocking(move || {
+            let hub_client = HubChainClient::new(&hub_config)?;
+            hub_client.fulfill_outflow_intent_gmp(&intent_addr_clone)
+        })
+        .await
+        .context("Failed to spawn blocking task for hub GMP fulfillment")?
+    }
+
     /// Executes outflow fulfillment on the connected chain.
     ///
     /// For MVM chains, uses the GMP flow via outflow_validator::fulfill_intent.
@@ -206,15 +325,8 @@ impl OutflowService {
 
         match chain_type {
             "mvm" => {
-                // GMP Flow: Call outflow_validator::fulfill_intent
-                // The outflow_validator will:
-                // 1. Validate solver is authorized
-                // 2. Transfer tokens from solver to recipient
-                // 3. Send FulfillmentProof via GMP to hub
-                // The hub will auto-release tokens when it receives the proof
-                let client = self.mvm_client.as_ref()
-                    .context("MVM client not configured")?;
-                let tx_hash = client.fulfill_outflow_via_gmp(&intent.intent_id, desired_token)?;
+                // GMP Flow: Wait for requirements, then call outflow_validator::fulfill_intent
+                let tx_hash = self.execute_mvm_gmp_fulfillment(intent).await?;
                 Ok((tx_hash, true)) // true = uses GMP flow
             }
             "evm" => {
@@ -226,11 +338,6 @@ impl OutflowService {
             }
             "svm" => {
                 // GMP Flow: Call outflow_validator::fulfill_intent
-                // The outflow_validator will:
-                // 1. Validate solver is authorized
-                // 2. Transfer tokens from solver to recipient
-                // 3. Send FulfillmentProof via GMP to hub
-                // The hub will auto-release tokens when it receives the proof
                 let client = self.svm_client.as_ref()
                     .context("SVM client not configured")?;
                 let tx_hash = client.fulfill_outflow_via_gmp(&intent.intent_id, desired_token).await?;
@@ -349,9 +456,9 @@ impl OutflowService {
     /// Main service loop that continuously processes outflow intents
     ///
     /// This loop:
-    /// 1. Polls for pending outflow intents and executes fulfillments
-    /// 2. For GMP flow (MVM): Marks as fulfilled (hub release happens via GMP)
-    /// 3. For EVM/SVM (pending GMP update): Gets trusted-gmp approval and fulfills hub intent
+    /// 1. Polls for pending outflow intents and executes fulfillments on connected chain
+    /// 2. For GMP flow (MVM/SVM): Waits for FulfillmentProof delivery, then claims tokens on hub
+    /// 3. For EVM (pending GMP update): Gets trusted-gmp approval and fulfills hub intent
     ///
     /// # Arguments
     ///
@@ -365,17 +472,28 @@ impl OutflowService {
                     for (intent, tx_hash, uses_gmp) in executed_transfers {
                         if uses_gmp {
                             // GMP Flow: The outflow_validator sent FulfillmentProof via GMP.
-                            // The native GMP relay will deliver it to the hub, which auto-releases tokens.
-                            // We just need to mark the intent as fulfilled in our tracker.
+                            // Wait for the native GMP relay to deliver it to the hub, then
+                            // call fulfill_outflow_intent on the hub to claim locked tokens.
                             info!(
-                                "Successfully fulfilled outflow intent {} via GMP: fulfill_tx={}",
+                                "Connected chain fulfillment complete for outflow intent {} (tx={}), waiting for FulfillmentProof delivery to hub",
                                 intent.intent_id, tx_hash
                             );
-                            info!(
-                                "Hub will auto-release tokens when FulfillmentProof is delivered via GMP"
-                            );
-                            if let Err(e) = self.tracker.mark_fulfilled(&intent.draft_id).await {
-                                error!("Failed to mark intent {} as fulfilled: {}", intent.draft_id, e);
+                            match self.wait_for_proof_and_fulfill_hub(&intent).await {
+                                Ok(hub_tx_hash) => {
+                                    info!(
+                                        "Successfully fulfilled outflow intent {} on hub: hub_tx={}",
+                                        intent.intent_id, hub_tx_hash
+                                    );
+                                    if let Err(e) = self.tracker.mark_fulfilled(&intent.draft_id).await {
+                                        error!("Failed to mark intent {} as fulfilled: {}", intent.draft_id, e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!(
+                                        "Failed to complete hub fulfillment for outflow intent {}: {}",
+                                        intent.intent_id, e
+                                    );
+                                }
                             }
                             continue;
                         }

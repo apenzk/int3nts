@@ -268,6 +268,7 @@ module mvmt_intent::gmp_intent_state {
         state.escrow_confirmed
     }
 
+    #[view]
     /// Check if fulfillment proof is received for an intent.
     ///
     /// # Arguments

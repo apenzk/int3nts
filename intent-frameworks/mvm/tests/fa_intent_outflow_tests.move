@@ -156,6 +156,7 @@ module mvmt_intent::fa_intent_outflow_tests {
             requester_addr_connected_chain,
             approver_public_key_bytes,
             solver_addr,
+            solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
         );
         
@@ -211,6 +212,7 @@ module mvmt_intent::fa_intent_outflow_tests {
             requester_addr_connected_chain,
             approver_public_key_bytes,
             solver_addr,
+            solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
         );
         
@@ -504,6 +506,7 @@ module mvmt_intent::fa_intent_outflow_tests {
             requester_addr_connected_chain, // Zero address - should cause abort
             approver_public_key_bytes,
             solver_addr,
+            solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
         );
     }

@@ -104,6 +104,7 @@ module mvmt_intent::fa_intent_inflow_tests {
             expiry_time,
             intent_id,
             solver_addr,
+            solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
             signer::address_of(requestor), // requester_addr_connected_chain (same as requestor in test)
         );
@@ -202,6 +203,7 @@ module mvmt_intent::fa_intent_inflow_tests {
             expiry_time,
             intent_id,
             solver_addr,
+            solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
             signer::address_of(requestor), // requester_addr_connected_chain (same as requestor in test)
         );

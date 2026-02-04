@@ -232,3 +232,131 @@ fn test_release_gmp_escrow_command_building() {
     assert!(arg2.starts_with("address:"));
     assert!(arg2.contains("0x")); // address should keep 0x prefix
 }
+
+// ============================================================================
+// HEX ADDRESS NORMALIZATION
+// ============================================================================
+
+/// 19. Test: normalize_hex_to_address preserves full-length 64-char addresses
+/// Verifies that a correctly formatted 64-char hex address passes through unchanged.
+/// Why: Normalization must be a no-op for well-formed addresses to avoid corruption.
+#[test]
+fn test_normalize_hex_to_address_full_length() {
+    let result = ConnectedMvmClient::normalize_hex_to_address(DUMMY_INTENT_ID);
+    assert_eq!(result, DUMMY_INTENT_ID);
+}
+
+/// 20. Test: normalize_hex_to_address pads short addresses to 64 chars
+/// Verifies that short addresses (e.g., "0x1") are zero-padded to 32 bytes.
+/// Why: Move addresses are always 32 bytes. Short forms like "0x1" appear in framework
+/// addresses and must be padded for the Aptos REST API.
+#[test]
+fn test_normalize_hex_to_address_short_address() {
+    let result = ConnectedMvmClient::normalize_hex_to_address("0x1");
+    assert_eq!(
+        result,
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+}
+
+/// 21. Test: normalize_hex_to_address fixes odd-length hex from stripped leading zeros
+/// Verifies that 63-char hex (from Move stripping a leading zero) becomes 64-char.
+/// Why: Move events strip leading zeros from addresses. "0x0f...fe" becomes "0xf...fe"
+/// (63 hex chars, odd length), which the Aptos REST API rejects with "Odd number of digits".
+#[test]
+fn test_normalize_hex_to_address_odd_length() {
+    // Simulate Move stripping the leading zero from DUMMY_INTENT_ADDR_HUB ("0x00...0f")
+    // "0x0f" → "0xf" (odd length, 1 hex char instead of 2)
+    let stripped = "0xf";
+    let result = ConnectedMvmClient::normalize_hex_to_address(stripped);
+    assert_eq!(
+        result,
+        "0x000000000000000000000000000000000000000000000000000000000000000f"
+    );
+}
+
+/// 22. Test: normalize_hex_to_address handles input without 0x prefix
+/// Verifies that bare hex strings (no "0x") are correctly padded and prefixed.
+/// Why: Intent IDs from different sources may or may not include the 0x prefix.
+#[test]
+fn test_normalize_hex_to_address_no_prefix() {
+    let bare_hex = "1";
+    let result = ConnectedMvmClient::normalize_hex_to_address(bare_hex);
+    assert_eq!(
+        result,
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+}
+
+// ============================================================================
+// HAS OUTFLOW REQUIREMENTS (GMP view function)
+// ============================================================================
+
+/// 23. Test: has_outflow_requirements returns true when requirements delivered
+/// Verifies that has_outflow_requirements() calls the outflow_validator_impl::has_requirements
+/// view function and parses the boolean response.
+/// Why: The solver polls this before calling fulfill_intent. A parse error would block fulfillment.
+#[tokio::test]
+async fn test_has_outflow_requirements_success() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([true])))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let result = client.has_outflow_requirements(DUMMY_INTENT_ID).await.unwrap();
+    assert!(result);
+}
+
+/// 24. Test: has_outflow_requirements returns false when not yet delivered
+/// Verifies that has_outflow_requirements() correctly parses a false response.
+/// Why: The solver polls this function repeatedly; false must not be misinterpreted.
+#[tokio::test]
+async fn test_has_outflow_requirements_returns_false() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([false])))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let result = client.has_outflow_requirements(DUMMY_INTENT_ID).await.unwrap();
+    assert!(!result);
+}
+
+/// 25. Test: has_outflow_requirements propagates HTTP errors
+/// Verifies that has_outflow_requirements() returns Err on HTTP failure.
+/// Why: Errors must propagate (not be swallowed as warnings) so the caller can fail fast.
+#[tokio::test]
+async fn test_has_outflow_requirements_http_error() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .respond_with(ResponseTemplate::new(400).set_body_string(
+            r#"{"message":"Odd number of digits","error_code":"invalid_input"}"#,
+        ))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let result = client.has_outflow_requirements(DUMMY_INTENT_ID).await;
+    assert!(result.is_err());
+}

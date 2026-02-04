@@ -107,7 +107,7 @@ log_and_echo ""
 log_and_echo " Step 5b: Waiting for solver to automatically fulfill..."
 log_and_echo "==========================================================="
 
-if ! wait_for_solver_fulfillment "$INTENT_ID" "inflow" 30; then
+if ! wait_for_solver_fulfillment "$INTENT_ID" "inflow" 20; then
     log_and_echo "❌ ERROR: Solver did not fulfill the intent automatically"
     display_service_logs "Solver fulfillment timeout"
     exit 1

@@ -23,6 +23,15 @@ pub struct ConnectedMvmClient {
 }
 
 impl ConnectedMvmClient {
+    /// Normalizes a hex string to a 64-character (32-byte) 0x-prefixed address.
+    ///
+    /// Move addresses are 32 bytes but leading zeros may be stripped in event data,
+    /// producing odd-length hex strings that the Aptos REST API rejects.
+    pub fn normalize_hex_to_address(hex: &str) -> String {
+        let without_prefix = hex.strip_prefix("0x").unwrap_or(hex);
+        format!("0x{:0>64}", without_prefix)
+    }
+
     /// Creates a new connected MVM chain client
     ///
     /// # Arguments
@@ -48,6 +57,62 @@ impl ConnectedMvmClient {
         })
     }
 
+    /// Checks if outflow requirements have been delivered via GMP to the connected chain.
+    ///
+    /// Calls the `outflow_validator_impl::has_requirements` view function.
+    /// Returns true if IntentRequirements were delivered for this intent_id.
+    ///
+    /// # Arguments
+    ///
+    /// * `intent_id` - Intent ID as hex string (e.g., "0x4b1e...")
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(bool)` - True if requirements are available
+    /// * `Err(anyhow::Error)` - Failed to query
+    pub async fn has_outflow_requirements(&self, intent_id: &str) -> Result<bool> {
+        let intent_id_hex = Self::normalize_hex_to_address(intent_id);
+
+        // base_url already includes /v1
+        let view_url = format!("{}/view", self.base_url);
+        let request_body = serde_json::json!({
+            "function": format!("{}::outflow_validator_impl::has_requirements", self.module_addr),
+            "type_arguments": [],
+            "arguments": [intent_id_hex]
+        });
+
+        let response = self
+            .client
+            .post(&view_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to query outflow requirements")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "Failed to query outflow requirements: HTTP {} - {}",
+                status,
+                error_body
+            );
+        }
+
+        let result: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse outflow requirements response")?;
+
+        if let Some(first_result) = result.first() {
+            if let Some(has_req) = first_result.as_bool() {
+                return Ok(has_req);
+            }
+        }
+
+        anyhow::bail!("Unexpected response format from has_requirements view function")
+    }
+
     /// Checks if an inflow escrow has been fulfilled (FulfillmentProof received via GMP).
     ///
     /// Calls the `inflow_escrow_gmp::is_fulfilled` view function on the connected chain.
@@ -61,11 +126,7 @@ impl ConnectedMvmClient {
     /// * `Ok(bool)` - True if FulfillmentProof was received
     /// * `Err(anyhow::Error)` - Failed to query
     pub async fn is_escrow_fulfilled(&self, intent_id: &str) -> Result<bool> {
-        let intent_id_hex = if intent_id.starts_with("0x") {
-            intent_id.to_string()
-        } else {
-            format!("0x{}", intent_id)
-        };
+        let intent_id_hex = Self::normalize_hex_to_address(intent_id);
 
         // base_url already includes /v1
         let view_url = format!("{}/view", self.base_url);
@@ -134,6 +195,8 @@ impl ConnectedMvmClient {
         );
 
         // Function signature: release_escrow(solver: &signer, intent_id: vector<u8>, token_metadata: Object<Metadata>)
+        let normalized = Self::normalize_hex_to_address(intent_id);
+        let intent_id_bare = &normalized[2..]; // strip "0x" for hex: arg
         let output = Command::new("aptos")
             .args(&[
                 "move",
@@ -144,7 +207,7 @@ impl ConnectedMvmClient {
                 "--function-id",
                 &format!("{}::inflow_escrow_gmp::release_escrow", self.module_addr),
                 "--args",
-                &format!("hex:{}", intent_id.strip_prefix("0x").unwrap_or(intent_id)),
+                &format!("hex:{}", intent_id_bare),
                 &format!("address:{}", token_metadata),
             ])
             .output()
@@ -354,6 +417,8 @@ impl ConnectedMvmClient {
 
         // Use aptos CLI for compatibility with E2E tests which create aptos profiles
         // Function signature: fulfill_intent(solver: &signer, intent_id: vector<u8>, token_metadata: Object<Metadata>)
+        let normalized = Self::normalize_hex_to_address(intent_id);
+        let intent_id_bare = &normalized[2..]; // strip "0x" for hex: arg
         let output = Command::new("aptos")
             .args(&[
                 "move",
@@ -367,10 +432,7 @@ impl ConnectedMvmClient {
                     self.module_addr
                 ),
                 "--args",
-                &format!(
-                    "hex:{}",
-                    intent_id.strip_prefix("0x").unwrap_or(intent_id)
-                ),
+                &format!("hex:{}", intent_id_bare),
                 &format!("address:{}", token_metadata),
             ])
             .output()

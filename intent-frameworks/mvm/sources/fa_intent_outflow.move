@@ -155,6 +155,47 @@ module mvmt_intent::fa_intent_outflow {
         gmp_intent_state::remove_intent(intent_id_bytes);
     }
 
+    /// Entry function to create an outflow intent.
+    ///
+    /// Outflow intents lock tokens on the hub chain and request tokens on a connected chain.
+    /// The solver's public key is looked up from the on-chain solver registry.
+    ///
+    /// For argument descriptions and abort conditions, see `create_outflow_intent`.
+    public entry fun create_outflow_intent_entry(
+        requester_signer: &signer,
+        offered_metadata: Object<Metadata>,
+        offered_amount: u64,
+        offered_chain_id: u64,
+        desired_metadata_addr: address,
+        desired_amount: u64,
+        desired_chain_id: u64,
+        expiry_time: u64,
+        intent_id: address,
+        requester_addr_connected_chain: address,
+        approver_public_key: vector<u8>,
+        solver: address,
+        solver_addr_connected_chain: address,
+        solver_signature: vector<u8>
+    ) {
+        let _intent_obj =
+            create_outflow_intent(
+                requester_signer,
+                offered_metadata,
+                offered_amount,
+                offered_chain_id,
+                desired_metadata_addr,
+                desired_amount,
+                desired_chain_id,
+                expiry_time,
+                intent_id,
+                requester_addr_connected_chain,
+                approver_public_key,
+                solver,
+                solver_addr_connected_chain,
+                solver_signature
+            );
+    }
+
     /// Creates an outflow intent and returns the intent object.
     ///
     /// This is the core implementation that both the entry function and tests use.
@@ -179,6 +220,7 @@ module mvmt_intent::fa_intent_outflow {
     /// - `requester_addr_connected_chain`: Address on connected chain where solver should send tokens
     /// - `approver_public_key`: Public key of the trusted-gmp (approver) that will approve the connected chain transaction (32 bytes)
     /// - `solver`: Address of the solver authorized to fulfill this intent (must be registered)
+    /// - `solver_addr_connected_chain`: Solver's address on the connected chain (used in GMP message for authorization)
     /// - `solver_signature`: Ed25519 signature from the solver authorizing this intent
     ///
     /// # Returns
@@ -201,6 +243,7 @@ module mvmt_intent::fa_intent_outflow {
         requester_addr_connected_chain: address,
         approver_public_key: vector<u8>, // 32 bytes
         solver: address,
+        solver_addr_connected_chain: address,
         solver_signature: vector<u8>
     ): Object<Intent<fa_intent_with_oracle::FungibleStoreManager, fa_intent_with_oracle::OracleGuardedLimitOrder>> {
         // Validate requester_addr_connected_chain is not zero address
@@ -296,7 +339,7 @@ module mvmt_intent::fa_intent_outflow {
         // For outflow: requester_addr is on connected chain, token is desired token on connected chain
         let requester_addr_bytes = bcs::to_bytes(&requester_addr_connected_chain);
         let token_addr_bytes = bcs::to_bytes(&desired_metadata_addr);
-        let solver_addr_bytes = bcs::to_bytes(&solver);
+        let solver_addr_bytes = bcs::to_bytes(&solver_addr_connected_chain);
 
         let _nonce = intent_gmp_hub::send_intent_requirements(
             requester_signer,

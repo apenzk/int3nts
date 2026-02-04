@@ -178,10 +178,14 @@ impl InflowService {
                         // Not yet confirmed, skip
                     }
                     Err(e) => {
-                        warn!(
+                        error!(
                             "Failed to check escrow confirmation for intent {}: {}",
                             intent.intent_id, e
                         );
+                        return Err(e.context(format!(
+                            "Failed to check escrow confirmation for intent {}",
+                            intent.intent_id
+                        )));
                     }
                 }
             }
@@ -441,10 +445,10 @@ impl InflowService {
                     // Not yet fulfilled, wait and retry
                 }
                 Err(e) => {
-                    warn!(
-                        "Error checking escrow fulfillment for intent {}: {}",
-                        intent.intent_id, e
-                    );
+                    return Err(e.context(format!(
+                        "Failed to check escrow fulfillment for intent {}",
+                        intent.intent_id
+                    )));
                 }
             }
 

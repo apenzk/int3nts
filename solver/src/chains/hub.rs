@@ -525,11 +525,10 @@ impl HubChainClient {
     /// * `Ok(bool)` - True if escrow is confirmed
     /// * `Err(anyhow::Error)` - Failed to query
     pub async fn is_escrow_confirmed(&self, intent_id: &str) -> Result<bool> {
-        let intent_id_hex = if intent_id.starts_with("0x") {
-            intent_id.to_string()
-        } else {
-            format!("0x{}", intent_id)
-        };
+        // Normalize to 64-char hex: Move strips leading zeros from addresses in events,
+        // producing odd-length hex that the Aptos REST API rejects.
+        let without_prefix = intent_id.strip_prefix("0x").unwrap_or(intent_id);
+        let intent_id_hex = format!("0x{:0>64}", without_prefix);
 
         let view_url = format!("{}/v1/view", self.base_url);
         let request_body = serde_json::json!({
@@ -568,6 +567,136 @@ impl HubChainClient {
         }
 
         anyhow::bail!("Unexpected response format from is_escrow_confirmed view function")
+    }
+
+    /// Checks if a FulfillmentProof has been received via GMP for an outflow intent.
+    ///
+    /// Calls the `gmp_intent_state::is_fulfillment_proof_received` view function.
+    /// Returns true if the FulfillmentProof GMP message was received from the connected chain.
+    ///
+    /// # Arguments
+    ///
+    /// * `intent_id` - Intent ID as hex string (e.g., "0x4b1e...")
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(bool)` - True if FulfillmentProof was received
+    /// * `Err(anyhow::Error)` - Failed to query
+    pub async fn is_fulfillment_proof_received(&self, intent_id: &str) -> Result<bool> {
+        let without_prefix = intent_id.strip_prefix("0x").unwrap_or(intent_id);
+        let intent_id_hex = format!("0x{:0>64}", without_prefix);
+
+        let view_url = format!("{}/v1/view", self.base_url);
+        let request_body = serde_json::json!({
+            "function": format!("{}::gmp_intent_state::is_fulfillment_proof_received", self.module_addr),
+            "type_arguments": [],
+            "arguments": [intent_id_hex]
+        });
+
+        let response = self
+            .client
+            .post(&view_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to query fulfillment proof status")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            anyhow::bail!(
+                "Failed to query fulfillment proof status: HTTP {} - {}",
+                status,
+                error_body
+            );
+        }
+
+        let result: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse fulfillment proof response")?;
+
+        if let Some(first_result) = result.first() {
+            if let Some(received) = first_result.as_bool() {
+                return Ok(received);
+            }
+        }
+
+        anyhow::bail!("Unexpected response format from is_fulfillment_proof_received view function")
+    }
+
+    /// Fulfills an outflow intent on the hub using GMP proof (no approval signature needed).
+    ///
+    /// After FulfillmentProof is delivered via GMP, the solver calls this to claim locked tokens.
+    /// The Move function checks `gmp_intent_state::is_fulfillment_proof_received` internally.
+    ///
+    /// # Arguments
+    ///
+    /// * `intent_addr` - Object address of the intent to fulfill
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(String)` - Transaction hash
+    /// * `Err(anyhow::Error)` - Failed to fulfill intent
+    pub fn fulfill_outflow_intent_gmp(&self, intent_addr: &str) -> Result<String> {
+        let cli = if self.e2e_mode { "aptos" } else { "movement" };
+        let function_id = format!("{}::fa_intent_outflow::fulfill_outflow_intent", self.module_addr);
+        let intent_addr_arg = format!("address:{}", intent_addr);
+
+        let pk_hex_stripped = if !self.e2e_mode {
+            let pk_hex = std::env::var("MOVEMENT_SOLVER_PRIVATE_KEY")
+                .context("MOVEMENT_SOLVER_PRIVATE_KEY not set")?;
+            Some(pk_hex.strip_prefix("0x").unwrap_or(&pk_hex).to_string())
+        } else {
+            None
+        };
+
+        let mut args = vec![
+            "move",
+            "run",
+            "--assume-yes",
+            "--function-id",
+            &function_id,
+            "--args",
+            &intent_addr_arg,
+        ];
+
+        if self.e2e_mode {
+            args.extend(vec!["--profile", &self.profile]);
+        } else {
+            args.extend(vec![
+                "--private-key",
+                pk_hex_stripped.as_ref().unwrap(),
+                "--url",
+                &self.base_url,
+            ]);
+        }
+
+        let output = Command::new(cli)
+            .args(&args)
+            .output()
+            .context(format!("Failed to execute {} move run", cli))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "{} fulfill_outflow_intent_gmp failed:\nstderr: {}\nstdout: {}",
+                cli,
+                stderr,
+                stdout
+            );
+        }
+
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        if let Some(hash) = extract_transaction_hash(&output_str) {
+            return Ok(hash);
+        }
+
+        anyhow::bail!(
+            "Could not extract transaction hash from output: {}",
+            output_str
+        )
     }
 
     /// Checks if a solver is registered in the solver registry

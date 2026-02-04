@@ -116,7 +116,7 @@ echo "   2. Fulfill the intent on hub chain"
 echo "   3. Trusted-GMP will detect fulfillment and generate approval"
 echo ""
 
-if ! wait_for_solver_fulfillment "$INTENT_ID" "inflow" 30; then
+if ! wait_for_solver_fulfillment "$INTENT_ID" "inflow" 20; then
     echo "❌ ERROR: Solver did not fulfill the intent automatically"
     display_service_logs "Solver fulfillment timeout"
     exit 1

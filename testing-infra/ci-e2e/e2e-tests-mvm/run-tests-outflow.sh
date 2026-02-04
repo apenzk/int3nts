@@ -123,7 +123,7 @@ echo "   3. Call trusted-gmp to validate and get approval signature"
 echo "   4. Fulfill the hub intent with approval"
 echo ""
 
-if ! wait_for_solver_fulfillment "$INTENT_ID" "outflow" 30; then
+if ! wait_for_solver_fulfillment "$INTENT_ID" "outflow" 20; then
     echo "❌ ERROR: Solver did not fulfill the intent automatically"
     display_service_logs "Solver fulfillment timeout"
     exit 1
@@ -136,7 +136,7 @@ echo " Final Balance View"
 echo "=========================================="
 # Outflow: Solver gets from hub intent (2000000 on hub, 0 on MVM transferred to requester)
 #          Requester receives on MVM (0 on hub locked in intent, 2000000 on MVM)
-./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 2000000 0 0 2000000 || true
+./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 2000000 0 0 2000000
 
 echo ""
 echo "✅ E2E outflow test completed!"

@@ -13,7 +13,6 @@ module mvmt_intent::fa_intent_inflow {
     use mvmt_intent::intent_registry;
     use mvmt_intent::intent_gmp_hub;
     use mvmt_intent::gmp_intent_state;
-    use mvmt_intent::solver_registry;
 
     /// The solver signature is invalid and cannot be verified.
     const E_INVALID_SIGNATURE: u64 = 2;
@@ -168,6 +167,7 @@ module mvmt_intent::fa_intent_inflow {
     /// - `expiry_time`: Unix timestamp when intent expires
     /// - `intent_id`: Intent ID for cross-chain linking
     /// - `solver`: Address of the solver authorized to fulfill this intent (must be registered)
+    /// - `solver_addr_connected_chain`: Solver's address on the connected chain (used in GMP message for authorization)
     /// - `solver_signature`: Ed25519 signature from the solver authorizing this intent
     /// - `requester_addr_connected_chain`: Requester's address on the connected chain (for escrow lookup)
     ///
@@ -188,6 +188,7 @@ module mvmt_intent::fa_intent_inflow {
         expiry_time: u64,
         intent_id: address,
         solver: address,
+        solver_addr_connected_chain: address,
         solver_signature: vector<u8>,
         requester_addr_connected_chain: address
     ): Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>> {
@@ -259,14 +260,7 @@ module mvmt_intent::fa_intent_inflow {
         // Convert addresses to 32-byte vectors for GMP message
         let requester_addr_bytes = bcs::to_bytes(&requester_addr_connected_chain);
         let token_addr_bytes = bcs::to_bytes(&offered_metadata_addr);
-        // Use the solver's registered connected chain MVM address (the account that will
-        // sign release_escrow on the connected chain), falling back to hub address.
-        let solver_connected_addr = solver_registry::get_connected_chain_mvm_address(solver);
-        let solver_addr_bytes = if (option::is_some(&solver_connected_addr)) {
-            bcs::to_bytes(option::borrow(&solver_connected_addr))
-        } else {
-            bcs::to_bytes(&solver)
-        };
+        let solver_addr_bytes = bcs::to_bytes(&solver_addr_connected_chain);
 
         let _nonce = intent_gmp_hub::send_intent_requirements(
             account,
@@ -299,6 +293,7 @@ module mvmt_intent::fa_intent_inflow {
         expiry_time: u64,
         intent_id: address,
         solver: address,
+        solver_addr_connected_chain: address,
         solver_signature: vector<u8>,
         requester_addr_connected_chain: address
     ) {
@@ -314,6 +309,7 @@ module mvmt_intent::fa_intent_inflow {
                 expiry_time,
                 intent_id,
                 solver,
+                solver_addr_connected_chain,
                 solver_signature,
                 requester_addr_connected_chain
             );
