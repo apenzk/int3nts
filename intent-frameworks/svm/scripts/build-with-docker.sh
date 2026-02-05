@@ -41,8 +41,9 @@ docker run --rm \
     fi
     export PATH="$SOLANA_BIN:$PATH"
     ./scripts/build.sh
-    # Fix ownership of output files for host user
-    chown -R "$HOST_UID:$HOST_GID" /workspace/target/deploy 2>/dev/null || true
+    # Fix ownership of entire target dir for host user (not just deploy/)
+    # so subsequent host-side cargo builds can write to target/
+    chown -R "$HOST_UID:$HOST_GID" /workspace/target 2>/dev/null || true
   '
 
 echo "[build-with-docker.sh] Done. Output: target/deploy/intent_escrow.so"
