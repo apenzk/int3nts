@@ -1,0 +1,25 @@
+[package]
+name = "intent-hub"
+version = "1.0.0"
+authors = []
+
+[addresses]
+mvmt_intent = "_"
+
+[dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "ab80decffca5dd83991b5783073fe66ddde2836d"  # 2025-11-17 main branch
+subdir = "aptos-move/framework/aptos-framework"
+
+[dependencies.intent-gmp]
+local = "../intent-gmp"
+
+[dev-dependencies]
+
+[dev-dependencies.AptosFramework]
+git = "https://github.com/movementlabsxyz/aptos-core.git"
+rev = "ab80decffca5dd83991b5783073fe66ddde2836d"  # 2025-11-17 main branch
+subdir = "aptos-move/framework/aptos-framework"
+
+[dev-dependencies.intent-gmp]
+local = "../intent-gmp"

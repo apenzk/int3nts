@@ -36,16 +36,31 @@ log " Deploying contracts to Hub..."
 log "   - Getting account address for Hub..."
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
 
-log "   - Deploying to Hub with address: $HUB_MODULE_ADDR"
-cd intent-frameworks/mvm
-if aptos move publish --dev --profile intent-account-chain1 --named-addresses mvmt_intent=$HUB_MODULE_ADDR --assume-yes --chunked-publish --max-gas 500000 --gas-unit-price 100 >> "$LOG_FILE" 2>&1; then
-    log "   ✅ Hub deployment successful!"
+# Deploy intent-gmp package first (base layer)
+log "   - Deploying intent-gmp to Hub with address: $HUB_MODULE_ADDR"
+cd intent-frameworks/mvm/intent-gmp
+if aptos move publish --dev --profile intent-account-chain1 --named-addresses mvmt_intent=$HUB_MODULE_ADDR --assume-yes --max-gas 500000 --gas-unit-price 100 >> "$LOG_FILE" 2>&1; then
+    log "   ✅ intent-gmp deployment successful!"
+else
+    log_and_echo "   ❌ intent-gmp deployment failed!"
+    log_and_echo "   Log file contents:"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    cat "$LOG_FILE"
+    log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
+    exit 1
+fi
+
+# Deploy intent-hub package (depends on intent-gmp)
+log "   - Deploying intent-hub to Hub with address: $HUB_MODULE_ADDR"
+cd ../intent-hub
+if aptos move publish --dev --profile intent-account-chain1 --named-addresses mvmt_intent=$HUB_MODULE_ADDR --assume-yes --max-gas 500000 --gas-unit-price 100 >> "$LOG_FILE" 2>&1; then
+    log "   ✅ intent-hub deployment successful!"
     log_and_echo "✅ Hub chain contracts deployed"
     # Save hub module address for connected chain to reference
     mkdir -p "$PROJECT_ROOT/.tmp"
     echo "HUB_MODULE_ADDR=$HUB_MODULE_ADDR" >> "$PROJECT_ROOT/.tmp/chain-info.env"
 else
-    log_and_echo "   ❌ Hub deployment failed!"
+    log_and_echo "   ❌ intent-hub deployment failed!"
     log_and_echo "   Log file contents:"
     log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
     cat "$LOG_FILE"
