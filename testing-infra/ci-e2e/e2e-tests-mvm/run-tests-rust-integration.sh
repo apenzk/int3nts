@@ -1,11 +1,19 @@
 #!/bin/bash
 
 # E2E Integration Test Runner - Rust Integration Tests
-# 
+#
 # This script runs the Rust integration tests for coordinator and solver.
 # It sets up chains, deploys contracts, starts services, then runs Rust tests.
 
 set -eo pipefail
+
+# Parse flags
+SKIP_BUILD=false
+for arg in "$@"; do
+    case "$arg" in
+        --no-build) SKIP_BUILD=true ;;
+    esac
+done
 
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -24,22 +32,31 @@ echo "================================================================"
 ./testing-infra/ci-e2e/chain-connected-mvm/cleanup.sh
 
 echo ""
-echo " Step 1: Build bins and pre-pull docker images"
-echo "========================================"
-pushd "$PROJECT_ROOT/coordinator" > /dev/null
-cargo build --bin coordinator 2>&1 | tail -5
-popd > /dev/null
-echo "   ✅ Coordinator: coordinator"
+if [ "$SKIP_BUILD" = "true" ]; then
+    echo " Step 1: Skipping build (--no-build)"
+    echo "========================================"
+else
+    echo " Step 1: Build bins and pre-pull docker images"
+    echo "========================================"
+    # Delete existing binaries to ensure fresh build
+    rm -f "$PROJECT_ROOT/target/debug/trusted-gmp" "$PROJECT_ROOT/target/debug/solver" "$PROJECT_ROOT/target/debug/coordinator"
+    rm -f "$PROJECT_ROOT/target/release/trusted-gmp" "$PROJECT_ROOT/target/release/solver" "$PROJECT_ROOT/target/release/coordinator"
 
-pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
-cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
-popd > /dev/null
-echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
+    pushd "$PROJECT_ROOT/coordinator" > /dev/null
+    cargo build --bin coordinator 2>&1 | tail -5
+    popd > /dev/null
+    echo "   ✅ Coordinator: coordinator"
 
-pushd "$PROJECT_ROOT/solver" > /dev/null
-cargo build --bin solver --bin sign_intent 2>&1 | tail -5
-popd > /dev/null
-echo "   ✅ Solver: solver, sign_intent"
+    pushd "$PROJECT_ROOT/trusted-gmp" > /dev/null
+    cargo build --bin trusted-gmp --bin generate_keys 2>&1 | tail -5
+    popd > /dev/null
+    echo "   ✅ Trusted-GMP: trusted-gmp, generate_keys"
+
+    pushd "$PROJECT_ROOT/solver" > /dev/null
+    cargo build --bin solver --bin sign_intent 2>&1 | tail -5
+    popd > /dev/null
+    echo "   ✅ Solver: solver, sign_intent"
+fi
 
 echo ""
 docker pull "$APTOS_DOCKER_IMAGE"

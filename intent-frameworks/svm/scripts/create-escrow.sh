@@ -13,8 +13,14 @@ REPO_ROOT="$(dirname "$PROJECT_DIR")"
 # If not in nix shell, re-exec inside nix develop ./nix
 if [ -z "$IN_NIX_SHELL" ]; then
     echo "[create-escrow.sh] Entering nix develop ./nix..."
+    echo "[create-escrow.sh] ENV before nix: USD_SVM_MINT_ADDR=$USD_SVM_MINT_ADDR"
     exec env NIX_CONFIG="warn-dirty = false" nix develop "$REPO_ROOT/nix" -c bash "$0" "$@"
 fi
+echo "[create-escrow.sh] Inside nix shell"
+echo "[create-escrow.sh] ENV: USD_SVM_MINT_ADDR=$USD_SVM_MINT_ADDR"
+echo "[create-escrow.sh] ENV: SVM_REQUESTER_TOKEN=$SVM_REQUESTER_TOKEN"
+echo "[create-escrow.sh] ENV: SVM_PROGRAM_ID=$SVM_PROGRAM_ID"
+echo "[create-escrow.sh] ENV: HUB_CHAIN_ID=$HUB_CHAIN_ID"
 
 SVM_RPC_URL="${SVM_RPC_URL:-http://localhost:8899}"
 SVM_PAYER_KEYPAIR="${SVM_PAYER_KEYPAIR:-$HOME/.config/solana/id.json}"
@@ -57,6 +63,13 @@ fi
 if [ -n "$SVM_PROGRAM_ID" ]; then
     ARGS+=(--program-id "$SVM_PROGRAM_ID")
 fi
+# GMP endpoint for sending EscrowConfirmation back to hub
+if [ -n "$SVM_GMP_ENDPOINT_ID" ]; then
+    ARGS+=(--gmp-endpoint "$SVM_GMP_ENDPOINT_ID")
+fi
+if [ -n "$HUB_CHAIN_ID" ]; then
+    ARGS+=(--hub-chain-id "$HUB_CHAIN_ID")
+fi
 
 cd "$PROJECT_DIR"
 
@@ -65,4 +78,5 @@ if [ ! -x "$CLI_BIN" ]; then
     echo "❌ PANIC: intent_escrow_cli not built. Step 1 (build binaries) failed."
     exit 1
 fi
+echo "[create-escrow.sh] Running: $CLI_BIN ${ARGS[*]}"
 "$CLI_BIN" "${ARGS[@]}"

@@ -67,6 +67,8 @@ pub struct NativeGmpRelayConfig {
     pub svm_rpc_url: Option<String>,
     /// SVM native GMP endpoint program ID (optional)
     pub svm_gmp_program_id: Option<String>,
+    /// SVM intent escrow program ID (optional, for routing IntentRequirements)
+    pub svm_escrow_program_id: Option<String>,
     /// SVM chain ID (optional)
     pub svm_chain_id: Option<u32>,
     /// Polling interval in milliseconds
@@ -93,15 +95,16 @@ impl NativeGmpRelayConfig {
             };
 
         // Extract SVM connected chain config if present
-        let (svm_rpc_url, svm_gmp_program_id, svm_chain_id) =
+        let (svm_rpc_url, svm_gmp_program_id, svm_escrow_program_id, svm_chain_id) =
             if let Some(ref svm_config) = config.connected_chain_svm {
                 (
                     Some(svm_config.rpc_url.clone()),
                     svm_config.gmp_endpoint_program_id.clone(),
+                    Some(svm_config.escrow_program_id.clone()),
                     Some(svm_config.chain_id as u32),
                 )
             } else {
-                (None, None, None)
+                (None, None, None, None)
             };
 
         Ok(Self {
@@ -113,6 +116,7 @@ impl NativeGmpRelayConfig {
             mvm_connected_chain_id,
             svm_rpc_url,
             svm_gmp_program_id,
+            svm_escrow_program_id,
             svm_chain_id,
             polling_interval_ms: config.trusted_gmp.polling_interval_ms,
             operator_private_key,
@@ -860,8 +864,25 @@ impl NativeGmpRelay {
             &[b"nonce_in", &message.src_chain_id.to_le_bytes()],
             &program_id,
         );
+        let (routing_pda, _) = Pubkey::find_program_address(&[b"routing"], &program_id);
+
+        // Get intent_escrow program for second destination (required for routing)
+        let escrow_program = if let Some(ref escrow_id) = self.config.svm_escrow_program_id {
+            Pubkey::from_str(escrow_id).context("Invalid SVM escrow program ID")?
+        } else {
+            // If no escrow configured, use dst_program as placeholder (routing won't be used)
+            dst_program
+        };
 
         // Build base accounts for DeliverMessage
+        // Account order (updated for routing support):
+        // 0. Config, 1. Relay, 2. TrustedRemote, 3. NonceIn, 4. RelaySigner, 5. Payer
+        // Track if we need to create an ATA before delivering the message (for FulfillmentProof)
+        // Tuple: (ata, owner, mint, token_program, associated_token_program)
+        #[allow(clippy::type_complexity)]
+        let mut ata_create_info: Option<(Pubkey, Pubkey, Pubkey, Pubkey, Pubkey)> = None;
+
+        // 6. SystemProgram, 7. RoutingConfig, 8. DestProgram1, 9. DestProgram2, 10+. Remaining
         let mut accounts = vec![
             AccountMeta::new_readonly(config_pda, false),
             AccountMeta::new_readonly(relay_pda, false),
@@ -869,12 +890,20 @@ impl NativeGmpRelay {
             AccountMeta::new(nonce_in_pda, false),
             AccountMeta::new_readonly(relay_pubkey, true), // signer
             AccountMeta::new(relay_pubkey, true),          // payer (signer)
-            AccountMeta::new_readonly(dst_program, false),
             AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(routing_pda, false), // routing config (may not exist)
+            AccountMeta::new_readonly(dst_program, false), // destination program 1 (outflow_validator)
+            AccountMeta::new_readonly(escrow_program, false), // destination program 2 (intent_escrow)
         ];
 
-        // For IntentRequirements (0x01), add accounts for outflow-validator's LzReceive CPI.
-        // The GMP endpoint passes remaining accounts to the destination program.
+        // For IntentRequirements (0x01), add accounts for both destination programs' LzReceive CPI.
+        // The GMP endpoint routes to BOTH outflow_validator AND intent_escrow when routing is configured.
+        //
+        // Account layout for remaining_accounts (passed to GMP endpoint after base accounts):
+        // Indices 0-4: outflow_validator's LzReceive accounts
+        // Indices 5-9: intent_escrow's LzReceive accounts
+        //
+        // Each program's LzReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
         if !payload.is_empty() && payload[0] == 0x01 {
             // IntentRequirements format: [type(1)] [intent_id(32)] [...]
             if payload.len() >= 33 {
@@ -882,7 +911,7 @@ impl NativeGmpRelay {
                 intent_id.copy_from_slice(&payload[1..33]);
 
                 // Derive outflow-validator PDAs (dst_program is the outflow-validator)
-                let (requirements_pda, _) = Pubkey::find_program_address(
+                let (outflow_requirements_pda, _) = Pubkey::find_program_address(
                     &[b"requirements", &intent_id],
                     &dst_program,
                 );
@@ -891,17 +920,120 @@ impl NativeGmpRelay {
                     &dst_program,
                 );
 
-                debug!(
-                    "Adding outflow-validator accounts for LzReceive CPI: requirements={}, config={}",
-                    requirements_pda, outflow_config_pda
+                // Derive intent_escrow PDAs (escrow_program is the intent_escrow)
+                let (escrow_requirements_pda, _) = Pubkey::find_program_address(
+                    &[b"requirements", &intent_id],
+                    &escrow_program,
+                );
+                let (escrow_gmp_config_pda, _) = Pubkey::find_program_address(
+                    &[b"gmp_config"],
+                    &escrow_program,
                 );
 
+                debug!(
+                    "Adding accounts for multi-destination LzReceive CPI: outflow_req={}, outflow_cfg={}, escrow_req={}, escrow_cfg={}",
+                    outflow_requirements_pda, outflow_config_pda, escrow_requirements_pda, escrow_gmp_config_pda
+                );
+
+                // Accounts for outflow_validator's LzReceive (indices 0-4)
                 // LzReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
-                accounts.push(AccountMeta::new(requirements_pda, false));
-                accounts.push(AccountMeta::new_readonly(outflow_config_pda, false));
-                accounts.push(AccountMeta::new_readonly(relay_pubkey, true));  // authority (signer)
-                accounts.push(AccountMeta::new(relay_pubkey, true));           // payer (signer)
-                accounts.push(AccountMeta::new_readonly(system_program::id(), false));
+                accounts.push(AccountMeta::new(outflow_requirements_pda, false));  // 0
+                accounts.push(AccountMeta::new_readonly(outflow_config_pda, false)); // 1
+                accounts.push(AccountMeta::new_readonly(relay_pubkey, true));  // 2: authority (signer)
+                accounts.push(AccountMeta::new(relay_pubkey, true));           // 3: payer (signer)
+                accounts.push(AccountMeta::new_readonly(system_program::id(), false)); // 4
+
+                // Accounts for intent_escrow's LzReceive (indices 5-9)
+                // LzReceive expects: requirements(w), gmp_config(r), authority(s), payer(s,w), system_program
+                accounts.push(AccountMeta::new(escrow_requirements_pda, false));  // 5
+                accounts.push(AccountMeta::new_readonly(escrow_gmp_config_pda, false)); // 6
+                accounts.push(AccountMeta::new_readonly(relay_pubkey, true));  // 7: authority (signer)
+                accounts.push(AccountMeta::new(relay_pubkey, true));           // 8: payer (signer)
+                accounts.push(AccountMeta::new_readonly(system_program::id(), false)); // 9
+            }
+        } else if !payload.is_empty() && payload[0] == 0x03 {
+            // FulfillmentProof (0x03) - route to intent_escrow only
+            // Payload format: [type(1)] [intent_id(32)] [solver_addr(32)] [amount(8)] [timestamp(8)]
+            if payload.len() >= 65 {
+                let mut intent_id = [0u8; 32];
+                intent_id.copy_from_slice(&payload[1..33]);
+
+                let mut solver_addr = [0u8; 32];
+                solver_addr.copy_from_slice(&payload[33..65]);
+
+                // Derive intent_escrow PDAs
+                let (escrow_requirements_pda, _) = Pubkey::find_program_address(
+                    &[b"requirements", &intent_id],
+                    &escrow_program,
+                );
+                let (escrow_pda, _) = Pubkey::find_program_address(
+                    &[b"escrow", &intent_id],
+                    &escrow_program,
+                );
+                let (vault_pda, _) = Pubkey::find_program_address(
+                    &[b"vault", &intent_id],
+                    &escrow_program,
+                );
+                let (escrow_gmp_config_pda, _) = Pubkey::find_program_address(
+                    &[b"gmp_config"],
+                    &escrow_program,
+                );
+
+                // Read requirements account to get token_addr (mint)
+                let rpc_client_for_read = RpcClient::new_with_commitment(
+                    rpc_url.clone(),
+                    CommitmentConfig::confirmed(),
+                );
+                let requirements_data = rpc_client_for_read
+                    .get_account_data(&escrow_requirements_pda)
+                    .context("Failed to read requirements account for FulfillmentProof")?;
+
+                // Parse token_addr from StoredIntentRequirements
+                // Layout: discriminator(8) + intent_id(32) + requester_addr(32) + amount_required(8) + token_addr(32)
+                // token_addr starts at offset 80
+                if requirements_data.len() < 112 {
+                    return Err(anyhow::anyhow!(
+                        "Requirements account too small: {} bytes",
+                        requirements_data.len()
+                    ));
+                }
+                let mut token_mint_bytes = [0u8; 32];
+                token_mint_bytes.copy_from_slice(&requirements_data[80..112]);
+                let token_mint = Pubkey::new_from_array(token_mint_bytes);
+
+                // Derive solver's ATA manually (PDA derivation)
+                // ATA = PDA([owner, TOKEN_PROGRAM_ID, mint], ASSOCIATED_TOKEN_PROGRAM_ID)
+                let solver_pubkey = Pubkey::new_from_array(solver_addr);
+                let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+                    .expect("Invalid token program ID");
+                let associated_token_program_id = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+                    .expect("Invalid associated token program ID");
+                let (solver_ata, _) = Pubkey::find_program_address(
+                    &[
+                        solver_pubkey.as_ref(),
+                        token_program_id.as_ref(),
+                        token_mint.as_ref(),
+                    ],
+                    &associated_token_program_id,
+                );
+
+                debug!(
+                    "FulfillmentProof accounts: requirements={}, escrow={}, vault={}, solver_ata={}, gmp_config={}, token_mint={}",
+                    escrow_requirements_pda, escrow_pda, vault_pda, solver_ata, escrow_gmp_config_pda, token_mint
+                );
+
+                // Store ATA creation info for use when building transaction
+                ata_create_info = Some((solver_ata, solver_pubkey, token_mint, token_program_id, associated_token_program_id));
+
+                // Accounts for intent_escrow's LzReceiveFulfillmentProof
+                // Expected: requirements(w), escrow(w), vault(w), solver_token(w), gmp_config(r), gmp_caller(s), token_program
+                accounts.push(AccountMeta::new(escrow_requirements_pda, false));     // 0: requirements (writable)
+                accounts.push(AccountMeta::new(escrow_pda, false));                  // 1: escrow (writable)
+                accounts.push(AccountMeta::new(vault_pda, false));                   // 2: vault (writable)
+                accounts.push(AccountMeta::new(solver_ata, false));                  // 3: solver_token (writable)
+                accounts.push(AccountMeta::new_readonly(escrow_gmp_config_pda, false)); // 4: gmp_config
+                accounts.push(AccountMeta::new_readonly(relay_pubkey, true));        // 5: gmp_caller (signer)
+                accounts.push(AccountMeta::new_readonly(token_program_id, false));   // 6: token_program
             }
         }
 
@@ -913,13 +1045,42 @@ impl NativeGmpRelay {
             nonce: message.nonce,
         };
 
-        let instruction = Instruction {
+        let deliver_instruction = Instruction {
             program_id,
             accounts,
             data: instruction_data
                 .try_to_vec()
                 .context("Failed to serialize DeliverMessage instruction")?,
         };
+
+        // Build instructions list - may include ATA creation for FulfillmentProof
+        let mut instructions = Vec::new();
+
+        // If we need to create an ATA (for FulfillmentProof), add that instruction first
+        if let Some((ata, owner, mint, token_program, ata_program)) = ata_create_info {
+            // Build create_associated_token_account_idempotent instruction manually
+            // Instruction data: [1] for idempotent create
+            // Accounts: payer(s,w), ata(w), owner(r), mint(r), system_program(r), token_program(r)
+            let create_ata_ix = Instruction {
+                program_id: ata_program,
+                accounts: vec![
+                    AccountMeta::new(relay_pubkey, true),         // payer (signer, writable)
+                    AccountMeta::new(ata, false),                 // associated token account (writable)
+                    AccountMeta::new_readonly(owner, false),      // wallet owner
+                    AccountMeta::new_readonly(mint, false),       // token mint
+                    AccountMeta::new_readonly(system_program::id(), false), // system program
+                    AccountMeta::new_readonly(token_program, false), // token program
+                ],
+                data: vec![1], // 1 = create_idempotent
+            };
+            debug!(
+                "Adding create_associated_token_account_idempotent instruction: ata={}, owner={}, mint={}",
+                ata, owner, mint
+            );
+            instructions.push(create_ata_ix);
+        }
+
+        instructions.push(deliver_instruction);
 
         // Create RPC client and submit transaction
         let rpc_client = RpcClient::new_with_commitment(
@@ -932,7 +1093,7 @@ impl NativeGmpRelay {
             .context("Failed to get latest blockhash")?;
 
         let transaction = Transaction::new_signed_with_payer(
-            &[instruction],
+            &instructions,
             Some(&relay_pubkey),
             &[&relay_keypair],
             blockhash,
@@ -999,9 +1160,9 @@ struct SvmDeliverMessageInstruction {
 
 impl SvmDeliverMessageInstruction {
     fn try_to_vec(&self) -> Result<Vec<u8>> {
-        // Instruction discriminator: DeliverMessage is variant 5 in the enum
-        // (Initialize=0, AddRelay=1, RemoveRelay=2, SetTrustedRemote=3, Send=4, DeliverMessage=5)
-        let mut data = vec![5u8];
+        // Instruction discriminator: DeliverMessage is variant 6 in the enum
+        // (Initialize=0, AddRelay=1, RemoveRelay=2, SetTrustedRemote=3, SetRouting=4, Send=5, DeliverMessage=6)
+        let mut data = vec![6u8];
         data.extend(
             borsh::to_vec(self).context("Failed to serialize instruction data")?,
         );

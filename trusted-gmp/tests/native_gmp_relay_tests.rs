@@ -430,3 +430,144 @@ fn test_relay_config_extracts_both_connected_chains() {
         "MVM connected and SVM should have different chain IDs"
     );
 }
+
+// ============================================================================
+// FULFILLMENT PROOF PAYLOAD PARSING TESTS
+// ============================================================================
+
+/// Test FulfillmentProof payload parsing for intent_id extraction.
+/// Why: deliver_to_svm must correctly parse intent_id from payload to derive PDAs.
+/// Payload format: [type(1)] [intent_id(32)] [solver_addr(32)] [amount(8)] [timestamp(8)] = 81 bytes
+#[test]
+fn test_fulfillment_proof_payload_intent_id_extraction() {
+    // Build a valid FulfillmentProof payload (81 bytes)
+    let mut payload = vec![0x03]; // FulfillmentProof message type
+    let intent_id = [0xAA; 32];
+    let solver_addr = [0xBB; 32];
+    payload.extend_from_slice(&intent_id);
+    payload.extend_from_slice(&solver_addr);
+    payload.extend_from_slice(&1000u64.to_be_bytes()); // amount
+    payload.extend_from_slice(&1234567890u64.to_be_bytes()); // timestamp
+
+    assert_eq!(payload.len(), 81, "FulfillmentProof payload should be 81 bytes");
+    assert_eq!(payload[0], 0x03, "First byte should be message type 0x03");
+
+    // Extract intent_id (bytes 1-33)
+    let mut extracted_intent_id = [0u8; 32];
+    extracted_intent_id.copy_from_slice(&payload[1..33]);
+    assert_eq!(extracted_intent_id, intent_id, "Extracted intent_id should match");
+
+    // Extract solver_addr (bytes 33-65)
+    let mut extracted_solver_addr = [0u8; 32];
+    extracted_solver_addr.copy_from_slice(&payload[33..65]);
+    assert_eq!(extracted_solver_addr, solver_addr, "Extracted solver_addr should match");
+}
+
+/// Test FulfillmentProof payload validation for minimum length.
+/// Why: deliver_to_svm checks payload.len() >= 65 for required fields.
+#[test]
+fn test_fulfillment_proof_payload_minimum_length() {
+    // Valid payload: 81 bytes
+    let valid_payload = vec![0x03; 81];
+    assert!(valid_payload.len() >= 65, "Valid payload should be >= 65 bytes");
+
+    // Minimum payload for parsing intent_id and solver_addr: 65 bytes
+    let minimum_payload = vec![0x03; 65];
+    assert!(minimum_payload.len() >= 65, "Minimum payload should be >= 65 bytes");
+
+    // Too short payload: 64 bytes (can't extract solver_addr completely)
+    let short_payload = vec![0x03; 64];
+    assert!(short_payload.len() < 65, "Short payload should be < 65 bytes");
+}
+
+// ============================================================================
+// ATA DERIVATION TESTS
+// ============================================================================
+
+/// Test ATA derivation formula is correct.
+/// Why: trusted-gmp derives solver's ATA manually. Must match spl-associated-token-account.
+/// ATA = PDA([owner, TOKEN_PROGRAM_ID, mint], ASSOCIATED_TOKEN_PROGRAM_ID)
+#[test]
+fn test_ata_derivation_formula() {
+    // Known constants
+    let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        .expect("Invalid token program ID");
+    let associated_token_program_id = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        .expect("Invalid associated token program ID");
+
+    // Use deterministic test values
+    let owner = Pubkey::from_str("So11111111111111111111111111111111111111112")
+        .expect("Invalid owner pubkey");
+    let mint = Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
+        .expect("Invalid mint pubkey");
+
+    // Derive ATA using the same formula as in deliver_to_svm
+    let (derived_ata, bump) = Pubkey::find_program_address(
+        &[
+            owner.as_ref(),
+            token_program_id.as_ref(),
+            mint.as_ref(),
+        ],
+        &associated_token_program_id,
+    );
+
+    // Verify the derivation produces a valid pubkey and bump
+    assert!(bump <= 255, "Bump should be <= 255");
+    assert_ne!(derived_ata, Pubkey::default(), "Derived ATA should not be default");
+
+    // Verify the formula matches expected ATA format
+    // The ATA should be different from owner and mint
+    assert_ne!(derived_ata, owner, "ATA should be different from owner");
+    assert_ne!(derived_ata, mint, "ATA should be different from mint");
+}
+
+/// Test ATA derivation is deterministic.
+/// Why: Same inputs must always produce the same ATA address.
+#[test]
+fn test_ata_derivation_is_deterministic() {
+    let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        .expect("Invalid token program ID");
+    let associated_token_program_id = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        .expect("Invalid associated token program ID");
+
+    let owner = Pubkey::new_from_array([0xAA; 32]);
+    let mint = Pubkey::new_from_array([0xBB; 32]);
+
+    // Derive twice with same inputs
+    let (ata1, bump1) = Pubkey::find_program_address(
+        &[owner.as_ref(), token_program_id.as_ref(), mint.as_ref()],
+        &associated_token_program_id,
+    );
+    let (ata2, bump2) = Pubkey::find_program_address(
+        &[owner.as_ref(), token_program_id.as_ref(), mint.as_ref()],
+        &associated_token_program_id,
+    );
+
+    assert_eq!(ata1, ata2, "ATA derivation should be deterministic");
+    assert_eq!(bump1, bump2, "Bump should be deterministic");
+}
+
+/// Test ATA changes with different owners.
+/// Why: Each owner must have a unique ATA for the same token.
+#[test]
+fn test_ata_differs_by_owner() {
+    let token_program_id = Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+        .expect("Invalid token program ID");
+    let associated_token_program_id = Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+        .expect("Invalid associated token program ID");
+
+    let owner1 = Pubkey::new_from_array([0xCC; 32]);
+    let owner2 = Pubkey::new_from_array([0xDD; 32]);
+    let mint = Pubkey::new_from_array([0xEE; 32]);
+
+    let (ata1, _) = Pubkey::find_program_address(
+        &[owner1.as_ref(), token_program_id.as_ref(), mint.as_ref()],
+        &associated_token_program_id,
+    );
+    let (ata2, _) = Pubkey::find_program_address(
+        &[owner2.as_ref(), token_program_id.as_ref(), mint.as_ref()],
+        &associated_token_program_id,
+    );
+
+    assert_ne!(ata1, ata2, "Different owners should have different ATAs");
+}

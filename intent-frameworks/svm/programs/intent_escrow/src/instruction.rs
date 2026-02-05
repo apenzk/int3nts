@@ -13,6 +13,36 @@ pub enum EscrowInstruction {
     /// 2. `[]` System program
     Initialize { approver: Pubkey },
 
+    /// Generic LzReceive for GMP message delivery (variant index 1).
+    /// Routes to LzReceiveRequirements or LzReceiveFulfillmentProof based on message type.
+    ///
+    /// This must be at index 1 to match the GMP endpoint's CPI format which uses
+    /// variant index 1 for all destination programs.
+    ///
+    /// Accounts expected (for IntentRequirements - message type 0x01):
+    /// 0. `[writable]` Requirements account (PDA)
+    /// 1. `[]` GMP config account (PDA)
+    /// 2. `[signer]` GMP endpoint or relay (trusted caller)
+    /// 3. `[signer]` Payer
+    /// 4. `[]` System program
+    ///
+    /// Accounts expected (for FulfillmentProof - message type 0x03):
+    /// 0. `[writable]` Requirements account (PDA)
+    /// 1. `[writable]` Escrow account (PDA)
+    /// 2. `[writable]` Escrow vault (PDA)
+    /// 3. `[writable]` Solver token account
+    /// 4. `[]` GMP config account (PDA)
+    /// 5. `[signer]` GMP endpoint or relay (trusted caller)
+    /// 6. `[]` Token program
+    LzReceive {
+        /// Source chain ID
+        src_chain_id: u32,
+        /// Source address (trusted hub address)
+        src_addr: [u8; 32],
+        /// GMP payload (message type in first byte determines routing)
+        payload: Vec<u8>,
+    },
+
     /// Set or update GMP configuration for cross-chain messaging
     ///
     /// Accounts expected:

@@ -168,6 +168,47 @@ impl InboundNonceAccount {
     }
 }
 
+/// Routing configuration for message delivery.
+/// Stores program IDs that handle different message types.
+/// PDA seeds: ["routing"]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RoutingConfig {
+    /// Discriminator for account type
+    pub discriminator: u8,
+    /// Outflow validator program (handles IntentRequirements for outflow)
+    /// Zero pubkey means not configured
+    pub outflow_validator: Pubkey,
+    /// Intent escrow program (handles IntentRequirements for inflow)
+    /// Zero pubkey means not configured
+    pub intent_escrow: Pubkey,
+    /// Bump seed for PDA derivation
+    pub bump: u8,
+}
+
+impl RoutingConfig {
+    pub const DISCRIMINATOR: u8 = 6;
+    pub const SIZE: usize = 1 + 32 + 32 + 1; // 66 bytes
+
+    pub fn new(outflow_validator: Pubkey, intent_escrow: Pubkey, bump: u8) -> Self {
+        Self {
+            discriminator: Self::DISCRIMINATOR,
+            outflow_validator,
+            intent_escrow,
+            bump,
+        }
+    }
+
+    /// Check if outflow_validator is configured (non-zero)
+    pub fn has_outflow_validator(&self) -> bool {
+        self.outflow_validator != Pubkey::default()
+    }
+
+    /// Check if intent_escrow is configured (non-zero)
+    pub fn has_intent_escrow(&self) -> bool {
+        self.intent_escrow != Pubkey::default()
+    }
+}
+
 /// Seeds for PDA derivation
 pub mod seeds {
     pub const CONFIG_SEED: &[u8] = b"config";
@@ -175,4 +216,5 @@ pub mod seeds {
     pub const TRUSTED_REMOTE_SEED: &[u8] = b"trusted_remote";
     pub const NONCE_OUT_SEED: &[u8] = b"nonce_out";
     pub const NONCE_IN_SEED: &[u8] = b"nonce_in";
+    pub const ROUTING_SEED: &[u8] = b"routing";
 }

@@ -61,7 +61,7 @@ fn create_fulfillment_proof_payload(
 }
 
 // ============================================================================
-// GMP CONFIG TESTS (Tests 1-2)
+// GMP CONFIG TESTS
 // ============================================================================
 
 /// 1. Test: SetGmpConfig creates/updates GMP configuration
@@ -162,7 +162,7 @@ async fn test_set_gmp_config_rejects_unauthorized() {
 }
 
 // ============================================================================
-// LZ RECEIVE REQUIREMENTS TESTS (Tests 3-5)
+// LZ RECEIVE REQUIREMENTS TESTS
 // ============================================================================
 
 /// 3. Test: ReceiveRequirements stores intent requirements
@@ -381,7 +381,7 @@ async fn test_receive_requirements_rejects_untrusted_source() {
 }
 
 // ============================================================================
-// LZ RECEIVE FULFILLMENT PROOF TESTS (Tests 6-8)
+// LZ RECEIVE FULFILLMENT PROOF TESTS
 // ============================================================================
 
 /// 6. Test: ReceiveFulfillmentProof releases escrow
@@ -742,7 +742,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
 }
 
 // ============================================================================
-// CREATE ESCROW WITH REQUIREMENTS TESTS (Tests 9-12)
+// CREATE ESCROW WITH REQUIREMENTS TESTS
 // ============================================================================
 
 /// 9. Test: CreateEscrow validates against requirements
@@ -1073,7 +1073,7 @@ async fn test_create_escrow_sends_escrow_confirmation() {
 }
 
 // ============================================================================
-// FULL WORKFLOW TEST (Test 13)
+// FULL WORKFLOW TEST
 // ============================================================================
 
 /// 13. Test: Full inflow GMP workflow
@@ -1274,3 +1274,265 @@ async fn test_full_inflow_gmp_workflow() {
 //     Why: MVM tests that manual release can't happen twice. SVM auto-releases
 //     once in test 6, and the escrow is marked claimed. Double fulfillment is
 //     rejected in test 8 (test_receive_fulfillment_proof_rejects_already_fulfilled).
+
+// ============================================================================
+// GENERIC LZRECEIVE ROUTING TESTS
+// ============================================================================
+//
+// These tests verify the generic LzReceive instruction (variant index 1) that
+// routes based on message type. This is used by the GMP endpoint's CPI which
+// always uses variant index 1 for destination programs.
+
+/// 20. Test: Generic LzReceive routes IntentRequirements correctly
+/// Verifies that message type 0x01 routes to requirements handler.
+/// Why: GMP endpoint uses generic LzReceive for all CPIs - must route correctly.
+#[tokio::test]
+async fn test_generic_lz_receive_routes_requirements() {
+    let program_test = program_test();
+    let mut context = program_test.start_with_context().await;
+    let env = setup_basic_env(&mut context).await;
+
+    let intent_id = generate_intent_id();
+    let amount = 1_000_000u64;
+    let expiry = u64::MAX;
+
+    let (requirements_pda, _) =
+        Pubkey::find_program_address(&[seeds::REQUIREMENTS_SEED, &intent_id], &env.program_id);
+
+    // Create IntentRequirements payload (message type 0x01 is embedded in encode())
+    let requirements_payload = create_requirements_payload(
+        intent_id,
+        &env.requester.pubkey(),
+        amount,
+        &env.mint,
+        &env.solver.pubkey(),
+        expiry,
+    );
+
+    let gmp_caller = context.payer.insecure_clone();
+
+    // Use the generic LzReceive instruction (variant index 1)
+    let lz_receive_ix = common::create_lz_receive_generic_requirements_ix(
+        env.program_id,
+        requirements_pda,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_TRUSTED_HUB_ADDR,
+        requirements_payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[lz_receive_ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    // Verify requirements were stored
+    let req_account = context
+        .banks_client
+        .get_account(requirements_pda)
+        .await
+        .unwrap()
+        .expect("Requirements account should exist");
+
+    let requirements = read_requirements(&req_account);
+    assert_eq!(requirements.intent_id, intent_id);
+    assert_eq!(requirements.amount_required, amount);
+    assert!(!requirements.escrow_created);
+    assert!(!requirements.fulfilled);
+}
+
+/// 21. Test: Generic LzReceive routes FulfillmentProof correctly
+/// Verifies that message type 0x03 routes to fulfillment proof handler.
+/// Why: GMP endpoint uses generic LzReceive for all CPIs - must route correctly.
+#[tokio::test]
+async fn test_generic_lz_receive_routes_fulfillment_proof() {
+    let program_test = program_test();
+    let mut context = program_test.start_with_context().await;
+    let env = setup_basic_env(&mut context).await;
+
+    let intent_id = generate_intent_id();
+    let amount = 500_000u64;
+
+    let (escrow_pda, _) =
+        Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id], &env.program_id);
+    let (vault_pda, _) =
+        Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
+    let (requirements_pda, _) =
+        Pubkey::find_program_address(&[seeds::REQUIREMENTS_SEED, &intent_id], &env.program_id);
+
+    let gmp_caller = context.payer.insecure_clone();
+
+    // Step 1: Receive requirements (using specific instruction to set up state)
+    let requirements_payload = create_requirements_payload(
+        intent_id,
+        &env.requester.pubkey(),
+        amount,
+        &env.mint,
+        &env.solver.pubkey(),
+        u64::MAX,
+    );
+
+    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+        env.program_id,
+        requirements_pda,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_TRUSTED_HUB_ADDR,
+        requirements_payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[lz_receive_req_ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    // Step 2: Create escrow
+    let create_ix = create_escrow_ix(
+        env.program_id,
+        intent_id,
+        amount,
+        env.requester.pubkey(),
+        env.mint,
+        env.requester_token,
+        env.solver.pubkey(),
+        None,
+        Some(requirements_pda),
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[create_ix],
+        Some(&env.requester.pubkey()),
+        &[&env.requester],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    // Step 3: Receive fulfillment proof using GENERIC LzReceive
+    let proof_payload = create_fulfillment_proof_payload(
+        intent_id,
+        &env.solver.pubkey(),
+        amount,
+        12345,
+    );
+
+    let lz_receive_proof_ix = common::create_lz_receive_generic_fulfillment_ix(
+        env.program_id,
+        requirements_pda,
+        escrow_pda,
+        vault_pda,
+        env.solver_token,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_TRUSTED_HUB_ADDR,
+        proof_payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[lz_receive_proof_ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    // Verify escrow released
+    let vault_balance = get_token_balance(&mut context, vault_pda).await;
+    let solver_balance = get_token_balance(&mut context, env.solver_token).await;
+    assert_eq!(vault_balance, 0);
+    assert_eq!(solver_balance, amount);
+
+    let escrow = read_escrow(
+        &context
+            .banks_client
+            .get_account(escrow_pda)
+            .await
+            .unwrap()
+            .unwrap(),
+    );
+    assert!(escrow.is_claimed);
+}
+
+/// 22. Test: Generic LzReceive rejects unknown message types
+/// Verifies that invalid message types (not 0x01 or 0x03) are rejected.
+/// Why: Unknown message types should fail explicitly, not silently.
+#[tokio::test]
+async fn test_generic_lz_receive_rejects_unknown_message_type() {
+    let program_test = program_test();
+    let mut context = program_test.start_with_context().await;
+    let env = setup_basic_env(&mut context).await;
+
+    let intent_id = generate_intent_id();
+
+    let (requirements_pda, _) =
+        Pubkey::find_program_address(&[seeds::REQUIREMENTS_SEED, &intent_id], &env.program_id);
+
+    let gmp_caller = context.payer.insecure_clone();
+
+    // Create payload with invalid message type (0x00)
+    let invalid_payload = vec![0x00, 0x01, 0x02, 0x03]; // 0x00 is not a valid message type
+
+    let lz_receive_ix = common::create_lz_receive_generic_requirements_ix(
+        env.program_id,
+        requirements_pda,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_TRUSTED_HUB_ADDR,
+        invalid_payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[lz_receive_ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+
+    let result = context.banks_client.process_transaction(tx).await;
+    assert!(result.is_err(), "Should reject unknown message type 0x00");
+
+    // Warp to next slot
+    context.warp_to_slot(100).unwrap();
+
+    // Try another invalid type (0x02 - EscrowConfirmation is outbound only)
+    let invalid_payload2 = vec![0x02, 0x01, 0x02, 0x03];
+
+    let lz_receive_ix2 = common::create_lz_receive_generic_requirements_ix(
+        env.program_id,
+        requirements_pda,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_TRUSTED_HUB_ADDR,
+        invalid_payload2,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[lz_receive_ix2],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+
+    let result = context.banks_client.process_transaction(tx).await;
+    assert!(result.is_err(), "Should reject message type 0x02 (EscrowConfirmation)");
+}

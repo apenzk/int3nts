@@ -39,7 +39,7 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     // ... imports and helpers ...
 
     // ============================================================================
-    // GMP CONFIG TESTS (Tests 1-2)
+    // GMP CONFIG TESTS
     // ============================================================================
 
     /// 1. Test: SetGmpConfig creates/updates GMP configuration
@@ -61,7 +61,7 @@ module mvmt_intent::inflow_escrow_gmp_tests {
     }
 
     // ============================================================================
-    // LZ RECEIVE REQUIREMENTS TESTS (Tests 3-5)
+    // LZ RECEIVE REQUIREMENTS TESTS
     // ============================================================================
 
     /// 3. Test: LzReceiveRequirements stores intent requirements

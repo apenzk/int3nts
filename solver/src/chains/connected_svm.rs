@@ -459,9 +459,13 @@ impl ConnectedSvmClient {
             blockhash,
         );
 
-        let sig = self.rpc_client
-            .send_and_confirm_transaction(&tx)
-            .context("Failed to send FulfillIntent transaction")?;
+        let sig = match self.rpc_client.send_and_confirm_transaction(&tx) {
+            Ok(s) => s,
+            Err(e) => {
+                tracing::error!("FulfillIntent transaction failed: {:?}", e);
+                return Err(anyhow::anyhow!("Failed to send FulfillIntent transaction: {}", e));
+            }
+        };
 
         Ok(sig.to_string())
     }

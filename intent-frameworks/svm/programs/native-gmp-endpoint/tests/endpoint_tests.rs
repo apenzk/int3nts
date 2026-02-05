@@ -8,7 +8,7 @@ use native_gmp_endpoint::{
     instruction::NativeGmpInstruction,
     state::{
         ConfigAccount, InboundNonceAccount, OutboundNonceAccount, RelayAccount,
-        TrustedRemoteAccount,
+        RoutingConfig, TrustedRemoteAccount,
     },
     GmpError,
 };
@@ -144,7 +144,7 @@ fn test_initialize_instruction_serialization() {
 /// Why: Admin must be able to authorize relays. Incorrect relay pubkey serialization would authorize wrong accounts.
 #[test]
 fn test_add_relay_instruction_serialization() {
-    let original_relay = Pubkey::new_unique();
+    let original_relay = Pubkey::new_from_array([0x11; 32]);
 
     let instruction = NativeGmpInstruction::AddRelay {
         relay: original_relay,
@@ -189,16 +189,66 @@ fn test_set_trusted_remote_instruction_serialization() {
     }
 }
 
+/// 6. Test: SetRouting instruction serialization roundtrip
+/// Verifies that SetRouting instruction can be serialized and deserialized correctly.
+/// Why: Routing configuration enables multi-destination delivery. Incorrect pubkeys would route messages to wrong programs.
+#[test]
+fn test_set_routing_instruction_serialization() {
+    let original_outflow_validator = Pubkey::new_from_array([0x22; 32]);
+    let original_intent_escrow = Pubkey::new_from_array([0x33; 32]);
+
+    let instruction = NativeGmpInstruction::SetRouting {
+        outflow_validator: original_outflow_validator,
+        intent_escrow: original_intent_escrow,
+    };
+
+    let encoded = borsh::to_vec(&instruction).unwrap();
+    let decoded = NativeGmpInstruction::try_from_slice(&encoded).unwrap();
+
+    match decoded {
+        NativeGmpInstruction::SetRouting {
+            outflow_validator,
+            intent_escrow,
+        } => {
+            assert_eq!(outflow_validator, original_outflow_validator);
+            assert_eq!(intent_escrow, original_intent_escrow);
+        }
+        _ => panic!("Wrong instruction variant"),
+    }
+}
+
+/// 7. Test: RoutingConfig serialization roundtrip
+/// Verifies that RoutingConfig state can be serialized and deserialized correctly.
+/// Why: Routing config stores destination programs. Corruption would route messages to wrong programs.
+#[test]
+fn test_routing_config_serialization() {
+    let original_outflow_validator = Pubkey::new_from_array([0x44; 32]);
+    let original_intent_escrow = Pubkey::new_from_array([0x55; 32]);
+    let original_bump = 250u8;
+
+    let routing = RoutingConfig::new(original_outflow_validator, original_intent_escrow, original_bump);
+
+    let encoded = borsh::to_vec(&routing).unwrap();
+    let decoded = RoutingConfig::try_from_slice(&encoded).unwrap();
+
+    assert_eq!(decoded.discriminator, RoutingConfig::DISCRIMINATOR);
+    assert_eq!(decoded.outflow_validator, original_outflow_validator);
+    assert_eq!(decoded.intent_escrow, original_intent_escrow);
+    assert_eq!(decoded.bump, original_bump);
+    assert!(decoded.has_outflow_validator());
+    assert!(decoded.has_intent_escrow());
+}
+
 // ============================================================================
 // STATE SERIALIZATION TESTS
 // ============================================================================
 
-/// 6. Test: ConfigAccount serialization roundtrip
+/// 8. Test: ConfigAccount serialization roundtrip
 /// Verifies that ConfigAccount state can be serialized and deserialized correctly.
 /// Why: Config stores admin and chain_id. Corruption would break authorization checks and message routing.
 #[test]
 fn test_config_account_serialization() {
-    let original_admin = Pubkey::new_unique();
+    let original_admin = Pubkey::new_from_array([0x66; 32]);
     let original_chain_id = DUMMY_CHAIN_ID_SVM;
     let original_bump = 255u8;
 
@@ -213,12 +263,12 @@ fn test_config_account_serialization() {
     assert_eq!(decoded.bump, original_bump);
 }
 
-/// 7. Test: RelayAccount serialization roundtrip
+/// 9. Test: RelayAccount serialization roundtrip
 /// Verifies that RelayAccount state can be serialized and deserialized correctly.
 /// Why: Relay authorization state must persist correctly. Corruption could authorize/deauthorize wrong relays.
 #[test]
 fn test_relay_account_serialization() {
-    let original_relay = Pubkey::new_unique();
+    let original_relay = Pubkey::new_from_array([0x77; 32]);
     let original_bump = 254u8;
 
     let relay_account = RelayAccount::new(original_relay, original_bump);
@@ -232,7 +282,7 @@ fn test_relay_account_serialization() {
     assert_eq!(decoded.bump, original_bump);
 }
 
-/// 8. Test: TrustedRemoteAccount serialization roundtrip
+/// 10. Test: TrustedRemoteAccount serialization roundtrip
 /// Verifies that TrustedRemoteAccount state can be serialized and deserialized correctly.
 /// Why: Trusted remote config is security-critical. Corruption would accept messages from untrusted sources.
 #[test]
@@ -257,7 +307,7 @@ fn test_trusted_remote_account_serialization() {
 // NONCE TRACKING TESTS
 // ============================================================================
 
-/// 9. Test: OutboundNonceAccount increment behavior
+/// 11. Test: OutboundNonceAccount increment behavior
 /// Verifies that outbound nonce increments correctly and returns the pre-increment value.
 /// Why: Nonces must be unique per message. Incorrect increment logic would cause duplicate nonces or gaps.
 #[test]
@@ -275,7 +325,7 @@ fn test_outbound_nonce_account() {
     assert_eq!(nonce_account.nonce, 2);
 }
 
-/// 10. Test: InboundNonceAccount replay detection
+/// 12. Test: InboundNonceAccount replay detection
 /// Verifies that replay detection correctly identifies previously processed nonces.
 /// Why: Replay protection prevents double-processing of messages. Bugs here would allow replay attacks.
 #[test]
@@ -313,7 +363,7 @@ fn test_inbound_nonce_account_replay_detection() {
 // ERROR CONVERSION TESTS
 // ============================================================================
 
-/// 11. Test: Error to ProgramError conversion
+/// 13. Test: Error to ProgramError conversion
 /// Verifies that GmpError can be converted to ProgramError.
 /// Why: Errors must propagate correctly to clients. Incorrect conversion would hide error details.
 #[test]
@@ -329,7 +379,7 @@ fn test_error_conversion() {
     }
 }
 
-/// 12. Test: All error variants have unique codes
+/// 14. Test: All error variants have unique codes
 /// Verifies that each error variant maps to a unique error code.
 /// Why: Unique error codes allow clients to identify specific failures. Duplicate codes would make debugging impossible.
 #[test]
@@ -384,7 +434,7 @@ mod integration {
     use borsh::{BorshDeserialize, BorshSerialize};
     use native_gmp_endpoint::{
         instruction::NativeGmpInstruction,
-        state::{seeds, ConfigAccount, OutboundNonceAccount, RelayAccount, TrustedRemoteAccount, InboundNonceAccount},
+        state::{seeds, ConfigAccount, OutboundNonceAccount, RelayAccount, RoutingConfig, TrustedRemoteAccount, InboundNonceAccount},
     };
     use solana_program::instruction::{AccountMeta, Instruction};
     use solana_program_test::{processor, ProgramTest, ProgramTestContext};
@@ -405,9 +455,14 @@ mod integration {
         solana_sdk::pubkey!("GmpEnd1111111111111111111111111111111111111")
     }
 
-    /// Mock receiver program ID
+    /// Mock receiver program ID (simulates outflow_validator)
     fn mock_receiver_id() -> Pubkey {
         solana_sdk::pubkey!("MockRcv111111111111111111111111111111111111")
+    }
+
+    /// Mock escrow receiver program ID (simulates intent_escrow)
+    fn mock_escrow_receiver_id() -> Pubkey {
+        solana_sdk::pubkey!("MockEsc111111111111111111111111111111111111")
     }
 
     /// Mock receiver processor - accepts any instruction
@@ -420,15 +475,27 @@ mod integration {
         Ok(())
     }
 
-    /// Build ProgramTest with native-gmp-endpoint and mock receiver
+    /// Mock escrow receiver processor - accepts any instruction
+    fn mock_escrow_receiver_process(
+        _program_id: &Pubkey,
+        _accounts: &[solana_program::account_info::AccountInfo],
+        _instruction_data: &[u8],
+    ) -> solana_program::entrypoint::ProgramResult {
+        solana_program::msg!("MockEscrowReceiver: instruction received");
+        Ok(())
+    }
+
+    /// Build ProgramTest with native-gmp-endpoint and mock receivers
     fn program_test() -> ProgramTest {
         let mut pt = ProgramTest::new(
             "native_gmp_endpoint",
             gmp_program_id(),
             processor!(native_gmp_endpoint::processor::process_instruction),
         );
-        // Add mock receiver for DeliverMessage CPI tests
+        // Add mock receiver for DeliverMessage CPI tests (simulates outflow_validator)
         pt.add_program("mock_receiver", mock_receiver_id(), processor!(mock_receiver_process));
+        // Add mock escrow receiver for routing tests (simulates intent_escrow)
+        pt.add_program("mock_escrow_receiver", mock_escrow_receiver_id(), processor!(mock_escrow_receiver_process));
         pt
     }
 
@@ -565,6 +632,11 @@ mod integration {
             &[seeds::NONCE_IN_SEED, &chain_id_bytes],
             &program_id,
         );
+        let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], &program_id);
+        // Account order (updated for routing support):
+        // 0. Config, 1. Relay, 2. TrustedRemote, 3. NonceIn, 4. RelaySigner, 5. Payer
+        // 6. SystemProgram, 7. RoutingConfig, 8. DestProgram1, 9. DestProgram2, 10+. Remaining
+        // For tests without routing, we pass destination_program as both dest1 and dest2
         Instruction {
             program_id,
             accounts: vec![
@@ -574,9 +646,79 @@ mod integration {
                 AccountMeta::new(nonce_pda, false),
                 AccountMeta::new_readonly(relay, true),
                 AccountMeta::new(payer, true),
-                AccountMeta::new_readonly(destination_program, false),
+                AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new_readonly(routing_pda, false), // routing config (may not exist)
+                AccountMeta::new_readonly(destination_program, false), // dest program 1
+                AccountMeta::new_readonly(destination_program, false), // dest program 2 (same for tests)
+            ],
+            data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload, nonce }.try_to_vec().unwrap(),
+        }
+    }
+
+    /// Helper: create SetRouting instruction
+    fn create_set_routing_ix(
+        program_id: Pubkey,
+        admin: Pubkey,
+        payer: Pubkey,
+        outflow_validator: Pubkey,
+        intent_escrow: Pubkey,
+    ) -> Instruction {
+        let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
+        let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], &program_id);
+        Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(config_pda, false),
+                AccountMeta::new(routing_pda, false),
+                AccountMeta::new_readonly(admin, true),
+                AccountMeta::new(payer, true),
                 AccountMeta::new_readonly(system_program::id(), false),
             ],
+            data: NativeGmpInstruction::SetRouting { outflow_validator, intent_escrow }.try_to_vec().unwrap(),
+        }
+    }
+
+    /// Helper: create DeliverMessage instruction with two different destination programs (for routing tests)
+    fn create_deliver_message_with_routing_ix(
+        program_id: Pubkey,
+        relay: Pubkey,
+        payer: Pubkey,
+        outflow_validator: Pubkey,
+        intent_escrow: Pubkey,
+        src_chain_id: u32,
+        src_addr: [u8; 32],
+        payload: Vec<u8>,
+        nonce: u64,
+        remaining_accounts: Vec<AccountMeta>,
+    ) -> Instruction {
+        let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
+        let (relay_pda, _) = Pubkey::find_program_address(&[seeds::RELAY_SEED, relay.as_ref()], &program_id);
+        let chain_id_bytes = src_chain_id.to_le_bytes();
+        let (trusted_remote_pda, _) = Pubkey::find_program_address(
+            &[seeds::TRUSTED_REMOTE_SEED, &chain_id_bytes],
+            &program_id,
+        );
+        let (nonce_pda, _) = Pubkey::find_program_address(
+            &[seeds::NONCE_IN_SEED, &chain_id_bytes],
+            &program_id,
+        );
+        let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], &program_id);
+        let mut accounts = vec![
+            AccountMeta::new_readonly(config_pda, false),
+            AccountMeta::new_readonly(relay_pda, false),
+            AccountMeta::new_readonly(trusted_remote_pda, false),
+            AccountMeta::new(nonce_pda, false),
+            AccountMeta::new_readonly(relay, true),
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(routing_pda, false),
+            AccountMeta::new_readonly(outflow_validator, false),
+            AccountMeta::new_readonly(intent_escrow, false),
+        ];
+        accounts.extend(remaining_accounts);
+        Instruction {
+            program_id,
+            accounts,
             data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload, nonce }.try_to_vec().unwrap(),
         }
     }
@@ -591,7 +733,7 @@ mod integration {
     // INTEGRATION TESTS
     // ========================================================================
 
-    /// 13. Test: Send instruction updates nonce state
+    /// 15. Test: Send instruction updates nonce state
     /// Verifies that Send creates/updates outbound nonce account correctly.
     /// Why: Nonce tracking is critical for message ordering. State must persist correctly.
     #[tokio::test]
@@ -632,7 +774,7 @@ mod integration {
         assert_eq!(nonce_account.nonce, 2, "Nonce should be 2 after second send (got {})", nonce_account.nonce);
     }
 
-    /// 14. Test: DeliverMessage calls receiver's handler via CPI
+    /// 16. Test: DeliverMessage calls receiver's handler via CPI
     /// Verifies that DeliverMessage successfully CPIs to destination program.
     /// Why: CPI is the core mechanism for message delivery. Must succeed for cross-chain messaging to work.
     #[tokio::test]
@@ -699,7 +841,7 @@ mod integration {
         assert_eq!(nonce_account.last_nonce, 2, "Last nonce should be 2 after second delivery");
     }
 
-    /// 15. Test: DeliverMessage rejects replay (duplicate nonce)
+    /// 17. Test: DeliverMessage rejects replay (duplicate nonce)
     /// Verifies that replay protection works correctly.
     /// Why: Replay attacks would allow double-processing of messages, potentially causing fund loss.
     #[tokio::test]
@@ -754,7 +896,7 @@ mod integration {
         assert!(result.is_err(), "Replay should be rejected");
     }
 
-    /// 16. Test: Unauthorized relay rejected
+    /// 18. Test: Unauthorized relay rejected
     /// Verifies that only authorized relays can deliver messages.
     /// Why: Relay authorization prevents malicious actors from injecting fake messages.
     #[tokio::test]
@@ -791,7 +933,7 @@ mod integration {
         assert!(result.is_err(), "Unauthorized relay should be rejected");
     }
 
-    /// 17. Test: Authorized relay succeeds
+    /// 19. Test: Authorized relay succeeds
     /// Verifies that explicitly authorized relays can deliver messages.
     /// Why: The relay authorization system must correctly grant access to approved relays.
     #[tokio::test]
@@ -834,7 +976,7 @@ mod integration {
         assert_eq!(nonce_account.last_nonce, 1, "Message should have been delivered");
     }
 
-    /// 18. Test: Untrusted remote address rejected
+    /// 20. Test: Untrusted remote address rejected
     /// Verifies that messages from non-trusted source addresses are rejected.
     /// Why: Trusted remote verification prevents spoofed cross-chain messages.
     #[tokio::test]
@@ -873,7 +1015,7 @@ mod integration {
         assert!(result.is_err(), "Untrusted remote should be rejected");
     }
 
-    /// 19. Test: No trusted remote configured
+    /// 21. Test: No trusted remote configured
     /// Verifies that messages fail when no trusted remote is configured for the source chain.
     /// Why: Missing configuration must be caught early to prevent security holes.
     #[tokio::test]
@@ -910,7 +1052,7 @@ mod integration {
         assert!(result.is_err(), "Message from chain with no trusted remote should be rejected");
     }
 
-    /// 20. Test: Non-admin cannot set trusted remote
+    /// 22. Test: Non-admin cannot set trusted remote
     /// Verifies that only the admin can configure trusted remote addresses.
     /// Why: Admin-only access prevents unauthorized trust configuration changes.
     #[tokio::test]
@@ -936,7 +1078,7 @@ mod integration {
         assert!(result.is_err(), "Non-admin should not be able to set trusted remote");
     }
 
-    /// 21. Test: Lower nonce rejected
+    /// 23. Test: Lower nonce rejected
     /// Verifies that delivering a message with a nonce lower than the last processed fails.
     /// Why: Strictly increasing nonces prevent out-of-order message processing attacks.
     #[tokio::test]
@@ -989,5 +1131,154 @@ mod integration {
         );
         let result = send_tx(&mut context, &relay, &[deliver_ix_lower], &[]).await;
         assert!(result.is_err(), "Lower nonce should be rejected");
+    }
+
+    // ========================================================================
+    // FULFILLMENT PROOF ROUTING TESTS
+    // ========================================================================
+
+    /// 24. Test: FulfillmentProof (0x03) routes to intent_escrow when routing is configured
+    /// Verifies that message type 0x03 is routed to destination_program_2 (intent_escrow).
+    /// Why: FulfillmentProof releases escrow funds on the connected chain. It must route to
+    /// intent_escrow, not outflow_validator. This test validates the MESSAGE_TYPE_FULFILLMENT_PROOF
+    /// routing logic added to the GMP endpoint.
+    #[tokio::test]
+    async fn test_fulfillment_proof_routes_to_intent_escrow() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize, add relay, set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        let src_addr = [0x99; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Set up routing config
+        let set_routing_ix = create_set_routing_ix(
+            program_id,
+            admin.pubkey(),
+            admin.pubkey(),
+            mock_receiver_id(),       // outflow_validator
+            mock_escrow_receiver_id(), // intent_escrow
+        );
+        send_tx(&mut context, &admin, &[set_routing_ix], &[]).await.unwrap();
+
+        // Create FulfillmentProof payload (message type 0x03)
+        // Format: [type(1)] [intent_id(32)] [solver_addr(32)] [amount(8)] [timestamp(8)] = 81 bytes
+        let mut payload = vec![0x03]; // FulfillmentProof message type
+        payload.extend_from_slice(&[0xAA; 32]); // intent_id
+        payload.extend_from_slice(&[0xBB; 32]); // solver_addr
+        payload.extend_from_slice(&0u64.to_be_bytes()); // amount
+        payload.extend_from_slice(&0u64.to_be_bytes()); // timestamp
+        assert_eq!(payload.len(), 81, "FulfillmentProof payload should be 81 bytes");
+
+        // Create mock remaining accounts (7 accounts for LzReceiveFulfillmentProof)
+        // In production: requirements, escrow, vault, solver_token, gmp_config, gmp_caller, token_program
+        // For test: we just need 7 placeholder accounts with deterministic addresses
+        let remaining_accounts = vec![
+            AccountMeta::new(Pubkey::new_from_array([0xD1; 32]), false),        // 0: requirements (writable)
+            AccountMeta::new(Pubkey::new_from_array([0xD2; 32]), false),        // 1: escrow (writable)
+            AccountMeta::new(Pubkey::new_from_array([0xD3; 32]), false),        // 2: vault (writable)
+            AccountMeta::new(Pubkey::new_from_array([0xD4; 32]), false),        // 3: solver_token (writable)
+            AccountMeta::new_readonly(Pubkey::new_from_array([0xD5; 32]), false), // 4: gmp_config
+            AccountMeta::new_readonly(relay.pubkey(), true),      // 5: gmp_caller (signer)
+            AccountMeta::new_readonly(Pubkey::new_from_array([0xD6; 32]), false), // 6: token_program
+        ];
+
+        // Deliver FulfillmentProof message - should route to intent_escrow (mock_escrow_receiver)
+        let deliver_ix = create_deliver_message_with_routing_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),        // outflow_validator (should NOT be called)
+            mock_escrow_receiver_id(), // intent_escrow (should be called)
+            CHAIN_ID_MVM,
+            src_addr,
+            payload,
+            1, // nonce
+            remaining_accounts,
+        );
+
+        // The transaction should succeed (message delivered to mock_escrow_receiver)
+        send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
+
+        // Verify inbound nonce was updated (proves message was processed)
+        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
+        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], &program_id);
+        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
+        assert_eq!(nonce_account.last_nonce, 1, "Message should have been delivered");
+    }
+
+    /// 25. Test: FulfillmentProof fails with insufficient accounts
+    /// Verifies that FulfillmentProof routing fails when fewer than 7 remaining accounts provided.
+    /// Why: LzReceiveFulfillmentProof requires 7 accounts for token transfer. The GMP endpoint
+    /// must validate account count before attempting CPI.
+    #[tokio::test]
+    async fn test_fulfillment_proof_fails_with_insufficient_accounts() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund relay
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &relay.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize, add relay, set trusted remote
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        let src_addr = [0xAA; 32];
+        let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
+
+        // Set up routing config
+        let set_routing_ix = create_set_routing_ix(
+            program_id,
+            admin.pubkey(),
+            admin.pubkey(),
+            mock_receiver_id(),        // outflow_validator
+            mock_escrow_receiver_id(), // intent_escrow
+        );
+        send_tx(&mut context, &admin, &[set_routing_ix], &[]).await.unwrap();
+
+        // Create FulfillmentProof payload
+        let mut payload = vec![0x03];
+        payload.extend_from_slice(&[0xAA; 32]); // intent_id
+        payload.extend_from_slice(&[0xBB; 32]); // solver_addr
+        payload.extend_from_slice(&0u64.to_be_bytes()); // amount
+        payload.extend_from_slice(&0u64.to_be_bytes()); // timestamp
+
+        // Only provide 3 accounts instead of required 7
+        let insufficient_accounts = vec![
+            AccountMeta::new(Pubkey::new_from_array([0xE1; 32]), false),
+            AccountMeta::new(Pubkey::new_from_array([0xE2; 32]), false),
+            AccountMeta::new(Pubkey::new_from_array([0xE3; 32]), false),
+        ];
+
+        let deliver_ix = create_deliver_message_with_routing_ix(
+            program_id,
+            relay.pubkey(),
+            relay.pubkey(),
+            mock_receiver_id(),
+            mock_escrow_receiver_id(),
+            CHAIN_ID_MVM,
+            src_addr,
+            payload,
+            1,
+            insufficient_accounts,
+        );
+
+        // Should fail due to insufficient accounts
+        let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
+        assert!(result.is_err(), "Should fail with insufficient accounts for FulfillmentProof");
     }
 }

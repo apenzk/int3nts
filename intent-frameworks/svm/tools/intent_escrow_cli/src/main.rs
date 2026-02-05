@@ -97,6 +97,18 @@ fn run() -> Result<(), Box<dyn Error>> {
         return handle_gmp_set_trusted_remote(&client, &options, gmp_program_id);
     }
 
+    if command == "gmp-set-routing" {
+        let gmp_program_id = match options.get("gmp-program-id") {
+            Some(value) => parse_pubkey(value)?,
+            None => {
+                eprintln!("Error: --gmp-program-id is required for '{}'", command);
+                print_usage();
+                std::process::exit(1);
+            }
+        };
+        return handle_gmp_set_routing(&client, &options, gmp_program_id);
+    }
+
     // Outflow commands use --outflow-program-id
     if command == "outflow-init" {
         let outflow_program_id = match options.get("outflow-program-id") {
@@ -108,6 +120,19 @@ fn run() -> Result<(), Box<dyn Error>> {
             }
         };
         return handle_outflow_init(&client, &options, outflow_program_id);
+    }
+
+    // Escrow GMP config command
+    if command == "escrow-set-gmp-config" {
+        let program_id = match options.get("program-id") {
+            Some(value) => parse_pubkey(value)?,
+            None => {
+                eprintln!("Error: --program-id is required for '{}'", command);
+                print_usage();
+                std::process::exit(1);
+            }
+        };
+        return handle_escrow_set_gmp_config(&client, &options, program_id);
     }
 
     // All other commands require program-id
@@ -182,6 +207,19 @@ fn handle_create_escrow(
         .map(|value| parse_i64(value))
         .transpose()?;
 
+    // Optional GMP endpoint for sending EscrowConfirmation
+    let gmp_endpoint = options
+        .get("gmp-endpoint")
+        .map(|v| parse_pubkey(v))
+        .transpose()?;
+
+    // Optional hub chain ID (defaults to 1 for Movement hub)
+    let hub_chain_id: u32 = options
+        .get("hub-chain-id")
+        .map(|v| parse_u32(v))
+        .transpose()?
+        .unwrap_or(1);
+
     let create_ix = build_create_escrow_ix(
         program_id,
         intent_id,
@@ -191,6 +229,8 @@ fn handle_create_escrow(
         requester_token,
         solver,
         expiry,
+        gmp_endpoint,
+        hub_chain_id,
     )?;
 
     let signature = send_tx(client, &[create_ix], &payer, &[&requester])?;
@@ -297,6 +337,44 @@ fn handle_get_token_balance(
 }
 
 // ============================================================================
+// ESCROW GMP CONFIG COMMAND HANDLER
+// ============================================================================
+
+fn handle_escrow_set_gmp_config(
+    client: &RpcClient,
+    options: &HashMap<String, String>,
+    program_id: Pubkey,
+) -> Result<(), Box<dyn Error>> {
+    let payer = read_keypair(options, "payer")?;
+    let hub_chain_id = parse_u32(required_option(options, "hub-chain-id")?)?;
+    let trusted_hub_addr = parse_32_byte_hex(required_option(options, "hub-address")?)?;
+    let gmp_endpoint = parse_pubkey(required_option(options, "gmp-endpoint")?)?;
+
+    let (gmp_config_pda, _) =
+        Pubkey::find_program_address(&[seeds::GMP_CONFIG_SEED], &program_id);
+
+    let ix = Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(gmp_config_pda, false),
+            AccountMeta::new(payer.pubkey(), true), // admin
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        ],
+        data: EscrowInstruction::SetGmpConfig {
+            hub_chain_id,
+            trusted_hub_addr,
+            gmp_endpoint,
+        }
+        .try_to_vec()?,
+    };
+
+    let signature = send_tx(client, &[ix], &payer, &[])?;
+    println!("Escrow SetGmpConfig signature: {signature}");
+    println!("GMP Config PDA: {gmp_config_pda}");
+    Ok(())
+}
+
+// ============================================================================
 // GMP ENDPOINT COMMAND HANDLERS
 // ============================================================================
 
@@ -391,6 +469,40 @@ fn handle_gmp_set_trusted_remote(
     Ok(())
 }
 
+fn handle_gmp_set_routing(
+    client: &RpcClient,
+    options: &HashMap<String, String>,
+    gmp_program_id: Pubkey,
+) -> Result<(), Box<dyn Error>> {
+    let payer = read_keypair(options, "payer")?;
+    let outflow_validator = parse_pubkey(required_option(options, "outflow-validator")?)?;
+    let intent_escrow = parse_pubkey(required_option(options, "intent-escrow")?)?;
+
+    let (config_pda, _) =
+        Pubkey::find_program_address(&[gmp_seeds::CONFIG_SEED], &gmp_program_id);
+    let (routing_pda, _) =
+        Pubkey::find_program_address(&[gmp_seeds::ROUTING_SEED], &gmp_program_id);
+
+    let ix = Instruction {
+        program_id: gmp_program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(config_pda, false),
+            AccountMeta::new(routing_pda, false),
+            AccountMeta::new_readonly(payer.pubkey(), true), // admin
+            AccountMeta::new(payer.pubkey(), true),          // payer
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        ],
+        data: NativeGmpInstruction::SetRouting { outflow_validator, intent_escrow }.try_to_vec()?,
+    };
+
+    let signature = send_tx(client, &[ix], &payer, &[])?;
+    println!("GMP SetRouting signature: {signature}");
+    println!("Routing PDA: {routing_pda}");
+    println!("Outflow validator: {outflow_validator}");
+    println!("Intent escrow: {intent_escrow}");
+    Ok(())
+}
+
 // ============================================================================
 // OUTFLOW VALIDATOR COMMAND HANDLERS
 // ============================================================================
@@ -442,25 +554,59 @@ fn build_create_escrow_ix(
     requester_token: Pubkey,
     reserved_solver: Pubkey,
     expiry_duration: Option<i64>,
+    gmp_endpoint: Option<Pubkey>,
+    hub_chain_id: u32,
 ) -> Result<Instruction, Box<dyn Error>> {
     let (escrow_pda, _escrow_bump) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id], &program_id);
     let (vault_pda, _vault_bump) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &program_id);
 
+    let mut accounts = vec![
+        AccountMeta::new(escrow_pda, false),
+        AccountMeta::new(requester, true),
+        AccountMeta::new_readonly(token_mint, false),
+        AccountMeta::new(requester_token, false),
+        AccountMeta::new(vault_pda, false),
+        AccountMeta::new_readonly(reserved_solver, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        AccountMeta::new_readonly(sysvar::rent::id(), false),
+    ];
+
+    // Add requirements PDA (account 9) - always include for GMP validation
+    let (requirements_pda, _) =
+        Pubkey::find_program_address(&[seeds::REQUIREMENTS_SEED, &intent_id], &program_id);
+    accounts.push(AccountMeta::new(requirements_pda, false));
+
+    // If GMP endpoint is provided, add accounts for EscrowConfirmation
+    if let Some(gmp_program) = gmp_endpoint {
+        // Account 10: GMP config PDA (from intent_escrow)
+        let (gmp_config_pda, _) =
+            Pubkey::find_program_address(&[seeds::GMP_CONFIG_SEED], &program_id);
+        accounts.push(AccountMeta::new_readonly(gmp_config_pda, false));
+
+        // Account 11: GMP endpoint program
+        accounts.push(AccountMeta::new_readonly(gmp_program, false));
+
+        // Accounts 12+: GMP Send CPI accounts
+        // GMP Send expects: config, nonce_out, sender, payer, system_program
+        let (gmp_endpoint_config, _) =
+            Pubkey::find_program_address(&[b"config"], &gmp_program);
+        let chain_id_bytes = hub_chain_id.to_le_bytes();
+        let (gmp_nonce_out, _) =
+            Pubkey::find_program_address(&[b"nonce_out", &chain_id_bytes], &gmp_program);
+
+        accounts.push(AccountMeta::new_readonly(gmp_endpoint_config, false)); // GMP config
+        accounts.push(AccountMeta::new(gmp_nonce_out, false)); // GMP nonce (writable for init/update)
+        accounts.push(AccountMeta::new_readonly(requester, true)); // sender (requester must sign)
+        accounts.push(AccountMeta::new(requester, true)); // payer (requester pays for nonce account)
+        accounts.push(AccountMeta::new_readonly(solana_sdk::system_program::id(), false)); // system program
+    }
+
     Ok(Instruction {
         program_id,
-        accounts: vec![
-            AccountMeta::new(escrow_pda, false),
-            AccountMeta::new(requester, true),
-            AccountMeta::new_readonly(token_mint, false),
-            AccountMeta::new(requester_token, false),
-            AccountMeta::new(vault_pda, false),
-            AccountMeta::new_readonly(reserved_solver, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
-            AccountMeta::new_readonly(sysvar::rent::id(), false),
-        ],
+        accounts,
         data: EscrowInstruction::CreateEscrow {
             intent_id,
             amount,
@@ -578,9 +724,12 @@ Usage:
 
 Escrow Commands:
   initialize         --program-id <pubkey> --payer <keypair> --approver <pubkey> [--rpc <url>]
+  escrow-set-gmp-config  --program-id <pubkey> --payer <keypair> --hub-chain-id <u32>
+                         --hub-address <hex> --gmp-endpoint <pubkey> [--rpc <url>]
   create-escrow      --program-id <pubkey> --payer <keypair> --requester <keypair> --token-mint <pubkey>
                      --requester-token <pubkey> --solver <pubkey> --intent-id <hex> --amount <u64>
-                     [--expiry <i64>] [--rpc <url>]
+                     [--expiry <i64>] [--gmp-endpoint <pubkey>] [--hub-chain-id <u32>] [--rpc <url>]
+                     Note: --gmp-endpoint enables sending EscrowConfirmation back to hub
   claim              --program-id <pubkey> --payer <keypair> --solver-token <pubkey> --intent-id <hex>
                      --signature <hex> [--rpc <url>]
   cancel             --program-id <pubkey> --payer <keypair> --requester <keypair> --requester-token <pubkey>
@@ -593,6 +742,8 @@ GMP Endpoint Commands:
   gmp-add-relay      --gmp-program-id <pubkey> --payer <keypair> --relay <pubkey> [--rpc <url>]
   gmp-set-trusted-remote  --gmp-program-id <pubkey> --payer <keypair> --src-chain-id <u32>
                           --trusted-addr <hex> [--rpc <url>]
+  gmp-set-routing    --gmp-program-id <pubkey> --payer <keypair> --outflow-validator <pubkey>
+                     --intent-escrow <pubkey> [--rpc <url>]
 
 Outflow Validator Commands:
   outflow-init       --outflow-program-id <pubkey> --payer <keypair> --gmp-endpoint <pubkey>

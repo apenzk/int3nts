@@ -46,6 +46,9 @@ pub enum GmpError {
 
     #[error("Arithmetic overflow")]
     ArithmeticOverflow,
+
+    #[error("Invalid account count for operation")]
+    InvalidAccountCount,
 }
 
 impl From<GmpError> for ProgramError {

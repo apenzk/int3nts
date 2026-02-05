@@ -43,6 +43,35 @@ impl Processor {
                 msg!("Instruction: Initialize");
                 Self::process_initialize(program_id, accounts, approver)
             }
+            EscrowInstruction::LzReceive {
+                src_chain_id,
+                src_addr,
+                payload,
+            } => {
+                // Route based on message type (first byte of payload)
+                let message_type = payload.first().copied().unwrap_or(0);
+                msg!("Instruction: LzReceive (message_type=0x{:02x})", message_type);
+                match message_type {
+                    0x01 => Self::process_lz_receive_requirements(
+                        program_id,
+                        accounts,
+                        src_chain_id,
+                        src_addr,
+                        payload,
+                    ),
+                    0x03 => Self::process_lz_receive_fulfillment_proof(
+                        program_id,
+                        accounts,
+                        src_chain_id,
+                        src_addr,
+                        payload,
+                    ),
+                    _ => {
+                        msg!("Unknown GMP message type: 0x{:02x}", message_type);
+                        Err(EscrowError::InvalidGmpMessage.into())
+                    }
+                }
+            }
             EscrowInstruction::SetGmpConfig {
                 hub_chain_id,
                 trusted_hub_addr,
@@ -435,11 +464,11 @@ impl Processor {
                         let gmp_accounts: Vec<AccountInfo> = account_info_iter.cloned().collect();
 
                         // Build Send instruction for GMP endpoint
-                        // NativeGmpInstruction::Send variant index is 4
+                        // NativeGmpInstruction::Send variant index is 5 (0=Initialize, 1=AddRelay, 2=RemoveRelay, 3=SetTrustedRemote, 4=SetRouting, 5=Send)
                         // Format: variant(1) + dst_chain_id(4) + dst_addr(32) + src_addr(32) + payload_len(4) + payload
                         let mut send_data =
                             Vec::with_capacity(1 + 4 + 32 + 32 + 4 + payload.len());
-                        send_data.push(4); // Send variant index
+                        send_data.push(5); // Send variant index
                         send_data.extend_from_slice(&config.hub_chain_id.to_le_bytes());
                         send_data.extend_from_slice(&config.trusted_hub_addr);
                         send_data.extend_from_slice(&program_id.to_bytes()); // src_addr = escrow program ID

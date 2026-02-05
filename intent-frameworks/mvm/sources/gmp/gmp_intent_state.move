@@ -10,6 +10,7 @@
 module mvmt_intent::gmp_intent_state {
     use std::error;
     use std::signer;
+    use std::vector;
     use aptos_framework::event;
     use aptos_std::table::{Self, Table};
 
@@ -52,6 +53,8 @@ module mvmt_intent::gmp_intent_state {
         escrow_confirmed: bool,
         /// Whether fulfillment proof has been received
         fulfillment_proof_received: bool,
+        /// Solver's address on the connected chain (for FulfillmentProof routing)
+        solver_addr_connected_chain: vector<u8>,
     }
 
     /// Global storage for intent GMP states.
@@ -126,12 +129,14 @@ module mvmt_intent::gmp_intent_state {
     /// - `intent_id`: 32-byte intent identifier
     /// - `intent_addr`: Address of the intent object on hub chain
     /// - `dst_chain_id`: Destination chain for GMP messages
+    /// - `solver_addr_connected_chain`: Solver's address on the connected chain (for FulfillmentProof)
     public fun register_inflow_intent(
         intent_id: vector<u8>,
         intent_addr: address,
         dst_chain_id: u32,
+        solver_addr_connected_chain: vector<u8>,
     ) acquires GmpStateStore {
-        register_intent_internal(intent_id, intent_addr, dst_chain_id, FLOW_TYPE_INFLOW);
+        register_intent_internal(intent_id, intent_addr, dst_chain_id, FLOW_TYPE_INFLOW, solver_addr_connected_chain);
     }
 
     /// Register a new outflow intent for GMP state tracking.
@@ -146,7 +151,8 @@ module mvmt_intent::gmp_intent_state {
         intent_addr: address,
         dst_chain_id: u32,
     ) acquires GmpStateStore {
-        register_intent_internal(intent_id, intent_addr, dst_chain_id, FLOW_TYPE_OUTFLOW);
+        // Outflow doesn't need solver_addr_connected_chain for FulfillmentProof (it's inbound)
+        register_intent_internal(intent_id, intent_addr, dst_chain_id, FLOW_TYPE_OUTFLOW, vector::empty());
     }
 
     /// Internal function to register an intent.
@@ -155,6 +161,7 @@ module mvmt_intent::gmp_intent_state {
         intent_addr: address,
         dst_chain_id: u32,
         flow_type: u8,
+        solver_addr_connected_chain: vector<u8>,
     ) acquires GmpStateStore {
         let store = borrow_global_mut<GmpStateStore>(@mvmt_intent);
 
@@ -170,6 +177,7 @@ module mvmt_intent::gmp_intent_state {
             flow_type,
             escrow_confirmed: false,
             fulfillment_proof_received: false,
+            solver_addr_connected_chain,
         };
 
         table::add(&mut store.states, intent_id, state);
@@ -186,7 +194,7 @@ module mvmt_intent::gmp_intent_state {
         intent_id: vector<u8>,
         dst_chain_id: u32,
     ) acquires GmpStateStore {
-        register_intent_internal(intent_id, @0x0, dst_chain_id, FLOW_TYPE_INFLOW);
+        register_intent_internal(intent_id, @0x0, dst_chain_id, FLOW_TYPE_INFLOW, vector::empty());
     }
 
     /// Record escrow confirmation for an intent.
@@ -329,6 +337,28 @@ module mvmt_intent::gmp_intent_state {
 
         let state = table::borrow(&store.states, intent_id);
         state.intent_addr
+    }
+
+    /// Get the solver's connected chain address for an intent.
+    ///
+    /// # Arguments
+    /// - `intent_id`: 32-byte intent identifier
+    ///
+    /// # Returns
+    /// - Solver's address on the connected chain (32 bytes)
+    ///
+    /// # Aborts
+    /// - E_INTENT_NOT_FOUND if intent is not registered
+    public fun get_solver_addr_connected_chain(intent_id: vector<u8>): vector<u8> acquires GmpStateStore {
+        let store = borrow_global<GmpStateStore>(@mvmt_intent);
+
+        assert!(
+            table::contains(&store.states, intent_id),
+            error::not_found(E_INTENT_NOT_FOUND)
+        );
+
+        let state = table::borrow(&store.states, intent_id);
+        state.solver_addr_connected_chain
     }
 
     /// Check if an intent is an outflow intent.

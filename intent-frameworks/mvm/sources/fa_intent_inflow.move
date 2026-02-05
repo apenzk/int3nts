@@ -124,18 +124,17 @@ module mvmt_intent::fa_intent_inflow {
 
         // 7. For cross-chain intents, send FulfillmentProof to connected chain and clean up state
         if (is_cross_chain) {
-            // Get dst_chain_id from GMP state
+            // Get dst_chain_id and solver's connected chain address from GMP state
             let dst_chain_id = gmp_intent_state::get_dst_chain_id(intent_id_bytes);
-
-            // Convert solver address to 32-byte vector
-            let solver_addr_bytes = bcs::to_bytes(&solver_addr);
+            let solver_addr_connected_chain = gmp_intent_state::get_solver_addr_connected_chain(intent_id_bytes);
 
             // Send fulfillment proof to connected chain
+            // Uses the solver's connected chain address (not the hub address)
             let _nonce = intent_gmp_hub::send_fulfillment_proof(
                 solver,
                 dst_chain_id,
                 intent_id_bytes,
-                solver_addr_bytes,
+                solver_addr_connected_chain,
                 payment_amount,
                 timestamp::now_seconds(),
             );
@@ -251,16 +250,16 @@ module mvmt_intent::fa_intent_inflow {
         // Convert intent_id to bytes for GMP
         let intent_id_bytes = bcs::to_bytes(&intent_id);
 
-        // Register intent in GMP state tracking
-        // Cast offered_chain_id from u64 to u32 for GMP (chain IDs fit in u32)
-        let dst_chain_id = (offered_chain_id as u32);
-        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, dst_chain_id);
-
         // Send IntentRequirements to connected chain via GMP
         // Convert addresses to 32-byte vectors for GMP message
         let requester_addr_bytes = bcs::to_bytes(&requester_addr_connected_chain);
         let token_addr_bytes = bcs::to_bytes(&offered_metadata_addr);
         let solver_addr_bytes = bcs::to_bytes(&solver_addr_connected_chain);
+
+        // Register intent in GMP state tracking
+        // Cast offered_chain_id from u64 to u32 for GMP (chain IDs fit in u32)
+        let dst_chain_id = (offered_chain_id as u32);
+        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, dst_chain_id, solver_addr_bytes);
 
         let _nonce = intent_gmp_hub::send_intent_requirements(
             account,

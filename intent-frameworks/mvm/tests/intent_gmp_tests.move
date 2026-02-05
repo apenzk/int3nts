@@ -279,7 +279,7 @@ module mvmt_intent::intent_gmp_tests {
         gmp_intent_state::init_for_test(admin);
 
         // Register the intent so confirm_escrow can find it
-        gmp_intent_state::register_inflow_intent(test_intent_id(), @0x0, DUMMY_CHAIN_ID);
+        gmp_intent_state::register_inflow_intent(test_intent_id(), @0x0, DUMMY_CHAIN_ID, x"0000000000000000000000000000000000000000000000000000000000000000");
 
         // Set trusted remote
         let src_address = test_src_address();
@@ -319,7 +319,7 @@ module mvmt_intent::intent_gmp_tests {
         gmp_intent_state::init_for_test(admin);
 
         let intent_id = test_intent_id();
-        gmp_intent_state::register_inflow_intent(copy intent_id, @0x0, DUMMY_CHAIN_ID);
+        gmp_intent_state::register_inflow_intent(copy intent_id, @0x0, DUMMY_CHAIN_ID, x"0000000000000000000000000000000000000000000000000000000000000000");
 
         // Before: escrow is NOT confirmed
         assert!(!gmp_intent_state::is_escrow_confirmed(copy intent_id), 1);

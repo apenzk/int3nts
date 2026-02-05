@@ -44,6 +44,10 @@ if [ "$SKIP_BUILD" = "true" ]; then
 else
     log_and_echo " Step 1: Build bins and pre-pull docker images"
     log_and_echo "========================================"
+    # Delete existing binaries to ensure fresh build
+    rm -f "$PROJECT_ROOT/target/debug/trusted-gmp" "$PROJECT_ROOT/target/debug/solver" "$PROJECT_ROOT/target/debug/coordinator"
+    rm -f "$PROJECT_ROOT/target/release/trusted-gmp" "$PROJECT_ROOT/target/release/solver" "$PROJECT_ROOT/target/release/coordinator"
+
     pushd "$PROJECT_ROOT/coordinator" > /dev/null
     cargo build --bin coordinator 2>&1 | tail -5
     popd > /dev/null

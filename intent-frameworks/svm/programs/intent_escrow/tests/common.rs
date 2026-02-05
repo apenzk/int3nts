@@ -402,6 +402,72 @@ pub fn create_lz_receive_fulfillment_proof_ix(
     }
 }
 
+/// Helper: Build a generic LzReceive instruction for requirements (message type 0x01)
+/// This uses the generic LzReceive variant which routes based on message type.
+pub fn create_lz_receive_generic_requirements_ix(
+    program_id: Pubkey,
+    requirements_pda: Pubkey,
+    gmp_config_pda: Pubkey,
+    gmp_caller: Pubkey,
+    payer: Pubkey,
+    src_chain_id: u32,
+    src_addr: [u8; 32],
+    payload: Vec<u8>,
+) -> Instruction {
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(requirements_pda, false),
+            AccountMeta::new_readonly(gmp_config_pda, false),
+            AccountMeta::new_readonly(gmp_caller, true),
+            AccountMeta::new(payer, true),
+            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+        ],
+        data: EscrowInstruction::LzReceive {
+            src_chain_id,
+            src_addr,
+            payload,
+        }
+        .try_to_vec()
+        .unwrap(),
+    }
+}
+
+/// Helper: Build a generic LzReceive instruction for fulfillment proof (message type 0x03)
+/// This uses the generic LzReceive variant which routes based on message type.
+pub fn create_lz_receive_generic_fulfillment_ix(
+    program_id: Pubkey,
+    requirements_pda: Pubkey,
+    escrow_pda: Pubkey,
+    vault_pda: Pubkey,
+    solver_token: Pubkey,
+    gmp_config_pda: Pubkey,
+    gmp_caller: Pubkey,
+    src_chain_id: u32,
+    src_addr: [u8; 32],
+    payload: Vec<u8>,
+) -> Instruction {
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new(requirements_pda, false),
+            AccountMeta::new(escrow_pda, false),
+            AccountMeta::new(vault_pda, false),
+            AccountMeta::new(solver_token, false),
+            AccountMeta::new_readonly(gmp_config_pda, false),
+            AccountMeta::new_readonly(gmp_caller, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: EscrowInstruction::LzReceive {
+            src_chain_id,
+            src_addr,
+            payload,
+        }
+        .try_to_vec()
+        .unwrap(),
+    }
+}
+
 /// Helper: Read escrow state from account data
 pub fn read_escrow(account: &solana_sdk::account::Account) -> Escrow {
     Escrow::try_from_slice(&account.data).unwrap()

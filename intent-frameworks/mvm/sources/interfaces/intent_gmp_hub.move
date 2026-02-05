@@ -46,8 +46,10 @@ module mvmt_intent::intent_gmp_hub {
     struct GmpHubConfig has key {
         /// Admin address (can update trusted remotes)
         admin: address,
-        /// Maps chain_id -> trusted program address (32 bytes)
-        trusted_remotes: SimpleMap<u32, vector<u8>>,
+        /// Maps chain_id -> list of trusted program addresses (32 bytes each)
+        /// Changed from single address to vector to support multiple trusted sources per chain
+        /// (e.g., both outflow-validator and intent-escrow on SVM)
+        trusted_remotes: SimpleMap<u32, vector<vector<u8>>>,
     }
 
     // ============================================================================
@@ -123,6 +125,7 @@ module mvmt_intent::intent_gmp_hub {
     }
 
     /// Set a trusted remote program address for a destination chain.
+    /// This replaces all existing trusted addresses for the chain with a single address.
     /// Only admin can call this.
     public entry fun set_trusted_remote(
         admin: &signer,
@@ -137,12 +140,50 @@ module mvmt_intent::intent_gmp_hub {
             error::permission_denied(E_NOT_INITIALIZED)
         );
 
+        // Create a new vector with the single address
+        let addrs = vector::empty<vector<u8>>();
+        vector::push_back(&mut addrs, remote_addr);
+
         // Add or update the trusted remote
         if (simple_map::contains_key(&config.trusted_remotes, &chain_id)) {
-            *simple_map::borrow_mut(&mut config.trusted_remotes, &chain_id) = remote_addr;
+            *simple_map::borrow_mut(&mut config.trusted_remotes, &chain_id) = addrs;
         } else {
-            simple_map::add(&mut config.trusted_remotes, chain_id, remote_addr);
+            simple_map::add(&mut config.trusted_remotes, chain_id, addrs);
         }
+    }
+
+    /// Add a trusted remote program address for a chain without replacing existing ones.
+    /// Only admin can call this.
+    ///
+    /// # Arguments
+    /// - `admin`: The admin signer
+    /// - `chain_id`: Chain endpoint ID (e.g., Solana = 30168)
+    /// - `remote_addr`: Trusted remote address (32 bytes) to add
+    public entry fun add_trusted_remote(
+        admin: &signer,
+        chain_id: u32,
+        remote_addr: vector<u8>,
+    ) acquires GmpHubConfig {
+        let admin_addr = signer::address_of(admin);
+        let config = borrow_global_mut<GmpHubConfig>(@mvmt_intent);
+
+        assert!(
+            admin_addr == config.admin,
+            error::permission_denied(E_NOT_INITIALIZED)
+        );
+
+        // Add to existing set or create new entry
+        if (simple_map::contains_key(&config.trusted_remotes, &chain_id)) {
+            let addrs = simple_map::borrow_mut(&mut config.trusted_remotes, &chain_id);
+            // Only add if not already present
+            if (!is_in_address_list(addrs, &remote_addr)) {
+                vector::push_back(addrs, remote_addr);
+            };
+        } else {
+            let addrs = vector::empty<vector<u8>>();
+            vector::push_back(&mut addrs, remote_addr);
+            simple_map::add(&mut config.trusted_remotes, chain_id, addrs);
+        };
     }
 
     /// Check if the GMP hub is initialized on this chain.
@@ -162,11 +203,25 @@ module mvmt_intent::intent_gmp_hub {
             return false
         };
 
-        let trusted_addr = simple_map::borrow(&config.trusted_remotes, &src_chain_id);
-        trusted_addr == src_address
+        let trusted_addrs = simple_map::borrow(&config.trusted_remotes, &src_chain_id);
+        is_in_address_list(trusted_addrs, src_address)
+    }
+
+    /// Check if an address (32 bytes) is in the trusted addresses list.
+    fun is_in_address_list(addrs: &vector<vector<u8>>, addr: &vector<u8>): bool {
+        let len = vector::length(addrs);
+        let i = 0;
+        while (i < len) {
+            if (vector::borrow(addrs, i) == addr) {
+                return true
+            };
+            i = i + 1;
+        };
+        false
     }
 
     /// Get the trusted remote address for a destination chain.
+    /// Returns the first trusted address (used for outbound messages).
     /// Aborts if not found.
     fun get_trusted_remote(dst_chain_id: u32): vector<u8> acquires GmpHubConfig {
         let config = borrow_global<GmpHubConfig>(@mvmt_intent);
@@ -176,7 +231,9 @@ module mvmt_intent::intent_gmp_hub {
             error::not_found(E_TRUSTED_REMOTE_NOT_FOUND)
         );
 
-        *simple_map::borrow(&config.trusted_remotes, &dst_chain_id)
+        let addrs = simple_map::borrow(&config.trusted_remotes, &dst_chain_id);
+        // Return first address for outbound messages
+        *vector::borrow(addrs, 0)
     }
 
     // ============================================================================
@@ -450,10 +507,12 @@ module mvmt_intent::intent_gmp_hub {
             });
         };
 
-        // Add trusted remote
+        // Add trusted remote as a vector with single address
         let config = borrow_global_mut<GmpHubConfig>(@mvmt_intent);
         if (!simple_map::contains_key(&config.trusted_remotes, &dst_chain_id)) {
-            simple_map::add(&mut config.trusted_remotes, dst_chain_id, trusted_remote);
+            let addrs = vector::empty<vector<u8>>();
+            vector::push_back(&mut addrs, trusted_remote);
+            simple_map::add(&mut config.trusted_remotes, dst_chain_id, addrs);
         };
     }
 }

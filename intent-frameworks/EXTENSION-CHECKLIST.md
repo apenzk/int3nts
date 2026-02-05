@@ -307,22 +307,28 @@ SVM: `intent-frameworks/svm/programs/native-gmp-endpoint/tests/endpoint_tests.rs
 | 3 | test_initialize_instruction_serialization | N/A | ⚠️ | ✅ |
 | 4 | test_add_relay_instruction_serialization | N/A | ⚠️ | ✅ |
 | 5 | test_set_trusted_remote_instruction_serialization | N/A | ⚠️ | ✅ |
-| 6 | test_config_account_serialization | N/A | ⚠️ | ✅ |
-| 7 | test_relay_account_serialization | N/A | ⚠️ | ✅ |
-| 8 | test_trusted_remote_account_serialization | N/A | ⚠️ | ✅ |
-| 9 | test_outbound_nonce_account | N/A | ⚠️ | ✅ |
-| 10 | test_inbound_nonce_account_replay_detection | N/A | ⚠️ | ✅ |
-| 11 | test_error_conversion | N/A | ⚠️ | ✅ |
-| 12 | test_error_codes_unique | N/A | ⚠️ | ✅ |
-| 13 | test_send_updates_nonce_state | ✅ | ⚠️ | ✅ |
-| 14 | test_deliver_message_calls_receiver | ✅ | ⚠️ | ✅ |
-| 15 | test_deliver_message_rejects_replay | ✅ | ⚠️ | ✅ |
-| 16 | test_deliver_message_rejects_unauthorized_relay | ✅ | ⚠️ | ✅ |
-| 17 | test_deliver_message_authorized_relay | ✅ | ⚠️ | ✅ |
-| 18 | test_deliver_message_rejects_untrusted_remote | ✅ | ⚠️ | ✅ |
-| 19 | test_deliver_message_rejects_no_trusted_remote | ✅ | ⚠️ | ✅ |
-| 20 | test_set_trusted_remote_unauthorized | ✅ | ⚠️ | ✅ |
-| 21 | test_deliver_message_rejects_lower_nonce | ✅ | ⚠️ | ✅ |
+| 6 | test_set_routing_instruction_serialization | N/A | ⚠️ | ✅ |
+| 7 | test_routing_config_serialization | N/A | ⚠️ | ✅ |
+| 8 | test_config_account_serialization | N/A | ⚠️ | ✅ |
+| 9 | test_relay_account_serialization | N/A | ⚠️ | ✅ |
+| 10 | test_trusted_remote_account_serialization | N/A | ⚠️ | ✅ |
+| 11 | test_outbound_nonce_account | N/A | ⚠️ | ✅ |
+| 12 | test_inbound_nonce_account_replay_detection | N/A | ⚠️ | ✅ |
+| 13 | test_error_conversion | N/A | ⚠️ | ✅ |
+| 14 | test_error_codes_unique | N/A | ⚠️ | ✅ |
+| 15 | test_send_updates_nonce_state | ✅ | ⚠️ | ✅ |
+| 16 | test_deliver_message_calls_receiver | ✅ | ⚠️ | ✅ |
+| 17 | test_deliver_message_rejects_replay | ✅ | ⚠️ | ✅ |
+| 18 | test_deliver_message_rejects_unauthorized_relay | ✅ | ⚠️ | ✅ |
+| 19 | test_deliver_message_authorized_relay | ✅ | ⚠️ | ✅ |
+| 20 | test_deliver_message_rejects_untrusted_remote | ✅ | ⚠️ | ✅ |
+| 21 | test_deliver_message_rejects_no_trusted_remote | ✅ | ⚠️ | ✅ |
+| 22 | test_set_trusted_remote_unauthorized | ✅ | ⚠️ | ✅ |
+| 23 | test_deliver_message_rejects_lower_nonce | ✅ | ⚠️ | ✅ |
+| 24 | test_deliver_intent_requirements_stores_in_both_handlers | ✅ | N/A | N/A |
+| 25 | test_deliver_intent_requirements_fails_without_outflow_init | ✅ | N/A | N/A |
+| 26 | test_fulfillment_proof_routes_to_intent_escrow | N/A | N/A | ✅ |
+| 27 | test_fulfillment_proof_fails_with_insufficient_accounts | N/A | N/A | ✅ |
 
 ---
 
@@ -357,3 +363,6 @@ SVM: `intent-frameworks/svm/programs/intent_escrow/tests/gmp.rs`
 | 17 | test_release_escrow_rejects_without_fulfillment | ✅ | ⚠️ | N/A |
 | 18 | test_release_escrow_rejects_unauthorized_solver | ✅ | ⚠️ | N/A |
 | 19 | test_release_escrow_rejects_double_release | ✅ | ⚠️ | N/A |
+| 20 | test_generic_lz_receive_routes_requirements | N/A | N/A | ✅ |
+| 21 | test_generic_lz_receive_routes_fulfillment_proof | N/A | N/A | ✅ |
+| 22 | test_generic_lz_receive_rejects_unknown_message_type | N/A | N/A | ✅ |

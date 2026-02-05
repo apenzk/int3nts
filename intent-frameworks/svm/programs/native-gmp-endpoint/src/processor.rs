@@ -17,8 +17,13 @@ use crate::error::GmpError;
 use crate::instruction::NativeGmpInstruction;
 use crate::state::{
     seeds, ConfigAccount, InboundNonceAccount, OutboundNonceAccount, RelayAccount,
-    TrustedRemoteAccount,
+    RoutingConfig, TrustedRemoteAccount,
 };
+
+/// Message type constants (matches MVM's gmp_common)
+const MESSAGE_TYPE_INTENT_REQUIREMENTS: u8 = 0x01;
+const MESSAGE_TYPE_ESCROW_CONFIRMATION: u8 = 0x02;
+const MESSAGE_TYPE_FULFILLMENT_PROOF: u8 = 0x03;
 
 /// Program entrypoint processor.
 pub fn process_instruction(
@@ -48,6 +53,13 @@ pub fn process_instruction(
         } => {
             msg!("Instruction: SetTrustedRemote");
             process_set_trusted_remote(program_id, accounts, src_chain_id, trusted_addr)
+        }
+        NativeGmpInstruction::SetRouting {
+            outflow_validator,
+            intent_escrow,
+        } => {
+            msg!("Instruction: SetRouting");
+            process_set_routing(program_id, accounts, outflow_validator, intent_escrow)
         }
         NativeGmpInstruction::Send {
             dst_chain_id,
@@ -317,6 +329,79 @@ fn process_set_trusted_remote(
     Ok(())
 }
 
+/// Set routing configuration for message delivery.
+/// Configures which programs handle different message types (like MVM's route_message).
+fn process_set_routing(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    outflow_validator: Pubkey,
+    intent_escrow: Pubkey,
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    let config_account = next_account_info(account_info_iter)?;
+    let routing_account = next_account_info(account_info_iter)?;
+    let admin = next_account_info(account_info_iter)?;
+    let payer = next_account_info(account_info_iter)?;
+    let system_program = next_account_info(account_info_iter)?;
+
+    // Verify admin is signer
+    if !admin.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // Load and verify config
+    let config = ConfigAccount::try_from_slice(&config_account.data.borrow())
+        .map_err(|_| GmpError::AccountNotInitialized)?;
+
+    if config.admin != *admin.key {
+        return Err(GmpError::UnauthorizedAdmin.into());
+    }
+
+    // Derive routing PDA
+    let (routing_pda, routing_bump) =
+        Pubkey::find_program_address(&[seeds::ROUTING_SEED], program_id);
+
+    if routing_account.key != &routing_pda {
+        return Err(GmpError::InvalidPda.into());
+    }
+
+    // Create or update routing account
+    if routing_account.data_is_empty() {
+        let rent = Rent::get()?;
+        let space = RoutingConfig::SIZE;
+        let lamports = rent.minimum_balance(space);
+
+        invoke_signed(
+            &system_instruction::create_account(
+                payer.key,
+                routing_account.key,
+                lamports,
+                space as u64,
+                program_id,
+            ),
+            &[payer.clone(), routing_account.clone(), system_program.clone()],
+            &[&[seeds::ROUTING_SEED, &[routing_bump]]],
+        )?;
+
+        let routing = RoutingConfig::new(outflow_validator, intent_escrow, routing_bump);
+        routing.serialize(&mut &mut routing_account.data.borrow_mut()[..])?;
+    } else {
+        // Update existing routing config
+        let mut routing = RoutingConfig::try_from_slice(&routing_account.data.borrow())
+            .map_err(|_| GmpError::InvalidDiscriminator)?;
+        routing.outflow_validator = outflow_validator;
+        routing.intent_escrow = intent_escrow;
+        routing.serialize(&mut &mut routing_account.data.borrow_mut()[..])?;
+    }
+
+    msg!(
+        "Routing configured: outflow_validator={}, intent_escrow={}",
+        outflow_validator,
+        intent_escrow
+    );
+    Ok(())
+}
+
 /// Process Send instruction - emit event for relay to pick up.
 fn process_send(
     program_id: &Pubkey,
@@ -401,7 +486,24 @@ fn process_send(
     Ok(())
 }
 
-/// Process DeliverMessage instruction - verify relay and CPI to destination.
+/// Process DeliverMessage instruction - verify relay and route to destination(s).
+///
+/// Message routing (similar to MVM's route_message):
+/// - IntentRequirements (0x01): Routes to BOTH outflow_validator AND intent_escrow (if configured)
+/// - Other message types: Single destination (destination_program account)
+///
+/// Account layout:
+/// 0. Config account (PDA: ["config"])
+/// 1. Relay account (PDA: ["relay", relay_pubkey])
+/// 2. Trusted remote account (PDA: ["trusted_remote", src_chain_id])
+/// 3. Inbound nonce account (PDA: ["nonce_in", src_chain_id])
+/// 4. Relay signer
+/// 5. Payer
+/// 6. System program
+/// 7. Routing config account (PDA: ["routing"]) - can be any account if routing not configured
+/// 8. Destination program 1 (outflow_validator for routing, or single destination)
+/// 9. Destination program 2 (intent_escrow for routing, or any account if not routing)
+/// 10+. Remaining accounts passed to destination(s)
 fn process_deliver_message(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -417,8 +519,10 @@ fn process_deliver_message(
     let nonce_account = next_account_info(account_info_iter)?;
     let relay_signer = next_account_info(account_info_iter)?;
     let payer = next_account_info(account_info_iter)?;
-    let destination_program = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
+    let routing_account = next_account_info(account_info_iter)?;
+    let destination_program_1 = next_account_info(account_info_iter)?;
+    let destination_program_2 = next_account_info(account_info_iter)?;
 
     // Verify relay is signer
     if !relay_signer.is_signer {
@@ -520,27 +624,21 @@ fn process_deliver_message(
         nonce_data.serialize(&mut &mut nonce_account.data.borrow_mut()[..])?;
     }
 
-    // Log the delivery
-    msg!(
-        "MessageDelivered: src_chain_id={}, src_addr={}, nonce={}, payload_len={}, destination={}",
-        src_chain_id,
-        hex_encode(&src_addr),
-        nonce,
-        payload.len(),
-        destination_program.key
-    );
+    // Check message type and determine routing
+    let message_type = payload.first().copied().unwrap_or(0);
 
-    // CPI to destination program's lz_receive instruction
-    // The destination program expects an LzReceive instruction with:
-    // - src_chain_id, src_addr, payload
-    //
-    // We construct the instruction data for the destination's LzReceive variant.
-    // This assumes the destination uses a compatible instruction format.
-    //
-    // The remaining accounts (after system_program) are passed to the destination.
+    // Check if routing config exists and is valid
+    let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], program_id);
+    let routing_config = if routing_account.key == &routing_pda && !routing_account.data_is_empty() {
+        RoutingConfig::try_from_slice(&routing_account.data.borrow()).ok()
+    } else {
+        None
+    };
+
+    // Collect remaining accounts for CPI
     let remaining_accounts: Vec<AccountInfo> = account_info_iter.cloned().collect();
 
-    // Build LzReceive instruction data for destination
+    // Build LzReceive instruction data
     // Format: [variant_index(1 byte)] + [src_chain_id(4)] + [src_addr(32)] + [payload_len(4)] + [payload]
     let mut lz_receive_data = Vec::with_capacity(1 + 4 + 32 + 4 + payload.len());
     lz_receive_data.push(1); // LzReceive variant index (assuming 0=Initialize, 1=LzReceive)
@@ -549,9 +647,122 @@ fn process_deliver_message(
     lz_receive_data.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     lz_receive_data.extend_from_slice(&payload);
 
+    // Route based on message type and configuration
+    match (message_type, &routing_config) {
+        (MESSAGE_TYPE_INTENT_REQUIREMENTS, Some(routing)) if routing.has_outflow_validator() && routing.has_intent_escrow() => {
+            // IntentRequirements with routing: deliver to BOTH outflow_validator AND intent_escrow
+            // Verify destination programs match routing config
+            if destination_program_1.key != &routing.outflow_validator {
+                msg!(
+                    "Destination program 1 mismatch: expected={}, got={}",
+                    routing.outflow_validator,
+                    destination_program_1.key
+                );
+                return Err(GmpError::InvalidPda.into());
+            }
+            if destination_program_2.key != &routing.intent_escrow {
+                msg!(
+                    "Destination program 2 mismatch: expected={}, got={}",
+                    routing.intent_escrow,
+                    destination_program_2.key
+                );
+                return Err(GmpError::InvalidPda.into());
+            }
+
+            msg!(
+                "MessageDelivered (routed): src_chain_id={}, src_addr={}, nonce={}, payload_len={}, dest1={}, dest2={}",
+                src_chain_id,
+                hex_encode(&src_addr),
+                nonce,
+                payload.len(),
+                destination_program_1.key,
+                destination_program_2.key
+            );
+
+            // Remaining accounts layout (set up by relay):
+            // Indices 0-4: outflow_validator's LzReceive accounts (requirements, config, authority, payer, system)
+            // Indices 5-9: intent_escrow's LzReceive accounts (requirements, gmp_config, authority, payer, system)
+            if remaining_accounts.len() < 10 {
+                msg!("Insufficient remaining accounts for multi-destination routing: need 10, got {}", remaining_accounts.len());
+                return Err(GmpError::InvalidAccountCount.into());
+            }
+
+            // CPI to outflow_validator (destination_program_1) with its accounts (indices 0-4)
+            let outflow_accounts = &remaining_accounts[0..5];
+            msg!("Routing to outflow_validator: {} with {} accounts", destination_program_1.key, outflow_accounts.len());
+            invoke_lz_receive(destination_program_1.key, &lz_receive_data, outflow_accounts)?;
+
+            // CPI to intent_escrow (destination_program_2) with its accounts (indices 5-9)
+            let escrow_accounts = &remaining_accounts[5..10];
+            msg!("Routing to intent_escrow: {} with {} accounts", destination_program_2.key, escrow_accounts.len());
+            invoke_lz_receive(destination_program_2.key, &lz_receive_data, escrow_accounts)?;
+
+            msg!("Multi-destination routing succeeded");
+        }
+        (MESSAGE_TYPE_FULFILLMENT_PROOF, Some(routing)) if routing.has_intent_escrow() => {
+            // FulfillmentProof with routing: deliver to intent_escrow only (not outflow_validator)
+            // Verify destination_program_2 matches routing config
+            if destination_program_2.key != &routing.intent_escrow {
+                msg!(
+                    "Destination program 2 mismatch for FulfillmentProof: expected={}, got={}",
+                    routing.intent_escrow,
+                    destination_program_2.key
+                );
+                return Err(GmpError::InvalidPda.into());
+            }
+
+            msg!(
+                "MessageDelivered (FulfillmentProof to escrow): src_chain_id={}, src_addr={}, nonce={}, payload_len={}, dest={}",
+                src_chain_id,
+                hex_encode(&src_addr),
+                nonce,
+                payload.len(),
+                destination_program_2.key
+            );
+
+            // Remaining accounts are for intent_escrow's LzReceiveFulfillmentProof:
+            // requirements(w), escrow(w), vault(w), solver_token(w), gmp_config(r), gmp_caller(s), token_program
+            if remaining_accounts.len() < 7 {
+                msg!("Insufficient remaining accounts for FulfillmentProof routing: need 7, got {}", remaining_accounts.len());
+                return Err(GmpError::InvalidAccountCount.into());
+            }
+
+            // CPI to intent_escrow (destination_program_2) with all remaining accounts
+            msg!("Routing FulfillmentProof to intent_escrow: {} with {} accounts", destination_program_2.key, remaining_accounts.len());
+            invoke_lz_receive(destination_program_2.key, &lz_receive_data, &remaining_accounts)?;
+
+            msg!("FulfillmentProof routing to intent_escrow succeeded");
+        }
+        _ => {
+            // Single destination: use destination_program_1 account
+            msg!(
+                "MessageDelivered: src_chain_id={}, src_addr={}, nonce={}, payload_len={}, destination={}",
+                src_chain_id,
+                hex_encode(&src_addr),
+                nonce,
+                payload.len(),
+                destination_program_1.key
+            );
+
+            // Pass remaining_accounts directly - destination program is invoked, not passed as account
+            invoke_lz_receive(destination_program_1.key, &lz_receive_data, &remaining_accounts)?;
+
+            msg!("CPI to destination program succeeded");
+        }
+    }
+
+    Ok(())
+}
+
+/// Helper to invoke LzReceive on a destination program.
+fn invoke_lz_receive(
+    program_id: &Pubkey,
+    lz_receive_data: &[u8],
+    accounts: &[AccountInfo],
+) -> ProgramResult {
     // Build account metas for CPI
-    let mut account_metas = Vec::with_capacity(remaining_accounts.len());
-    for acc in &remaining_accounts {
+    let mut account_metas = Vec::with_capacity(accounts.len());
+    for acc in accounts {
         if acc.is_writable {
             account_metas.push(solana_program::instruction::AccountMeta::new(*acc.key, acc.is_signer));
         } else {
@@ -560,17 +771,13 @@ fn process_deliver_message(
     }
 
     let cpi_instruction = solana_program::instruction::Instruction {
-        program_id: *destination_program.key,
+        program_id: *program_id,
         accounts: account_metas,
-        data: lz_receive_data,
+        data: lz_receive_data.to_vec(),
     };
 
     // Invoke the destination program
-    // Note: We don't use invoke_signed here because we're not signing as a PDA
-    solana_program::program::invoke(&cpi_instruction, &remaining_accounts)?;
-
-    msg!("CPI to destination program succeeded");
-    Ok(())
+    solana_program::program::invoke(&cpi_instruction, accounts)
 }
 
 /// Simple hex encoding for logging (no dependencies).

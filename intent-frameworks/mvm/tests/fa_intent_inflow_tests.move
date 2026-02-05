@@ -321,7 +321,7 @@ module mvmt_intent::fa_intent_inflow_tests {
 
         // Register intent in GMP state (normally done by create_inflow_intent, but we bypassed it)
         let intent_id_bytes = std::bcs::to_bytes(&dummy_intent_id);
-        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, 2); // dst_chain_id = 2
+        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, 2, x"0000000000000000000000000000000000000000000000000000000000000000"); // dst_chain_id = 2, dummy solver addr
 
         // Simulate escrow confirmation from connected chain (required for fulfillment)
         gmp_intent_state::confirm_escrow(intent_id_bytes);
@@ -551,7 +551,7 @@ module mvmt_intent::fa_intent_inflow_tests {
 
         // Register intent in GMP state and confirm escrow (normally done by create_inflow_intent)
         let intent_id_bytes = std::bcs::to_bytes(&dummy_intent_id);
-        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, 2);
+        gmp_intent_state::register_inflow_intent(intent_id_bytes, intent_addr, 2, x"0000000000000000000000000000000000000000000000000000000000000000");
         gmp_intent_state::confirm_escrow(intent_id_bytes);
 
         // Convert address to object reference

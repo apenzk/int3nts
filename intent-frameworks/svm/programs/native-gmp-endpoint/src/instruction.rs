@@ -56,6 +56,25 @@ pub enum NativeGmpInstruction {
         trusted_addr: [u8; 32],
     },
 
+    /// Set routing configuration for message delivery.
+    ///
+    /// Configures which programs handle different message types.
+    /// Similar to MVM's route_message, this enables routing IntentRequirements
+    /// to both outflow-validator AND intent-escrow for inflow support.
+    ///
+    /// Accounts expected:
+    /// 0. `[]` Config account (PDA: ["config"])
+    /// 1. `[writable]` Routing config account (PDA: ["routing"])
+    /// 2. `[signer]` Admin
+    /// 3. `[signer]` Payer
+    /// 4. `[]` System program
+    SetRouting {
+        /// Outflow validator program ID (zero = not configured)
+        outflow_validator: Pubkey,
+        /// Intent escrow program ID (zero = not configured)
+        intent_escrow: Pubkey,
+    },
+
     /// Send a cross-chain message.
     ///
     /// Emits a `MessageSent` event that the GMP relay monitors.
@@ -87,6 +106,10 @@ pub enum NativeGmpInstruction {
     /// on the source chain. The relay decodes the event, constructs this
     /// instruction, and submits it to the destination chain.
     ///
+    /// Message routing (similar to MVM's route_message):
+    /// - IntentRequirements (0x01): Routes to BOTH outflow_validator AND intent_escrow (if routing configured)
+    /// - Other message types: Single destination (destination_program_1 account)
+    ///
     /// Accounts expected:
     /// 0. `[]` Config account (PDA: ["config"])
     /// 1. `[]` Relay account (PDA: ["relay", relay_pubkey])
@@ -94,9 +117,11 @@ pub enum NativeGmpInstruction {
     /// 3. `[writable]` Inbound nonce account (PDA: ["nonce_in", src_chain_id])
     /// 4. `[signer]` Relay (must be authorized)
     /// 5. `[signer]` Payer (for nonce account creation if needed)
-    /// 6. `[]` Destination program
-    /// 7. `[]` System program
-    /// 8+. Additional accounts required by destination program
+    /// 6. `[]` System program
+    /// 7. `[]` Routing config account (PDA: ["routing"]) - pass any account if routing not configured
+    /// 8. `[]` Destination program 1 (outflow_validator for routing, or single destination)
+    /// 9. `[]` Destination program 2 (intent_escrow for routing, or any account if not routing)
+    /// 10+. Additional accounts required by destination program(s)
     DeliverMessage {
         /// Source chain endpoint ID
         src_chain_id: u32,

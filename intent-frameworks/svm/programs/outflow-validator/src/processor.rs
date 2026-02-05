@@ -369,10 +369,10 @@ fn process_fulfill_intent(
     let payload = fulfillment_proof.encode();
 
     // Build Send instruction for GMP endpoint
-    // NativeGmpInstruction::Send variant index is 4 (0=Initialize, 1=AddRelay, 2=RemoveRelay, 3=SetTrustedRemote, 4=Send)
+    // NativeGmpInstruction::Send variant index is 5 (0=Initialize, 1=AddRelay, 2=RemoveRelay, 3=SetTrustedRemote, 4=SetRouting, 5=Send)
     // Format: variant(1) + dst_chain_id(4) + dst_addr(32) + src_addr(32) + payload_len(4) + payload
     let mut send_data = Vec::with_capacity(1 + 4 + 32 + 32 + 4 + payload.len());
-    send_data.push(4); // Send variant index
+    send_data.push(5); // Send variant index
     send_data.extend_from_slice(&config.hub_chain_id.to_le_bytes());
     send_data.extend_from_slice(&config.trusted_hub_addr);
     send_data.extend_from_slice(&program_id.to_bytes()); // src_addr = outflow-validator program ID

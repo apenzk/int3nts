@@ -82,8 +82,10 @@ module mvmt_intent::native_gmp_endpoint {
         authorized_relays: vector<address>,
         /// Admin address (can configure trusted remotes)
         admin: address,
-        /// Trusted remote addresses per source chain (chain_id -> trusted_addr)
-        trusted_remotes: Table<u32, vector<u8>>,
+        /// Trusted remote addresses per source chain (chain_id -> list of trusted 32-byte addresses)
+        /// Changed from single address to vector to support multiple trusted sources per chain
+        /// (e.g., both outflow-validator and intent-escrow on SVM)
+        trusted_remotes: Table<u32, vector<vector<u8>>>,
         /// Inbound nonces per source chain (chain_id -> last_nonce)
         inbound_nonces: Table<u32, u64>,
     }
@@ -144,10 +146,10 @@ module mvmt_intent::native_gmp_endpoint {
         let config = borrow_global_mut<EndpointConfig>(@mvmt_intent);
         assert!(is_authorized_relay(&config.authorized_relays, relay_addr), E_UNAUTHORIZED_RELAY);
 
-        // Verify trusted remote: source address must be trusted for this chain
+        // Verify trusted remote: source address must be in the list of trusted addresses for this chain
         assert!(table::contains(&config.trusted_remotes, src_chain_id), E_NO_TRUSTED_REMOTE);
-        let trusted_addr = table::borrow(&config.trusted_remotes, src_chain_id);
-        assert!(&src_addr == trusted_addr, E_UNTRUSTED_REMOTE);
+        let trusted_addrs = table::borrow(&config.trusted_remotes, src_chain_id);
+        assert!(is_trusted_address(trusted_addrs, &src_addr), E_UNTRUSTED_REMOTE);
 
         // Replay protection: check and update inbound nonce
         if (table::contains(&config.inbound_nonces, src_chain_id)) {
@@ -244,6 +246,7 @@ module mvmt_intent::native_gmp_endpoint {
     // ============================================================================
 
     /// Set a trusted remote address for a source chain.
+    /// This replaces all existing trusted addresses for the chain with a single address.
     /// Only the admin can call this function.
     ///
     /// # Arguments
@@ -261,11 +264,47 @@ module mvmt_intent::native_gmp_endpoint {
         // Verify caller is admin
         assert!(config.admin == admin_addr, E_UNAUTHORIZED_ADMIN);
 
-        // Store or update trusted remote
+        // Create a new vector with the single address
+        let addrs = vector::empty<vector<u8>>();
+        vector::push_back(&mut addrs, trusted_addr);
+
+        // Store or update trusted remotes
         if (table::contains(&config.trusted_remotes, src_chain_id)) {
-            *table::borrow_mut(&mut config.trusted_remotes, src_chain_id) = trusted_addr;
+            *table::borrow_mut(&mut config.trusted_remotes, src_chain_id) = addrs;
         } else {
-            table::add(&mut config.trusted_remotes, src_chain_id, trusted_addr);
+            table::add(&mut config.trusted_remotes, src_chain_id, addrs);
+        };
+    }
+
+    /// Add a trusted remote address for a source chain without replacing existing ones.
+    /// Only the admin can call this function.
+    ///
+    /// # Arguments
+    /// - `admin`: The admin signer
+    /// - `src_chain_id`: Source chain endpoint ID (e.g., Solana = 30168)
+    /// - `trusted_addr`: Trusted source address (32 bytes) to add
+    public entry fun add_trusted_remote(
+        admin: &signer,
+        src_chain_id: u32,
+        trusted_addr: vector<u8>,
+    ) acquires EndpointConfig {
+        let admin_addr = signer::address_of(admin);
+        let config = borrow_global_mut<EndpointConfig>(@mvmt_intent);
+
+        // Verify caller is admin
+        assert!(config.admin == admin_addr, E_UNAUTHORIZED_ADMIN);
+
+        // Add to existing set or create new entry
+        if (table::contains(&config.trusted_remotes, src_chain_id)) {
+            let addrs = table::borrow_mut(&mut config.trusted_remotes, src_chain_id);
+            // Only add if not already present
+            if (!is_trusted_address(addrs, &trusted_addr)) {
+                vector::push_back(addrs, trusted_addr);
+            };
+        } else {
+            let addrs = vector::empty<vector<u8>>();
+            vector::push_back(&mut addrs, trusted_addr);
+            table::add(&mut config.trusted_remotes, src_chain_id, addrs);
         };
     }
 
@@ -316,14 +355,14 @@ module mvmt_intent::native_gmp_endpoint {
     }
 
     #[view]
-    /// Get the trusted remote address for a source chain.
+    /// Get the trusted remote addresses for a source chain.
     /// Returns empty vector if no trusted remote is configured.
-    public fun get_trusted_remote(src_chain_id: u32): vector<u8> acquires EndpointConfig {
+    public fun get_trusted_remote(src_chain_id: u32): vector<vector<u8>> acquires EndpointConfig {
         let config = borrow_global<EndpointConfig>(@mvmt_intent);
         if (table::contains(&config.trusted_remotes, src_chain_id)) {
             *table::borrow(&config.trusted_remotes, src_chain_id)
         } else {
-            vector::empty()
+            vector::empty<vector<u8>>()
         }
     }
 
@@ -356,6 +395,19 @@ module mvmt_intent::native_gmp_endpoint {
         let i = 0;
         while (i < len) {
             if (*vector::borrow(relays, i) == addr) {
+                return true
+            };
+            i = i + 1;
+        };
+        false
+    }
+
+    /// Check if an address (32 bytes) is in the trusted addresses list.
+    fun is_trusted_address(addrs: &vector<vector<u8>>, addr: &vector<u8>): bool {
+        let len = vector::length(addrs);
+        let i = 0;
+        while (i < len) {
+            if (vector::borrow(addrs, i) == addr) {
                 return true
             };
             i = i + 1;

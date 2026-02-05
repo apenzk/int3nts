@@ -42,7 +42,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
     /// so that EscrowConfirmation delivery can call confirm_escrow.
     fun register_test_escrow_intent() {
         let intent_id = create_test_32bytes(0x11);
-        gmp_intent_state::register_inflow_intent(intent_id, @0x0, SOLANA_CHAIN_ID);
+        gmp_intent_state::register_inflow_intent(intent_id, @0x0, SOLANA_CHAIN_ID, x"0000000000000000000000000000000000000000000000000000000000000000");
     }
 
     fun create_test_trusted_remote(): vector<u8> {
@@ -117,44 +117,52 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // 5. test_set_trusted_remote_instruction_serialization - N/A
     //    Why: SVM tests Borsh encode/decode roundtrip for SetTrustedRemote instruction, but
     //    Move function calls are typed by the VM - no manual instruction serialization needed.
+    //
+    // 6. test_set_routing_instruction_serialization - N/A
+    //    Why: SVM tests Borsh encode/decode roundtrip for SetRouting instruction, but Move
+    //    function calls are typed by the VM - no manual instruction serialization needed.
+    //
+    // 7. test_routing_config_serialization - N/A
+    //    Why: SVM tests Borsh serialization of RoutingConfig state, but Move stores state
+    //    in typed resources - the VM handles serialization automatically.
 
     // ============================================================================
     // STATE SERIALIZATION TESTS (N/A for Move)
     // ============================================================================
     //
-    // 6. test_config_account_serialization - N/A
+    // 8. test_config_account_serialization - N/A
     //    Why: SVM tests Borsh serialization of ConfigAccount state, but Move stores state
     //    in typed resources - the VM handles serialization automatically.
     //
-    // 7. test_relay_account_serialization - N/A
+    // 9. test_relay_account_serialization - N/A
     //    Why: SVM tests Borsh serialization of RelayAccount state, but Move stores state
     //    in typed resources - the VM handles serialization automatically.
     //
-    // 8. test_trusted_remote_account_serialization - N/A
-    //    Why: SVM tests Borsh serialization of TrustedRemoteAccount state, but Move stores
-    //    state in typed resources - the VM handles serialization automatically.
+    // 10. test_trusted_remote_account_serialization - N/A
+    //     Why: SVM tests Borsh serialization of TrustedRemoteAccount state, but Move stores
+    //     state in typed resources - the VM handles serialization automatically.
 
     // ============================================================================
     // NONCE TRACKING TESTS (N/A for Move)
     // ============================================================================
     //
-    // 9. test_outbound_nonce_account - N/A
-    //    Why: SVM unit tests OutboundNonceAccount::increment() in isolation, but Move
-    //    doesn't support isolated struct method tests - covered by integration tests 13-15.
+    // 11. test_outbound_nonce_account - N/A
+    //     Why: SVM unit tests OutboundNonceAccount::increment() in isolation, but Move
+    //     doesn't support isolated struct method tests - covered by integration tests 15-17.
     //
-    // 10. test_inbound_nonce_account_replay_detection - N/A
+    // 12. test_inbound_nonce_account_replay_detection - N/A
     //     Why: SVM unit tests InboundNonceAccount::is_replay() in isolation, but Move
-    //     doesn't support isolated struct method tests - covered by integration tests 15, 21.
+    //     doesn't support isolated struct method tests - covered by integration tests 17, 23.
 
     // ============================================================================
     // ERROR CONVERSION TESTS (N/A for Move)
     // ============================================================================
     //
-    // 11. test_error_conversion - N/A
+    // 13. test_error_conversion - N/A
     //     Why: SVM tests GmpError to ProgramError conversion, but Move errors are abort
     //     codes directly - no conversion layer exists.
     //
-    // 12. test_error_codes_unique - N/A
+    // 14. test_error_codes_unique - N/A
     //     Why: SVM verifies all error variants have unique codes, but Move abort codes are
     //     module constants - uniqueness is enforced at compile time.
 
@@ -162,7 +170,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // INTEGRATION TESTS
     // ============================================================================
 
-    // 13. Test: Send updates nonce state
+    // 15. Test: Send updates nonce state
     // Verifies that gmp_sender::lz_send increments the outbound nonce correctly for each message.
     // Why: Nonce tracking prevents message reordering and provides unique message IDs.
     #[test]
@@ -209,7 +217,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         assert!(after_second == 3, 5);
     }
 
-    // 14. Test: DeliverMessage calls receiver
+    // 16. Test: DeliverMessage calls receiver
     // Verifies that deliver_message routes to the destination module handler after validation.
     // Why: Message routing is the core delivery mechanism; messages must reach their handlers.
     #[test]
@@ -227,8 +235,9 @@ module mvmt_intent::native_gmp_endpoint_tests {
 
         // Verify trusted remote is set
         assert!(native_gmp_endpoint::has_trusted_remote(SOLANA_CHAIN_ID), 1);
-        let stored_addr = native_gmp_endpoint::get_trusted_remote(SOLANA_CHAIN_ID);
-        assert!(stored_addr == trusted_addr, 2);
+        let stored_addrs = native_gmp_endpoint::get_trusted_remote(SOLANA_CHAIN_ID);
+        assert!(std::vector::length(&stored_addrs) == 1, 2);
+        assert!(*std::vector::borrow(&stored_addrs, 0) == trusted_addr, 3);
 
         // Create valid payload (EscrowConfirmation)
         let payload = create_test_payload_escrow_confirmation();
@@ -244,10 +253,10 @@ module mvmt_intent::native_gmp_endpoint_tests {
 
         // Verify inbound nonce was updated
         let inbound_nonce = native_gmp_endpoint::get_inbound_nonce(SOLANA_CHAIN_ID);
-        assert!(inbound_nonce == 1, 3);
+        assert!(inbound_nonce == 1, 4);
     }
 
-    // 15. Test: DeliverMessage rejects replay
+    // 17. Test: DeliverMessage rejects replay
     // Verifies that delivering a message with an already-used nonce fails.
     // Why: Replay protection prevents attackers from re-submitting old messages.
     #[test]
@@ -289,7 +298,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // RELAY AUTHORIZATION TESTS
     // ============================================================================
 
-    // 16. Test: Unauthorized relay rejected
+    // 18. Test: Unauthorized relay rejected
     // Verifies that only authorized relays can deliver messages.
     // Why: Relay authorization prevents malicious actors from injecting fake messages.
     #[test]
@@ -318,7 +327,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    // 17. Test: Authorized relay succeeds
+    // 19. Test: Authorized relay succeeds
     // Verifies that explicitly authorized relays can deliver messages.
     // Why: The relay authorization system must correctly grant access to approved relays.
     #[test]
@@ -355,7 +364,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // TRUSTED REMOTE VERIFICATION TESTS
     // ============================================================================
 
-    // 18. Test: Untrusted remote address rejected
+    // 20. Test: Untrusted remote address rejected
     // Verifies that messages from non-trusted source addresses are rejected.
     // Why: Trusted remote verification prevents spoofed cross-chain messages.
     #[test]
@@ -391,7 +400,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    // 19. Test: No trusted remote configured
+    // 21. Test: No trusted remote configured
     // Verifies that messages fail when no trusted remote is configured for the source chain.
     // Why: Missing configuration must be caught early to prevent security holes.
     #[test]
@@ -417,7 +426,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
     // ADMIN FUNCTION TESTS
     // ============================================================================
 
-    // 20. Test: Non-admin cannot set trusted remote
+    // 22. Test: Non-admin cannot set trusted remote
     // Verifies that only the admin can configure trusted remote addresses.
     // Why: Admin-only access prevents unauthorized trust configuration changes.
     #[test]
@@ -436,7 +445,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         );
     }
 
-    // 21. Test: Lower nonce rejected
+    // 23. Test: Lower nonce rejected
     // Verifies that delivering a message with a nonce lower than the last processed fails.
     // Why: Strictly increasing nonces prevent out-of-order message processing attacks.
     #[test]
@@ -524,7 +533,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         gmp_common::encode_intent_requirements(&msg)
     }
 
-    // 22. Test: IntentRequirements delivery stores requirements in both handlers
+    // 24. Test: IntentRequirements delivery stores requirements in both handlers
     // Verifies the full connected chain delivery flow:
     //   deliver_message → route_message → outflow_validator_impl + inflow_escrow_gmp
     // Then asserts has_requirements() returns true on both stores.
@@ -552,7 +561,7 @@ module mvmt_intent::native_gmp_endpoint_tests {
         assert!(inflow_escrow_gmp::has_requirements(intent_id), 2);
     }
 
-    // 23. Test: IntentRequirements delivery aborts if outflow_validator_impl not initialized
+    // 25. Test: IntentRequirements delivery aborts if outflow_validator_impl not initialized
     // Verifies that deliver_message aborts when a required handler module is not initialized.
     // Why: All modules in the routing path must be initialized before message delivery.
     // A missing config must cause a hard failure, not silent data loss.

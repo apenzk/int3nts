@@ -240,10 +240,65 @@ cargo run -p intent_escrow_cli --quiet -- \
         log_and_echo "❌ PANIC: outflow-validator initialization failed"
         exit 1
     fi
+
+    # ============================================================================
+    # Configure intent_escrow GMP config (for receiving IntentRequirements)
+    # ============================================================================
+    log ""
+    log " Configuring intent_escrow GMP config..."
+    set +e
+    escrow_gmp_success=0
+    for attempt in 1 2 3; do
+        nix develop "$PROJECT_ROOT/nix" -c bash -c "
+cd \"$PROGRAM_DIR\"
+cargo run -p intent_escrow_cli --quiet -- \
+    escrow-set-gmp-config \
+    --program-id \"$SVM_PROGRAM_ID\" \
+    --payer \"$SVM_PAYER_KEYPAIR\" \
+    --hub-chain-id 1 \
+    --hub-address \"$HUB_ADDR_PADDED\" \
+    --gmp-endpoint \"$SVM_GMP_ENDPOINT_ID\" \
+    --rpc \"$SVM_RPC_URL\"
+" >> "$LOG_FILE" 2>&1
+        status=$?
+        if [ "$status" -eq 0 ]; then
+            log "   ✅ intent_escrow GMP config set"
+            escrow_gmp_success=1
+            break
+        fi
+        log "   Escrow GMP config failed (attempt $attempt), retrying..."
+        sleep 2
+    done
+    set -e
+
+    if [ "$escrow_gmp_success" -ne 1 ]; then
+        log_and_echo "❌ PANIC: intent_escrow GMP config failed"
+        exit 1
+    fi
 else
     log_and_echo "❌ PANIC: HUB_MODULE_ADDR not found, cannot initialize outflow-validator"
     exit 1
 fi
+
+# ============================================================================
+# Configure GMP routing for multi-destination delivery (like MVM's route_message)
+# ============================================================================
+log ""
+log " Configuring GMP routing (outflow-validator + intent-escrow)..."
+nix develop "$PROJECT_ROOT/nix" -c bash -c "
+cd \"$PROGRAM_DIR\"
+cargo run -p intent_escrow_cli --quiet -- \
+    gmp-set-routing \
+    --gmp-program-id \"$SVM_GMP_ENDPOINT_ID\" \
+    --payer \"$SVM_PAYER_KEYPAIR\" \
+    --outflow-validator \"$SVM_OUTFLOW_VALIDATOR_ID\" \
+    --intent-escrow \"$SVM_PROGRAM_ID\" \
+    --rpc \"$SVM_RPC_URL\"
+" >> "$LOG_FILE" 2>&1 || {
+    log_and_echo "❌ PANIC: Failed to set GMP routing"
+    exit 1
+}
+log "   ✅ GMP routing configured for IntentRequirements multi-destination delivery"
 
 # ============================================================================
 # Configure hub chain to trust SVM connected chain
@@ -252,14 +307,16 @@ log ""
 log " Configuring hub chain to trust SVM connected chain..."
 
 if [ -n "$HUB_MODULE_ADDR" ]; then
-    # Convert SVM outflow-validator pubkey to 32-byte hex for GMP addressing.
-    # FulfillmentProof messages from SVM have src_addr = outflow-validator program ID.
-    # Both transport layer (native_gmp_endpoint) and application layer (intent_gmp_hub)
-    # must trust the same address.
+    # Convert SVM program addresses to 32-byte hex for GMP addressing.
+    # Different message types come from different programs:
+    # - FulfillmentProof (outflow): src_addr = outflow-validator program ID
+    # - EscrowConfirmation (inflow): src_addr = intent-escrow program ID
     SVM_OUTFLOW_ADDR_HEX=$(svm_pubkey_to_hex "$SVM_OUTFLOW_VALIDATOR_ID")
+    SVM_ESCROW_ADDR_HEX=$(svm_pubkey_to_hex "$SVM_PROGRAM_ID")
     log "   SVM outflow-validator address (hex): $SVM_OUTFLOW_ADDR_HEX"
+    log "   SVM intent-escrow address (hex): $SVM_ESCROW_ADDR_HEX"
 
-    # Set trusted remote on hub's native_gmp_endpoint (transport layer)
+    # Set trusted remote on hub's native_gmp_endpoint for outflow-validator (FulfillmentProof)
     if aptos move run --profile intent-account-chain1 --assume-yes \
         --function-id ${HUB_MODULE_ADDR}::native_gmp_endpoint::set_trusted_remote \
         --args u32:$SVM_CHAIN_ID "hex:${SVM_OUTFLOW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
@@ -268,13 +325,41 @@ if [ -n "$HUB_MODULE_ADDR" ]; then
         log "   ️ Could not set trusted remote on hub (ignoring)"
     fi
 
-    # Set trusted remote on hub's intent_gmp_hub (application layer)
+    # Set trusted remote on hub's intent_gmp_hub for outflow-validator (FulfillmentProof)
     if aptos move run --profile intent-account-chain1 --assume-yes \
         --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::set_trusted_remote \
         --args u32:$SVM_CHAIN_ID "hex:${SVM_OUTFLOW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
         log "   ✅ Hub intent_gmp_hub now trusts SVM outflow-validator"
     else
         log "   ️ Could not set trusted remote in intent_gmp_hub (ignoring)"
+    fi
+
+    # Also trust intent-escrow for EscrowConfirmation messages (inflow flow)
+    # Note: MVM may only support one trusted remote per chain, so this might override the previous.
+    # If so, we may need to update the MVM to support multiple trusted remotes or use a single
+    # "SVM gateway" address that aggregates all SVM program messages.
+    if aptos move run --profile intent-account-chain1 --assume-yes \
+        --function-id ${HUB_MODULE_ADDR}::native_gmp_endpoint::add_trusted_remote \
+        --args u32:$SVM_CHAIN_ID "hex:${SVM_ESCROW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
+        log "   ✅ Hub native_gmp_endpoint now also trusts SVM intent-escrow"
+    elif aptos move run --profile intent-account-chain1 --assume-yes \
+        --function-id ${HUB_MODULE_ADDR}::native_gmp_endpoint::set_trusted_remote \
+        --args u32:$SVM_CHAIN_ID "hex:${SVM_ESCROW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
+        log "   ️ Hub native_gmp_endpoint: set_trusted_remote to intent-escrow (replaces outflow)"
+    else
+        log "   ️ Could not add intent-escrow to trusted remotes (ignoring)"
+    fi
+
+    if aptos move run --profile intent-account-chain1 --assume-yes \
+        --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::add_trusted_remote \
+        --args u32:$SVM_CHAIN_ID "hex:${SVM_ESCROW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
+        log "   ✅ Hub intent_gmp_hub now also trusts SVM intent-escrow"
+    elif aptos move run --profile intent-account-chain1 --assume-yes \
+        --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::set_trusted_remote \
+        --args u32:$SVM_CHAIN_ID "hex:${SVM_ESCROW_ADDR_HEX}" >> "$LOG_FILE" 2>&1; then
+        log "   ️ Hub intent_gmp_hub: set_trusted_remote to intent-escrow (replaces outflow)"
+    else
+        log "   ️ Could not add intent-escrow to trusted remotes (ignoring)"
     fi
 else
     log "   ️ WARNING: HUB_MODULE_ADDR not found, skipping hub trust config for SVM"
