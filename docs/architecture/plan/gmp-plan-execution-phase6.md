@@ -43,14 +43,14 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
 
 | Module | Purpose | Used By |
 |--------|---------|---------|
-| `inflow_escrow_gmp` | Receives requirements, creates escrow, sends confirmation | MVM as connected chain (inflow) |
-| `outflow_validator` | Receives requirements, validates solver fulfillment, sends proof | MVM as connected chain (outflow) |
+| `inflow_escrow_gmp` | Receives requirements from hub, creates escrow on connected chain, sends confirmation to hub | MVM as connected chain (inflow) |
+| `intent_outflow_validator` | Receives requirements from hub, validates solver fulfillment on connected chain, sends proof to hub | MVM as connected chain (outflow) |
 
 ### Tasks
 
 - [ ] **Commit 1: Audit MVM connected chain modules**
   - Review `inflow_escrow_gmp.move` dependencies
-  - Review `outflow_validator.move` dependencies
+  - Review `intent_outflow_validator.move` dependencies (currently named `outflow_validator.move`)
   - Identify shared code with hub modules
   - Document minimal required dependencies
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
@@ -58,37 +58,44 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
 - [ ] **Commit 2: Split MVM package into three separate packages (REQUIRED)**
   - **NOTE: This is now REQUIRED, not optional.** The combined MVM package is 108KB, exceeding Movement's 60KB single-transaction limit. While `--chunked-publish` works as a temporary workaround, splitting into separate packages is the proper solution.
   - Create three packages with the following dependency structure:
-    - `mvmt_intent_gmp` is the base layer (deploy first)
-    - `mvmt_intent_hub` and `mvmt_intent_connected` both depend on `mvmt_intent_gmp`
-  - **`mvmt_intent_gmp`** - GMP infrastructure (deploy to both hub and connected chains)
+    - `intent_gmp` is the base layer (deploy first)
+    - `intent_hub` and `intent_connected` both depend on `intent_gmp`
+  - **`intent_gmp`** - GMP infrastructure (deploy to both hub and connected chains)
     - gmp_common (message encoding/decoding)
     - gmp_sender (outbound message sending)
     - native_gmp_endpoint (inbound message receiving — currently shared, see note below)
-  - **`mvmt_intent_hub`** - Hub-only modules (deploy to hub chain only)
+  - **`intent_hub`** - Hub-only modules (deploy to hub chain only)
     - fa_intent, fa_intent_with_oracle
     - fa_intent_inflow, fa_intent_outflow
     - intent_gmp_hub, solver_registry, intent_registry
     - Hub-specific native_gmp_endpoint route_message (routes to intent_gmp_hub only)
-    - Depends on: mvmt_intent_gmp
-  - **`mvmt_intent_connected`** - Connected chain modules (deploy to connected MVM chains only)
-    - outflow_validator, outflow_validator_impl
+    - Depends on: intent_gmp
+  - **`intent_connected`** - Connected chain modules (deploy to connected MVM chains only)
+    - intent_outflow_validator, intent_outflow_validator_impl
     - inflow_escrow_gmp
-    - Connected-chain-specific native_gmp_endpoint route_message (routes to outflow_validator_impl + inflow_escrow_gmp)
-    - Depends on: mvmt_intent_gmp
+    - Connected-chain-specific native_gmp_endpoint route_message (routes to intent_outflow_validator_impl + inflow_escrow_gmp)
+    - Depends on: intent_gmp
   - **NOTE:** Once split, remove the `is_initialized()` conditional routing in `native_gmp_endpoint::route_message`. Currently the hub and connected chain share one `native_gmp_endpoint` with conditional checks because both deploy the same code. After the split, each package gets its own routing with unconditional calls — no fallbacks, missing init is a hard failure.
   - Update deployment scripts:
-    - Hub chain: deploy mvmt_intent_gmp first, then mvmt_intent_hub
-    - Connected chain: deploy mvmt_intent_gmp first, then mvmt_intent_connected
+    - Hub chain: deploy intent_gmp first, then intent_hub
+    - Connected chain: deploy intent_gmp first, then intent_connected
   - Verify each package is under 60KB limit
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 3: Split SVM programs into separate packages**
-  - Similar to MVM, split SVM into separate deployable units:
-  - **`native-gmp-endpoint`** - GMP infrastructure only (already exists as separate program)
-  - **`intent-escrow`** - Inflow escrow program (user locks tokens, receives GMP requirements)
-  - **`outflow-validator`** - Outflow validation program (already exists as separate program)
-  - Verify each program can be deployed independently
-  - Update deployment scripts to deploy programs in correct order
+- [ ] **Commit 3: Rename SVM and EVM programs for consistency**
+  - **SVM renames:**
+    - Rename `native-gmp-endpoint` → `intent-gmp`
+    - Rename `outflow-validator` → `intent-outflow-validator`
+    - Final SVM structure (2 logical groups, 3 programs):
+      - **`intent-gmp`** - GMP infrastructure
+      - **`intent-connected`** = `intent-escrow` + `intent-outflow-validator` (2 programs, logically grouped)
+    - Note: Unlike Move, Solana cannot bundle programs into packages - each is deployed separately
+  - **EVM renames:**
+    - Rename `NativeGmpEndpoint.sol` → `IntentGmp.sol`
+    - Rename `OutflowValidator.sol` → `IntentOutflowValidator.sol`
+  - Update all references in code, scripts, and tests
+  - Verify each program/contract can be deployed independently
+  - Document deployment order in scripts
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
 - [ ] **Commit 4: Minimize connected chain module dependencies**
@@ -113,12 +120,14 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
 **Files to analyze:**
 
 - `intent-frameworks/mvm/sources/gmp/inflow_escrow_gmp.move`
-- `intent-frameworks/mvm/sources/gmp/outflow_validator.move`
+- `intent-frameworks/mvm/sources/gmp/outflow_validator.move` (rename to `intent_outflow_validator.move`)
 - `intent-frameworks/mvm/sources/gmp/gmp_common.move`
 - `intent-frameworks/mvm/sources/gmp/native_gmp_endpoint.move`
-- `intent-frameworks/svm/programs/native-gmp-endpoint/`
+- `intent-frameworks/svm/programs/native-gmp-endpoint/` (rename to `intent-gmp/`)
 - `intent-frameworks/svm/programs/intent_escrow/`
-- `intent-frameworks/svm/programs/outflow-validator/`
+- `intent-frameworks/svm/programs/outflow-validator/` (rename to `intent-outflow-validator/`)
+- `intent-frameworks/evm/contracts/gmp/NativeGmpEndpoint.sol` (rename to `IntentGmp.sol`)
+- `intent-frameworks/evm/contracts/OutflowValidator.sol` (rename to `IntentOutflowValidator.sol`)
 
 ---
 
@@ -308,8 +317,8 @@ The SVM Docker build is slow. Research bottlenecks and identify optimization opp
 ## Exit Criteria
 
 - [ ] Part A: MVM and SVM connected chain modules audited and documented
-- [ ] Part A: MVM package split into 3 packages (gmp, hub, connected)
-- [ ] Part A: SVM programs verified as independently deployable
+- [ ] Part A: MVM package split into 3 packages (intent_gmp, intent_hub, intent_connected)
+- [ ] Part A: SVM program structure documented (gmp + connected logical grouping)
 - [ ] Part A: Recommendation on package structure documented
 - [ ] Part B: All three approaches analyzed with security implications
 - [ ] Part B: Prototype of conditional oracle approach (test branch)

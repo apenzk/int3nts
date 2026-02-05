@@ -71,7 +71,7 @@
 
 **Tasks:**
 
-- [ ] Update SVM deployment scripts to include GMP programs (OutflowValidator, intent_escrow with GMP config)
+- [ ] Update SVM deployment scripts to include GMP programs (intent-outflow-validator, intent-escrow with GMP config)
 - [ ] Update MVM deployment scripts to include GMP modules
 - [ ] Add trusted remote configuration to deployment scripts
 - [ ] Deploy updated contracts/modules to testnets
@@ -83,7 +83,7 @@
 ./testing-infra/run-all-unit-tests.sh
 
 # Verify deployments
-solana program show <OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
+solana program show <INTENT_OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
 ```
 
 > ⚠️ **CI e2e tests must pass before proceeding to Commit 4.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
