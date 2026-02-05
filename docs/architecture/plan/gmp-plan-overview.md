@@ -52,7 +52,7 @@ Add **on-chain validation + GMP messaging** for cross-chain communication:
 See execution phase documents for detailed implementation plan:
 
 - [Phase 1: Research & Design](gmp-plan-execution-phase1.md) ✅ **COMPLETE** - Interfaces, message schemas, wire format spec
-- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) 🔄 **IN PROGRESS** - Build both chains together for real cross-chain testing
+- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) ✅ **COMPLETE** - Build both chains together for real cross-chain testing
 - [Phase 3: EVM Expansion](gmp-plan-execution-phase3.md) (1-2 days) - Add EVM connected chain support
 - [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (1 day) - Add GMP message tracking to coordinator
 - [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (1-2 days) - Frontend, solver SDK, fee analysis, final cleanup

@@ -108,14 +108,14 @@
 
 **Files:**
 
-- `trusted-gmp/src/native_gmp_relay.rs`
-- `trusted-gmp/tests/relay_evm_tests.rs`
+- `trusted-gmp/src/native_gmp_relay.rs` (existing - already supports MVM and SVM)
+- `trusted-gmp/src/evm_client.rs` (existing)
 
 **Tasks:**
 
-- [ ] Add EVM event parsing for `MessageSent`
+- [ ] Add EVM event parsing for `MessageSent` in native_gmp_relay
 - [ ] Add EVM message delivery via `deliverMessage()`
-- [ ] Support EVM RPC configuration
+- [ ] Add EVM chain config to relay (similar to MVM/SVM)
 - [ ] Test event parsing for EVM chains
 - [ ] Test message delivery to EVM contracts
 
@@ -134,12 +134,12 @@
 **Files:**
 
 - `testing-infra/ci-e2e/e2e-tests-evm/` (update existing)
-- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
+- `testing-infra/ci-e2e/chain-connected-evm/` (update deployment for GMP)
 
 **Tasks:**
 
 - [ ] Update test environment to use native GMP endpoints on MVM and EVM
-- [ ] Start native GMP relay in background during tests
+- [ ] Start native GMP relay in background during tests (already done via `start_trusted_gmp`)
 - [ ] Update outflow test to use GMP flow (solver calls validation contract)
 - [ ] Verify GMP messages are sent and received correctly
 - [ ] Ensure existing test assertions still pass
@@ -149,8 +149,8 @@
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 
-# Run GMP e2e test
-./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-outflow.sh
+# Run EVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-evm/run-tests-outflow.sh
 ```
 
 > ⚠️ **CI e2e tests must pass before proceeding to Commit 6.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
@@ -162,7 +162,7 @@
 **Files:**
 
 - `testing-infra/ci-e2e/e2e-tests-evm/` (update existing)
-- `testing-infra/ci-e2e/e2e-tests-mvm/` (update existing)
+- `testing-infra/ci-e2e/chain-connected-evm/` (update deployment for GMP)
 
 **Tasks:**
 
@@ -177,8 +177,8 @@
 ```bash
 ./testing-infra/run-all-unit-tests.sh
 
-# Run GMP e2e test
-./testing-infra/ci-e2e/e2e-tests-gmp/mvm-evm-inflow.sh
+# Run EVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-evm/run-tests-inflow.sh
 ```
 
 > ⚠️ **CI e2e tests must pass before proceeding to Commit 7.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.

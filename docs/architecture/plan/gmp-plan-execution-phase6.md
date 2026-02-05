@@ -82,13 +82,22 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
   - Verify each package is under 60KB limit
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 3: Minimize connected chain module dependencies**
-  - Remove any hub-only dependencies from connected chain modules
+- [ ] **Commit 3: Split SVM programs into separate packages**
+  - Similar to MVM, split SVM into separate deployable units:
+  - **`native-gmp-endpoint`** - GMP infrastructure only (already exists as separate program)
+  - **`intent-escrow`** - Inflow escrow program (user locks tokens, receives GMP requirements)
+  - **`outflow-validator`** - Outflow validation program (already exists as separate program)
+  - Verify each program can be deployed independently
+  - Update deployment scripts to deploy programs in correct order
+  - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
+
+- [ ] **Commit 4: Minimize connected chain module dependencies**
+  - Remove any hub-only dependencies from connected chain modules (MVM + SVM)
   - Ensure connected chain modules only import what they need
   - Update tests to verify isolation
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 4: Auto-release escrow on FulfillmentProof receipt (GMP flow)**
+- [ ] **Commit 5: Auto-release escrow on FulfillmentProof receipt (GMP flow)**
   - Currently escrow release is two steps: (1) `receive_fulfillment_proof` marks `fulfilled=true`, (2) solver calls `release_escrow` separately
   - Collapse into single step: `receive_fulfillment_proof` also transfers tokens to the solver
   - The solver address is already in the GMP FulfillmentProof payload — no extra data needed
@@ -107,6 +116,9 @@ Minimize and isolate the MVM connected chain contracts (used when MVM acts as a 
 - `intent-frameworks/mvm/sources/gmp/outflow_validator.move`
 - `intent-frameworks/mvm/sources/gmp/gmp_common.move`
 - `intent-frameworks/mvm/sources/gmp/native_gmp_endpoint.move`
+- `intent-frameworks/svm/programs/native-gmp-endpoint/`
+- `intent-frameworks/svm/programs/intent_escrow/`
+- `intent-frameworks/svm/programs/outflow-validator/`
 
 ---
 
@@ -200,21 +212,21 @@ struct GenericLimitOrder<V: store + drop> has store, drop {
 
 ### Tasks
 
-- [ ] **Commit 5: Document current intent type differences**
+- [ ] **Commit 6: Document current intent type differences**
   - List all fields in `FungibleAssetLimitOrder`
   - List all fields in `OracleGuardedLimitOrder`
   - Identify overlap and differences
   - Document security implications of each field
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 6: Prototype conditional oracle approach**
+- [ ] **Commit 7: Prototype conditional oracle approach**
   - Create test branch with `oracle_required` flag
   - Implement conditional check in finish functions
   - Write security tests (attempt bypass without flag)
   - Document findings
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 7: Write recommendation document**
+- [ ] **Commit 8: Write recommendation document**
   - Compare approaches with concrete code examples
   - Security analysis of each approach
   - Recommendation with rationale
@@ -245,14 +257,14 @@ The SVM Docker build is slow. Research bottlenecks and identify optimization opp
 
 ### Tasks
 
-- [ ] **Commit 8: Profile SVM Docker build and document bottlenecks**
+- [ ] **Commit 9: Profile SVM Docker build and document bottlenecks**
   - Time each phase (Solana install, platform-tools download, compilation)
   - Measure download sizes
   - Identify what's re-downloaded vs cached
   - Document findings
   - Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
 
-- [ ] **Commit 9: Implement SVM build optimizations**
+- [ ] **Commit 10: Implement SVM build optimizations**
   - Based on profiling results, implement improvements:
     - Pre-built Docker image with Solana CLI?
     - Volume mounts for caches (~/.cache/solana, cargo registry)?
@@ -280,10 +292,10 @@ The SVM Docker build is slow. Research bottlenecks and identify optimization opp
 
 ## Deliverables
 
-1. **Part A Deliverable:** Assessment of MVM connected chain module isolation
+1. **Part A Deliverable:** Assessment of MVM and SVM connected chain module isolation
    - Dependency audit report
-   - Recommendation on package structure
-   - Refactored modules (if beneficial)
+   - Recommendation on package structure (MVM + SVM)
+   - Refactored modules/programs (if beneficial)
 
 2. **Part B Deliverable:** Intent unification recommendation document
    - Current state analysis
@@ -295,7 +307,9 @@ The SVM Docker build is slow. Research bottlenecks and identify optimization opp
 
 ## Exit Criteria
 
-- [ ] Part A: MVM connected chain modules audited and documented
+- [ ] Part A: MVM and SVM connected chain modules audited and documented
+- [ ] Part A: MVM package split into 3 packages (gmp, hub, connected)
+- [ ] Part A: SVM programs verified as independently deployable
 - [ ] Part A: Recommendation on package structure documented
 - [ ] Part B: All three approaches analyzed with security implications
 - [ ] Part B: Prototype of conditional oracle approach (test branch)

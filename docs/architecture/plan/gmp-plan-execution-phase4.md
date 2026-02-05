@@ -19,19 +19,15 @@
 - `coordinator/Cargo.toml`
 - `coordinator/src/main.rs`
 - `coordinator/src/lib.rs`
-- `coordinator/src/db/mod.rs`
-- `coordinator/src/db/models.rs`
-- `coordinator/migrations/001_initial.sql`
+- `coordinator/src/storage/mod.rs` (existing)
+- `coordinator/src/storage/models.rs` (new or extend existing)
 
 **Tasks:**
 
 - [ ] Coordinator crate already exists; add GMP message tracking
-- [ ] Add dependencies as needed: sqlx, migrations
-- [ ] Define `intents` table (id, status, requester, requirements, timestamps)
-- [ ] Define `escrows` table (id, intent_id, status, chain_id, timestamps)
-- [ ] Define `fulfillments` table (id, intent_id, solver, timestamps)
-- [ ] Define `gmp_messages` table (id, source_chain, dest_chain, payload, status)
-- [ ] Add SQLx models and basic queries
+- [ ] Extend existing storage module with GMP message tracking
+- [ ] Add `gmp_messages` tracking (source_chain, dest_chain, payload, status)
+- [ ] Add intent/escrow status tracking for GMP flows
 
 **Test:**
 
@@ -48,19 +44,19 @@
 
 **Files:**
 
-- `coordinator/src/listeners/mod.rs`
-- `coordinator/src/listeners/mvm.rs`
-- `coordinator/src/listeners/evm.rs`
-- `coordinator/src/listeners/svm.rs`
-- `coordinator/src/tests/listener_tests.rs`
+- `coordinator/src/monitor/mod.rs` (existing)
+- `coordinator/src/monitor/hub_mvm.rs` (existing)
+- `coordinator/src/monitor/inflow_mvm.rs` (existing)
+- `coordinator/src/monitor/inflow_svm.rs` (existing)
+- `coordinator/src/monitor/inflow_generic.rs` (existing)
+- `coordinator/src/monitor/outflow_generic.rs` (existing)
 
 **Tasks:**
 
-- [ ] Implement MVM event listener (IntentCreated, IntentFulfilled, etc.)
-- [ ] Implement EVM event listener (EscrowCreated, ValidationSucceeded, etc.)
-- [ ] Implement SVM event listener (account changes)
-- [ ] Store events in database as they arrive
-- [ ] Test event parsing for each chain
+- [ ] Extend existing monitors to track GMP message events
+- [ ] Add GMP MessageSent/MessageDelivered event parsing
+- [ ] Store GMP events in coordinator state
+- [ ] Test GMP event parsing for each chain
 
 **Test:**
 
@@ -135,18 +131,14 @@
 
 **Files:**
 
-- `frontend/src/services/coordinator.ts`
-- `frontend/src/hooks/useIntents.ts`
-- `frontend/src/hooks/useEscrows.ts`
-- `frontend/src/tests/coordinator.test.ts`
+- `frontend/src/lib/coordinator.ts` (existing)
+- `frontend/src/lib/types.ts` (existing)
 
 **Tasks:**
 
-- [ ] Create coordinator API client
-- [ ] Replace legacy signer API calls with coordinator API calls
-- [ ] Add WebSocket connection for real-time updates
-- [ ] Update UI to show GMP message status
-- [ ] Test API client with mocked responses
+- [ ] Extend existing coordinator client with GMP status endpoints
+- [ ] Add GMP message status display to UI
+- [ ] Test coordinator client with GMP flows
 
 **Test:**
 
@@ -163,19 +155,18 @@
 
 **Files:**
 
-- `solver/src/coordinator_client.rs`
-- `solver/src/tests/coordinator_client_tests.rs`
+- `solver/src/coordinator_gmp_client.rs` (existing)
+- `solver/src/service/outflow.rs` (existing - already has GMP flow)
+- `solver/src/service/inflow.rs` (existing - already has GMP flow)
+- `solver/src/chains/connected_mvm.rs` (existing - has fulfill_outflow_via_gmp)
+- `solver/src/chains/connected_svm.rs` (existing - has fulfill_outflow_via_gmp)
 
 **Tasks:**
 
-- [ ] Create coordinator API client for solver
-- [ ] Replace legacy signer API calls with coordinator API calls
-- [ ] Add intent discovery via coordinator
-- [ ] Add escrow status polling
-- [ ] **Add validation contract discovery** - query coordinator API for validation contract addresses on each connected chain
-- [ ] **Support GMP flow** - update solver to call validation contract functions instead of arbitrary transfers
-- [ ] **Add approval step** - solver must approve validation contract before calling fulfillment function
-- [ ] Test API client with mocked responses
+- [ ] Extend coordinator_gmp_client with GMP status tracking
+- [ ] Add validation contract address discovery via coordinator API
+- [ ] **Note:** GMP flow already implemented in Phase 2 (solver calls validation contracts)
+- [ ] Test coordinator client with GMP flows
 
 **Test:**
 
@@ -240,12 +231,10 @@ docker-compose down
 
 At the end of Phase 4, update:
 
-- [ ] `docs/coordinator/README.md` - Coordinator service overview
+- [ ] `docs/coordinator/README.md` - Coordinator service overview (if exists, or create)
 - [ ] `docs/coordinator/api-reference.md` - Full API documentation
-- [ ] `docs/solver/migration-guide.md` - How solvers migrate to GMP flow
-- [ ] `docker-compose.yml` - Document coordinator + PostgreSQL setup
+- [ ] `docs/solver/migration-guide.md` - How solvers migrate to GMP flow (note: GMP flow already implemented)
 - [ ] Review conception documents for accuracy after changes
-- [ ] Check if other files reference legacy signer API and update them
 
 ---
 
