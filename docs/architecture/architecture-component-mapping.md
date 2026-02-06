@@ -154,7 +154,7 @@ graph TB
 
 - **`intent-frameworks/mvm/intent-hub/sources/fa_intent.move`**
   - **Purpose**: Fungible asset trading intent implementation
-  - **Key Structures**: `FungibleAssetLimitOrder`, `FungibleStoreManager`, `FungibleAssetRecipientWitness`
+  - **Key Structures**: `FALimitOrder`, `FungibleStoreManager`, `FungibleAssetRecipientWitness`
   - **Key Functions**: `create_fa_to_fa_intent()`, `fulfill_cross_chain_request_intent()`
   - **Key Events**: `LimitOrderEvent`, `LimitOrderFulfillmentEvent`
   - **Responsibilities**: FA-specific intent creation, fulfillment logic, event emission

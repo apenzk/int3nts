@@ -31,7 +31,7 @@ module mvmt_intent::fa_intent_inflow_tests {
         requestor: &signer,
         solver: &signer,
     ): (
-        Object<Intent<fa_intent::FungibleStoreManager, fa_intent::FungibleAssetLimitOrder>>,
+        Object<Intent<fa_intent::FungibleStoreManager, fa_intent::FALimitOrder>>,
         Object<aptos_framework::fungible_asset::Metadata>,
         Object<aptos_framework::fungible_asset::Metadata>,
     ) {
@@ -122,7 +122,7 @@ module mvmt_intent::fa_intent_inflow_tests {
         requestor = @0xcafe,
         solver = @0xdead
     )]
-    /// What is tested: create_inflow_intent creates a FungibleAssetLimitOrder without locking hub tokens
+    /// What is tested: create_inflow_intent creates a FALimitOrder without locking hub tokens
     /// Why: Inflow intents should reference escrow on the connected chain, not lock assets on the hub
     fun test_create_inflow_intent(
         aptos_framework: &signer,
@@ -407,7 +407,7 @@ module mvmt_intent::fa_intent_inflow_tests {
     )]
     #[expected_failure(abort_code = 393223, location = aptos_framework::object)] // error::not_found(ERESOURCE_DOES_NOT_EXIST)
     /// What is tested: fulfilling an inflow intent with the outflow function aborts with ERESOURCE_DOES_NOT_EXIST
-    /// Why: Enforce type safety between FungibleAssetLimitOrder and OracleGuardedLimitOrder intents
+    /// Why: Enforce type safety between FALimitOrder and OracleGuardedLimitOrder intents
     ///
     /// Note: The error ERESOURCE_DOES_NOT_EXIST occurs because object::address_to_object<T> checks
     /// if an object of type T exists at the address. The object exists, but not as the requested type,
@@ -430,7 +430,7 @@ module mvmt_intent::fa_intent_inflow_tests {
         );
         
         // Try to convert to OracleGuardedLimitOrder type (wrong type)
-        // This should fail because the intent is FungibleAssetLimitOrder, not OracleGuardedLimitOrder
+        // This should fail because the intent is FALimitOrder, not OracleGuardedLimitOrder
         // The type system prevents this conversion, which is what we're testing
         let intent_addr = object::object_address(&intent_obj);
         

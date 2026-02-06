@@ -11,13 +11,13 @@ module mvmt_intent::fa_entryflow_tests {
     use aptos_framework::primary_fungible_store;
     use aptos_framework::timestamp;
 
-    use mvmt_intent::fa_intent::{Self, FungibleAssetLimitOrder, FungibleStoreManager};
+    use mvmt_intent::fa_intent::{Self, FALimitOrder, FungibleStoreManager};
     use mvmt_intent::intent;
     use mvmt_intent::test_utils;
 
     #[test_only]
     struct PendingIntent has key {
-        intent: object::Object<intent::Intent<FungibleStoreManager, FungibleAssetLimitOrder>>,
+        intent: object::Object<intent::Intent<FungibleStoreManager, FALimitOrder>>,
     }
 
     // ============================================================================

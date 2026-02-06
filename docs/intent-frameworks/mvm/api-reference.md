@@ -67,7 +67,7 @@ public fun create_fa_to_fa_intent_entry(
     expiry_time: u64,
     solver_addr: address,
     solver_signature: vector<u8>,
-): Object<Intent<FungibleAsset, FungibleAssetLimitOrder>>
+): Object<Intent<FungibleAsset, FALimitOrder>>
 ```
 
 **Parameters:**
@@ -97,7 +97,7 @@ public fun create_inflow_intent(
     intent_id: address,
     solver: address,
     solver_signature: vector<u8>,
-): Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>>
+): Object<Intent<FungibleStoreManager, FALimitOrder>>
 ```
 
 **Returns:** The created intent object
@@ -178,7 +178,7 @@ public fun create_outflow_intent(
 ```move
 public entry fun fulfill_inflow_intent(
     solver: &signer,
-    intent: Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>>,
+    intent: Object<Intent<FungibleStoreManager, FALimitOrder>>,
     payment_amount: u64,
 )
 ```
@@ -213,8 +213,8 @@ public entry fun fulfill_outflow_intent(
 
 ```move
 public fun start_fa_offering_session(
-    intent: Object<Intent<FungibleAsset, FungibleAssetLimitOrder>>,
-): (FungibleAsset, Session<FungibleAssetLimitOrder>)
+    intent: Object<Intent<FungibleAsset, FALimitOrder>>,
+): (FungibleAsset, Session<FALimitOrder>)
 ```
 
 **Parameters:**
@@ -227,7 +227,7 @@ public fun start_fa_offering_session(
 
 ```move
 public fun finish_fa_receiving_session(
-    session: Session<FungibleAssetLimitOrder>,
+    session: Session<FALimitOrder>,
     payment: FungibleAsset,
 ): FungibleAsset
 ```
@@ -572,10 +572,10 @@ struct Session<Args> {
 }
 ```
 
-### FungibleAssetLimitOrder
+### FALimitOrder
 
 ```move
-struct FungibleAssetLimitOrder has store, drop {
+struct FALimitOrder has store, drop {
     desired_metadata: Object<Metadata>,
     desired_amount: u64,
     requester_addr: address,

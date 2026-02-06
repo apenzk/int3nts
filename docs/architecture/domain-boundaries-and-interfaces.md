@@ -46,7 +46,7 @@ This document provides precise definitions of domain boundaries, external interf
 
 - `TradeIntent<Source, Args>` - Core intent structure
 - `TradeSession<Args>` - Active trading session
-- `FungibleAssetLimitOrder` - FA trading conditions
+- `FALimitOrder` - FA trading conditions
 - `OracleGuardedLimitOrder` - Oracle-guarded trading conditions
 - `IntentReserved` - Solver reservation structure
 

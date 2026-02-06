@@ -333,16 +333,16 @@ module mvmt_intent::fa_intent_outflow_tests {
             solver_signer,
         );
         
-        // Try to convert to FungibleAssetLimitOrder type (wrong type)
-        // This should fail because the intent is OracleGuardedLimitOrder, not FungibleAssetLimitOrder
+        // Try to convert to FALimitOrder type (wrong type)
+        // This should fail because the intent is OracleGuardedLimitOrder, not FALimitOrder
         // The type system prevents this conversion, which is what we're testing
         let intent_addr = object::object_address(&intent_obj);
         
         // Try to convert to the wrong type - this will fail at address_to_object
         // because object::address_to_object<T> checks if an object of type T exists at the address.
-        // The object exists, but not as FungibleAssetLimitOrder, so the runtime reports
+        // The object exists, but not as FALimitOrder, so the runtime reports
         // ERESOURCE_DOES_NOT_EXIST (a resource of that type doesn't exist at that address).
-        let _wrong_type_intent: Object<Intent<fa_intent::FungibleStoreManager, fa_intent::FungibleAssetLimitOrder>> = 
+        let _wrong_type_intent: Object<Intent<fa_intent::FungibleStoreManager, fa_intent::FALimitOrder>> = 
             object::address_to_object(intent_addr);
     }
 

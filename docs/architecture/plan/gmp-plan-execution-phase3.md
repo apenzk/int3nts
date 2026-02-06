@@ -100,41 +100,17 @@ Created EVM contracts following the same three-package structure as MVM and SVM,
 
 ---
 
-### Commit 6: Document current intent type differences
+### Commit 6: Document current intent type differences ✅
 
-Investigate whether hub intents can be unified into a single base type while maintaining security guarantees.
+Investigated whether hub intents can be unified into a single base type while maintaining security guarantees.
 
-**Background:**
-
-The hub chain (MVM) uses two different intent types:
-
-| Flow | Intent Type | Module | Security Gate |
-|------|-------------|--------|---------------|
-| **Inflow** | `FungibleAssetLimitOrder` | `fa_intent` | Escrow confirmation check in wrapper |
-| **Outflow** | `OracleGuardedLimitOrder` | `fa_intent_with_oracle` | Oracle witness at type level |
-
-`OracleGuardedLimitOrder` provides **defense-in-depth**: even if someone bypasses the wrapper function and calls lower-level `fa_intent_with_oracle` functions directly, they still need an oracle witness. `FungibleAssetLimitOrder` does NOT have this protection.
-
-**Potential approaches:**
-
-1. **Conditional Oracle Requirement** - Add `oracle_required: bool` field (simpler, but runtime check)
-2. **Separate Finish Functions (Current)** - Keep separate types, share more code (type-safe, more duplication)
-3. **Generic Intent with Pluggable Validation** - `GenericLimitOrder<V>` (flexible, but complex)
-
-**Tasks:**
-
-- [ ] List all fields in `FungibleAssetLimitOrder`
-- [ ] List all fields in `OracleGuardedLimitOrder`
-- [ ] Identify overlap and differences
-- [ ] Document security implications of each field
-- [ ] Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize
-
-**Files to analyze:**
-
-- `intent-frameworks/mvm/intent-hub/sources/fa_intent.move`
-- `intent-frameworks/mvm/intent-hub/sources/fa_intent_with_oracle.move`
-- `intent-frameworks/mvm/intent-hub/sources/fa_intent_inflow.move`
-- `intent-frameworks/mvm/intent-hub/sources/fa_intent_outflow.move`
+- **5 fields shared** between `FALimitOrder` (6 fields) and `OracleGuardedLimitOrder` (8 fields)
+- Key difference: `OracleGuardedLimitOrder` has defense-in-depth (type-level authorization); `FALimitOrder` relies on wrapper-level security only
+- `intent_id` differs: `Option<address>` (inflow) vs `address` (outflow, always present)
+- `OracleGuardedLimitOrder` has 2 unique fields: `requirement` (oracle) and `requester_addr_connected_chain`
+- Cross-chain payment: outflow uses 0 payment on hub (real payment on connected chain); inflow always requires payment
+- Outflow is non-revocable (security); inflow is revocable
+- See: `gmp-phase3-intent-type-analysis.md`
 
 ---
 

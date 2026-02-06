@@ -39,7 +39,7 @@ module mvmt_intent::fa_intent {
 
     /// Trading conditions for a fungible asset limit order.
     /// Specifies what token type and amount the intent creator wants to receive.
-    struct FungibleAssetLimitOrder has store, drop {
+    struct FALimitOrder has store, drop {
         desired_metadata: Object<Metadata>,
         desired_amount: u64,
         requester_addr: address,
@@ -49,17 +49,17 @@ module mvmt_intent::fa_intent {
     }
 
     /// Getter for desired_metadata to allow access from other modules
-    public fun get_desired_metadata(order: &FungibleAssetLimitOrder): Object<Metadata> {
+    public fun get_desired_metadata(order: &FALimitOrder): Object<Metadata> {
         order.desired_metadata
     }
 
     /// Getter for intent_id to allow access from other modules (for GMP integration)
-    public fun get_intent_id(order: &FungibleAssetLimitOrder): Option<address> {
+    public fun get_intent_id(order: &FALimitOrder): Option<address> {
         order.intent_id
     }
 
     /// Getter for offered_chain_id to allow access from other modules
-    public fun get_offered_chain_id(order: &FungibleAssetLimitOrder): u64 {
+    public fun get_offered_chain_id(order: &FALimitOrder): u64 {
         order.offered_chain_id
     }
 
@@ -158,7 +158,7 @@ module mvmt_intent::fa_intent {
     /// - `intent_id`: Optional cross-chain intent_id (None for regular intents)
     ///
     /// # Returns
-    /// - `Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>>`: Intent object
+    /// - `Object<Intent<FungibleStoreManager, FALimitOrder>>`: Intent object
     public fun create_fa_to_fa_intent(
         offered_fungible_asset: FungibleAsset,
         offered_chain_id: u64,
@@ -173,7 +173,7 @@ module mvmt_intent::fa_intent {
         revocable: bool,
         intent_id: Option<address>, // Optional cross-chain intent_id (None for regular intents)
         requester_addr_connected_chain: Option<address> // Optional requester address on connected chain (for inflow intents)
-    ): Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>> acquires ChainInfo {
+    ): Object<Intent<FungibleStoreManager, FALimitOrder>> acquires ChainInfo {
         // Capture metadata before depositing
         let offered_metadata = fungible_asset::asset_metadata(&offered_fungible_asset);
         
@@ -224,9 +224,9 @@ module mvmt_intent::fa_intent {
         };
         
         let intent_obj =
-            intent::create_intent<FungibleStoreManager, FungibleAssetLimitOrder, FungibleAssetRecipientWitness>(
+            intent::create_intent<FungibleStoreManager, FALimitOrder, FungibleAssetRecipientWitness>(
                 FungibleStoreManager { extend_ref, delete_ref },
-                FungibleAssetLimitOrder {
+                FALimitOrder {
                     desired_metadata,
                     desired_amount,
                     requester_addr,
@@ -409,7 +409,7 @@ module mvmt_intent::fa_intent {
     /// - `intent_addr`: The address of the intent being fulfilled
     /// - `solver`: The address of the solver who fulfilled the intent
     public fun finish_fa_receiving_session_with_event(
-        session: Session<FungibleAssetLimitOrder>,
+        session: Session<FALimitOrder>,
         received_fa: FungibleAsset,
         intent_addr: address,
         solver: address
@@ -458,7 +458,7 @@ module mvmt_intent::fa_intent {
 
     /// Legacy version without event - kept for compatibility
     public fun finish_fa_receiving_session(
-        session: Session<FungibleAssetLimitOrder>, received_fa: FungibleAsset
+        session: Session<FALimitOrder>, received_fa: FungibleAsset
     ) {
         let argument = intent::get_argument(&session);
         assert!(

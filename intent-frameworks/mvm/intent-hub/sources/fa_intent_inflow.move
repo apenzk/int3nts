@@ -7,7 +7,7 @@ module mvmt_intent::fa_intent_inflow {
     use aptos_framework::object::{Self as object, Object};
     use aptos_framework::fungible_asset::{FungibleAsset, Metadata};
     use aptos_framework::timestamp;
-    use mvmt_intent::fa_intent::{Self, FungibleStoreManager, FungibleAssetLimitOrder};
+    use mvmt_intent::fa_intent::{Self, FungibleStoreManager, FALimitOrder};
     use mvmt_intent::intent::{Self as intent, Intent};
     use mvmt_intent::intent_reservation;
     use mvmt_intent::intent_registry;
@@ -67,11 +67,11 @@ module mvmt_intent::fa_intent_inflow {
     ///
     /// # Arguments
     /// - `solver`: Signer fulfilling the intent
-    /// - `intent`: Object reference to the inflow intent to fulfill (FungibleAssetLimitOrder)
+    /// - `intent`: Object reference to the inflow intent to fulfill (FALimitOrder)
     /// - `payment_amount`: Amount of tokens to provide
     public entry fun fulfill_inflow_intent(
         solver: &signer,
-        intent: Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>>,
+        intent: Object<Intent<FungibleStoreManager, FALimitOrder>>,
         payment_amount: u64
     ) {
         let intent_addr = object::object_address(&intent);
@@ -171,7 +171,7 @@ module mvmt_intent::fa_intent_inflow {
     /// - `requester_addr_connected_chain`: Requester's address on the connected chain (for escrow lookup)
     ///
     /// # Returns
-    /// - `Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>>`: The created intent object
+    /// - `Object<Intent<FungibleStoreManager, FALimitOrder>>`: The created intent object
     ///
     /// # Aborts
     /// - `ESOLVER_NOT_REGISTERED`: Solver is not registered in the solver registry
@@ -190,7 +190,7 @@ module mvmt_intent::fa_intent_inflow {
         solver_addr_connected_chain: address,
         solver_signature: vector<u8>,
         requester_addr_connected_chain: address
-    ): Object<Intent<FungibleStoreManager, FungibleAssetLimitOrder>> {
+    ): Object<Intent<FungibleStoreManager, FALimitOrder>> {
         // Withdraw 0 tokens of DESIRED type (not offered type).
         // Why: The offered token metadata is on the connected chain, so the Object doesn't exist here.
         // We use desired_metadata (which exists on hub) to create a placeholder FungibleAsset.

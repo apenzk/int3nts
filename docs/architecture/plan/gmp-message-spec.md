@@ -226,7 +226,7 @@ Note: `amount_required` maps to `desired_amount` (outflow) or `offered_amount` (
 
 | Spec field | Source variable | File |
 |---|---|---|
-| `intent_id` | `argument.intent_id` (from `FungibleAssetLimitOrder`) | `fa_intent.move` |
+| `intent_id` | `argument.intent_id` (from `FALimitOrder`) | `fa_intent.move` |
 | `solver_addr` | `solver: address` (param) | `fa_intent.move` |
 | `amount_fulfilled` | `provided_amount` (from `fungible_asset::amount()`) | `fa_intent.move` |
 | `timestamp` | `timestamp::now_seconds()` | `fa_intent.move` |

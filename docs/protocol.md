@@ -182,7 +182,7 @@ The protocol uses `intent_id` to link intents across chains:
 2. **Hub Chain Cross-Chain Request Intent**:
    - `intent_id` explicitly provided as parameter
    - Used when tokens are locked on a different chain
-   - Stored in `FungibleAssetLimitOrder.intent_id` as `Option<address>`
+   - Stored in `FALimitOrder.intent_id` as `Option<address>`
 
 3. **Connected Chain Escrow**:
    - `intent_id` provided at creation, linking to hub intent

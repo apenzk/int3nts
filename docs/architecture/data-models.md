@@ -4,7 +4,7 @@ This document provides architectural guidance on how data structures relate acro
 
 For detailed field-by-field documentation, see:
 
-- [Move Intent Framework API Reference](../../docs/intent-frameworks/mvm/api-reference.md#type-definitions) - TradeIntent, TradeSession, FungibleAssetLimitOrder
+- [Move Intent Framework API Reference](../../docs/intent-frameworks/mvm/api-reference.md#type-definitions) - TradeIntent, TradeSession, FALimitOrder
 - [Move event structures](../../intent-frameworks/mvm/intent-hub/sources/fa_intent.move) - LimitOrderEvent, LimitOrderFulfillmentEvent
 - [EVM Escrow documentation](../../docs/intent-frameworks/evm/README.md)
 - [SVM Escrow documentation](../../docs/intent-frameworks/svm/README.md)
@@ -54,7 +54,7 @@ The `intent_id` field serves as the primary cross-chain linking mechanism:
 
 **References**:
 
-- `FungibleAssetLimitOrder.intent_id: Option<address>` - Optional cross-chain linking field
+- `FALimitOrder.intent_id: Option<address>` - Optional cross-chain linking field
 - `LimitOrderEvent.intent_id: address` - Event correlation field
 - `EscrowEvent.intent_id: String` - Coordinator event matching field
 - `EscrowEvent.chain_id: u64` - Chain ID where escrow is located (set by coordinator from config, trusted)
