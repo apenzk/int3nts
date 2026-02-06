@@ -99,6 +99,11 @@ pub struct ConnectedEvmClient {
     chain_id: u64,
     /// Hardhat network name (e.g., "localhost", "baseSepolia")
     network_name: String,
+    /// IntentOutflowValidator contract address (for GMP outflow)
+    outflow_validator_addr: Option<String>,
+    /// IntentGmp contract address (for GMP endpoint)
+    #[allow(dead_code)]
+    gmp_endpoint_addr: Option<String>,
 }
 
 impl ConnectedEvmClient {
@@ -125,6 +130,8 @@ impl ConnectedEvmClient {
             escrow_contract_addr: config.escrow_contract_addr.clone(),
             chain_id: config.chain_id,
             network_name: config.network_name.clone(),
+            outflow_validator_addr: config.outflow_validator_addr.clone(),
+            gmp_endpoint_addr: config.gmp_endpoint_addr.clone(),
         })
     }
 
@@ -461,6 +468,149 @@ impl ConnectedEvmClient {
         } else {
             anyhow::bail!("Unexpected output from get-is-released.js: {}", output_str)
         }
+    }
+
+    /// Checks if IntentOutflowValidator has requirements for an intent.
+    ///
+    /// Calls `hasRequirements(bytes32)` on the outflow validator contract via `eth_call`.
+    /// Returns true once the GMP relay has delivered IntentRequirements from the hub.
+    pub async fn has_outflow_requirements(&self, intent_id: &str) -> Result<bool> {
+        let outflow_addr = self
+            .outflow_validator_addr
+            .as_ref()
+            .context("outflow_validator_addr not configured for EVM chain")?;
+
+        // Function selector: keccak256("hasRequirements(bytes32)")[0:4]
+        let mut hasher = Keccak256::new();
+        hasher.update(b"hasRequirements(bytes32)");
+        let hash = hasher.finalize();
+        let selector = hex::encode(&hash[..4]);
+
+        // ABI-encode intent_id as bytes32
+        let intent_id_clean = intent_id.strip_prefix("0x").unwrap_or(intent_id);
+        let intent_id_padded = format!("{:0>64}", intent_id_clean);
+
+        let calldata = format!("0x{}{}", selector, intent_id_padded);
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: vec![
+                serde_json::json!({
+                    "to": outflow_addr,
+                    "data": calldata,
+                }),
+                serde_json::json!("latest"),
+            ],
+            id: 1,
+        };
+
+        let response: JsonRpcResponse<String> = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send eth_call for hasRequirements")?
+            .json()
+            .await
+            .context("Failed to parse eth_call response")?;
+
+        if let Some(error) = response.error {
+            anyhow::bail!(
+                "eth_call hasRequirements failed: {} (code: {})",
+                error.message,
+                error.code
+            );
+        }
+
+        let result = response
+            .result
+            .unwrap_or_else(|| "0x".to_string());
+
+        // ABI bool: 32 bytes, last byte is 0x01 (true) or 0x00 (false)
+        let clean = result.strip_prefix("0x").unwrap_or(&result);
+        Ok(clean.ends_with('1'))
+    }
+
+    /// Fulfills an outflow intent on the EVM chain via IntentOutflowValidator.
+    ///
+    /// Calls the Hardhat script `fulfill-outflow-intent.js` which:
+    /// 1. Reads requirements from the outflow validator
+    /// 2. Approves the outflow validator to spend solver's tokens
+    /// 3. Calls `fulfillIntent(intentId, tokenAddr)` from solver (signers[2])
+    ///
+    /// The outflow validator then sends a FulfillmentProof via GMP to the hub.
+    pub fn fulfill_outflow_via_gmp(
+        &self,
+        intent_id: &str,
+        token_addr: &str,
+    ) -> Result<String> {
+        let outflow_addr = self
+            .outflow_validator_addr
+            .as_ref()
+            .context("outflow_validator_addr not configured for EVM chain")?;
+
+        let intent_id_evm = if intent_id.starts_with("0x") {
+            intent_id.to_string()
+        } else {
+            format!("0x{}", intent_id)
+        };
+
+        let project_root = std::env::current_dir().context("Failed to get current directory")?;
+        let evm_framework_dir = project_root.join("intent-frameworks/evm");
+        if !evm_framework_dir.exists() {
+            anyhow::bail!(
+                "intent-frameworks/evm directory not found at: {}",
+                evm_framework_dir.display()
+            );
+        }
+
+        let nix_dir = project_root.join("nix");
+        let output = Command::new("nix")
+            .args(&[
+                "develop",
+                nix_dir.to_str().unwrap(),
+                "-c",
+                "bash",
+                "-c",
+                &format!(
+                    "cd '{}' && OUTFLOW_VALIDATOR_ADDR='{}' TOKEN_ADDR='{}' INTENT_ID='{}' npx hardhat run scripts/fulfill-outflow-intent.js --network {}",
+                    evm_framework_dir.display(),
+                    outflow_addr,
+                    token_addr,
+                    intent_id_evm,
+                    self.network_name
+                ),
+            ])
+            .output()
+            .context("Failed to execute nix develop command")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "Hardhat fulfill-outflow-intent script failed:\nstderr: {}\nstdout: {}",
+                stderr,
+                stdout
+            );
+        }
+
+        // Extract transaction hash from output
+        let output_str = String::from_utf8_lossy(&output.stdout);
+        if let Some(hash_line) = output_str
+            .lines()
+            .find(|l| l.contains("hash") || l.contains("Hash"))
+        {
+            if let Some(hash) = hash_line.split_whitespace().find(|s| s.starts_with("0x")) {
+                return Ok(hash.to_string());
+            }
+        }
+
+        anyhow::bail!(
+            "Could not extract transaction hash from fulfill-outflow-intent output: {}",
+            output_str
+        )
     }
 }
 

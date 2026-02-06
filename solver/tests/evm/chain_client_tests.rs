@@ -30,6 +30,8 @@ fn create_test_evm_config() -> EvmChainConfig {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         private_key_env: "TEST_PRIVATE_KEY".to_string(),
         network_name: "localhost".to_string(),
+        outflow_validator_addr: None,
+        gmp_endpoint_addr: None,
     }
 }
 

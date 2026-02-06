@@ -22,6 +22,8 @@ fn test_evm_chain_config_structure() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     };
 
     assert_eq!(evm_config.name, "Connected EVM Chain");
@@ -51,6 +53,8 @@ fn test_connected_chain_evm_with_values() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     assert!(config.connected_chain_evm.is_some());

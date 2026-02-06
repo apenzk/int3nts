@@ -8,7 +8,6 @@
 # Service Configuration
 [service]
 coordinator_url = "http://127.0.0.1:3333"  # Coordinator API base URL (draft negotiation)
-trusted_gmp_url = "http://127.0.0.1:3334"  # Trusted GMP API base URL (approvals and validation)
 polling_interval_ms = 2000               # Polling interval for checking pending drafts (milliseconds)
 e2e_mode = false                          # E2E testing mode: true = use aptos CLI with profiles, false = use movement CLI with private keys
 acceptance_api_host = "127.0.0.1"         # Solver acceptance API host
@@ -46,6 +45,8 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 # chain_id = 84532                         # Chain ID (e.g., 84532 for Base Sepolia)
 # escrow_contract_addr = "0x..."         # Address of the IntentEscrow contract
 # private_key_env = "SOLVER_EVM_PRIVATE_KEY"  # Environment variable containing EVM private key
+# outflow_validator_addr = "0x..."       # Address of the IntentOutflowValidator contract
+# gmp_endpoint_addr = "0x..."            # Address of the IntentGmp contract
 
 # Example: SVM Connected Chain
 # [[connected_chain]]

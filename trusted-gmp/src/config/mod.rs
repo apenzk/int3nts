@@ -71,6 +71,12 @@ pub struct EvmChainConfig {
     /// This is the Ethereum address derived from the trusted-gmp's ECDSA public key (on-chain approver address).
     #[serde(rename = "approver_evm_pubkey_hash")]
     pub approver_evm_pubkey_hash: String,
+    /// Address of the IntentGmp contract (GMP endpoint for message delivery/polling)
+    #[serde(default)]
+    pub gmp_endpoint_addr: Option<String>,
+    /// Address of the IntentOutflowValidator contract
+    #[serde(default)]
+    pub outflow_validator_addr: Option<String>,
 }
 
 /// Configuration for a Solana chain (SVM).

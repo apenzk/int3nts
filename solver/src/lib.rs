@@ -20,8 +20,7 @@ pub use service::outflow::OutflowService;
 pub use service::signing::SigningService;
 pub use service::tracker::{IntentState, IntentTracker, TrackedIntent};
 pub use coordinator_gmp_client::{
-    ApiResponse, Approval, CoordinatorGmpClient, OutflowFulfillmentValidationResponse,
-    PendingDraft, SignatureSubmission, SignatureSubmissionResponse,
-    ValidateOutflowFulfillmentRequest,
+    ApiResponse, CoordinatorGmpClient, PendingDraft, SignatureSubmission,
+    SignatureSubmissionResponse,
 };
 

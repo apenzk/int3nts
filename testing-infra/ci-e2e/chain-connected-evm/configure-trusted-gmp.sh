@@ -20,9 +20,17 @@ cd "$PROJECT_ROOT"
 log_and_echo "   Configuring trusted-gmp for Connected EVM Chain..."
 log_and_echo ""
 
-# Get EVM escrow contract address (single contract, one escrow per intentId)
+# Load chain-info.env for contract addresses
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+
+# Get EVM contract addresses
 CONTRACT_ADDR=$(extract_escrow_contract_address)
 log_and_echo "   EVM Escrow Contract: $CONTRACT_ADDR"
+
+GMP_ENDPOINT="${GMP_ENDPOINT_ADDR:-}"
+OUTFLOW_VALIDATOR="${OUTFLOW_VALIDATOR_ADDR:-}"
+log_and_echo "   EVM GMP Endpoint: $GMP_ENDPOINT"
+log_and_echo "   EVM Outflow Validator: $OUTFLOW_VALIDATOR"
 
 # Get trusted-gmp Ethereum address (Hardhat account 0; on-chain approver)
 log "   - Getting trusted-gmp Ethereum address (Hardhat account 0)..."
@@ -47,6 +55,8 @@ rpc_url = "http://127.0.0.1:8545"
 escrow_contract_addr = "$CONTRACT_ADDR"
 chain_id = 3
 approver_evm_pubkey_hash = "$APPROVER_ADDR"
+gmp_endpoint_addr = "$GMP_ENDPOINT"
+outflow_validator_addr = "$OUTFLOW_VALIDATOR"
 EOF
 
 # Insert the EVM section before [trusted_gmp] section

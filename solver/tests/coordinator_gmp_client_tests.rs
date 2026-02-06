@@ -3,7 +3,6 @@
 use serde_json::json;
 use solver::{
     ApiResponse, CoordinatorGmpClient, PendingDraft, SignatureSubmission, SignatureSubmissionResponse,
-    ValidateOutflowFulfillmentRequest,
 };
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -11,8 +10,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 #[path = "helpers.rs"]
 mod test_helpers;
 use test_helpers::{
-    DUMMY_DRAFT_ID, DUMMY_ESCROW_ID_EVM, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM,
-    DUMMY_SOLVER_ADDR_HUB, DUMMY_TX_HASH,
+    DUMMY_DRAFT_ID, DUMMY_REQUESTER_ADDR_EVM,
+    DUMMY_SOLVER_ADDR_HUB,
 };
 
 // ============================================================================
@@ -396,181 +395,6 @@ fn test_submit_signature_other_error() {
     );
 }
 
-// ----------------------------------------------------------------------------
-// validate_outflow_fulfillment() tests
-// ----------------------------------------------------------------------------
-
-/// What is tested: validate_outflow_fulfillment() successfully validates
-/// Why: Ensure HTTP POST request works correctly and parses validation response
-#[test]
-fn test_validate_outflow_fulfillment_success() {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let (_mock_server, base_url) = rt.block_on(async {
-        let mock_server = MockServer::start().await;
-
-        let response = json!({
-            "success": true,
-            "data": {
-                "validation": {
-                    "valid": true,
-                    "message": "Validation passed"
-                },
-                "approval_signature": {
-                    "signature": "base64signature=="
-                }
-            },
-            "error": null
-        });
-
-        Mock::given(method("POST"))
-            .and(path("/validate-outflow-fulfillment"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(response))
-            .mount(&mock_server)
-            .await;
-
-        let base_url = mock_server.uri().to_string();
-        (mock_server, base_url)
-    });
-
-    let client = CoordinatorGmpClient::new(base_url);
-    let request = ValidateOutflowFulfillmentRequest {
-        transaction_hash: DUMMY_TX_HASH.to_string(),
-        chain_type: "evm".to_string(),
-        intent_id: Some(DUMMY_INTENT_ID.to_string()),
-    };
-
-    let result = client.validate_outflow_fulfillment(&request).unwrap();
-
-    assert!(result.validation.valid);
-    assert_eq!(result.validation.message, "Validation passed");
-    assert!(result.approval_signature.is_some());
-    assert_eq!(
-        result.approval_signature.unwrap().signature,
-        "base64signature=="
-    );
-}
-
-/// What is tested: validate_outflow_fulfillment() handles validation failure
-/// Why: Ensure validation errors are handled correctly
-#[test]
-fn test_validate_outflow_fulfillment_failure() {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let (_mock_server, base_url) = rt.block_on(async {
-        let mock_server = MockServer::start().await;
-
-        let response = json!({
-            "success": false,
-            "data": null,
-            "error": "Transaction does not match intent requirements"
-        });
-
-        Mock::given(method("POST"))
-            .and(path("/validate-outflow-fulfillment"))
-            .respond_with(ResponseTemplate::new(400).set_body_json(response))
-            .mount(&mock_server)
-            .await;
-
-        let base_url = mock_server.uri().to_string();
-        (mock_server, base_url)
-    });
-
-    let client = CoordinatorGmpClient::new(base_url);
-    let request = ValidateOutflowFulfillmentRequest {
-        transaction_hash: DUMMY_TX_HASH.to_string(),
-        chain_type: "evm".to_string(),
-        intent_id: None,
-    };
-
-    let result = client.validate_outflow_fulfillment(&request);
-
-    assert!(result.is_err());
-    assert!(result
-        .unwrap_err()
-        .to_string()
-        .contains("Transaction does not match intent requirements"));
-}
-
-// ----------------------------------------------------------------------------
-// get_approvals() tests
-// ----------------------------------------------------------------------------
-
-/// What is tested: get_approvals() successfully fetches approvals
-/// Why: Ensure HTTP GET request works correctly and parses response
-#[test]
-fn test_get_approvals_success() {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let (_mock_server, base_url) = rt.block_on(async {
-        let mock_server = MockServer::start().await;
-
-        let response = json!({
-            "success": true,
-            "data": [
-                {
-                    "escrow_id": DUMMY_ESCROW_ID_EVM,
-                    "intent_id": DUMMY_INTENT_ID,
-                    "signature": "base64signature==",
-                    "timestamp": 1000000
-                }
-            ],
-            "error": null
-        });
-
-        Mock::given(method("GET"))
-            .and(path("/approvals"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(response))
-            .mount(&mock_server)
-            .await;
-
-        let base_url = mock_server.uri().to_string();
-        (mock_server, base_url)
-    });
-
-    let client = CoordinatorGmpClient::new(base_url);
-    let approvals = client.get_approvals().unwrap();
-
-    assert_eq!(approvals.len(), 1);
-    assert_eq!(
-        approvals[0].escrow_id,
-        DUMMY_ESCROW_ID_EVM
-    );
-    assert_eq!(
-        approvals[0].intent_id,
-        DUMMY_INTENT_ID
-    );
-    assert_eq!(approvals[0].signature, "base64signature==");
-    // Assertion uses test-specific timestamp (1000000)
-    assert_eq!(approvals[0].timestamp, 1000000);
-}
-
-/// What is tested: get_approvals() handles empty list
-/// Why: Ensure empty response is handled correctly
-#[test]
-fn test_get_approvals_empty() {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let (_mock_server, base_url) = rt.block_on(async {
-        let mock_server = MockServer::start().await;
-
-        let response = json!({
-            "success": true,
-            "data": [],
-            "error": null
-        });
-
-        Mock::given(method("GET"))
-            .and(path("/approvals"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(response))
-            .mount(&mock_server)
-            .await;
-
-        let base_url = mock_server.uri().to_string();
-        (mock_server, base_url)
-    });
-
-    let client = CoordinatorGmpClient::new(base_url);
-    let approvals = client.get_approvals().unwrap();
-
-    assert_eq!(approvals.len(), 0);
-}
 
 // ----------------------------------------------------------------------------
 // Error handling tests

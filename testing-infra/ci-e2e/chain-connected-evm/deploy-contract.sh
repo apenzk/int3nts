@@ -172,16 +172,17 @@ log ""
 log " Configuring hub chain to trust EVM connected chain..."
 
 # Get the EVM chain's "address" for hub trust config
-# For EVM, we use the IntentInflowEscrow contract address as the trusted remote
-ESCROW_GMP_ADDR_CLEAN=$(echo "$ESCROW_GMP_ADDR" | sed 's/^0x//')
+# For EVM, we use the IntentGmp contract address as the trusted remote
+# (IntentGmp is the GMP endpoint that sends/receives cross-chain messages)
+GMP_ENDPOINT_ADDR_CLEAN=$(echo "$GMP_ENDPOINT_ADDR" | sed 's/^0x//')
 # Pad to 64 hex characters (32 bytes)
-ESCROW_GMP_ADDR_PADDED=$(printf "%064s" "$ESCROW_GMP_ADDR_CLEAN" | tr ' ' '0')
+GMP_ENDPOINT_ADDR_PADDED=$(printf "%064s" "$GMP_ENDPOINT_ADDR_CLEAN" | tr ' ' '0')
 
 # Set trusted remote on hub for connected EVM chain (chain_id=3)
 if aptos move run --profile intent-account-chain1 --assume-yes \
     --function-id ${HUB_MODULE_ADDR}::intent_gmp::set_trusted_remote \
-    --args u32:3 "hex:${ESCROW_GMP_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
-    log "   ✅ Hub now trusts EVM connected chain (chain_id=3)"
+    --args u32:3 "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
+    log "   ✅ Hub now trusts EVM connected chain (chain_id=3, addr=$GMP_ENDPOINT_ADDR)"
 else
     log "   ️ Could not set trusted remote on hub (ignoring)"
 fi
@@ -189,7 +190,7 @@ fi
 # Also set trusted remote in intent_gmp_hub for EVM chain
 if aptos move run --profile intent-account-chain1 --assume-yes \
     --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::set_trusted_remote \
-    --args u32:3 "hex:${ESCROW_GMP_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
+    --args u32:3 "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
     log "   ✅ Hub intent_gmp_hub now trusts EVM connected chain"
 else
     log "   ️ Could not set trusted remote in intent_gmp_hub (ignoring)"

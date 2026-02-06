@@ -72,6 +72,8 @@ fn test_config_validation_multiple_connected_chains() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     config.connected_chain_svm = Some(SvmChainConfig {
@@ -119,6 +121,8 @@ fn test_get_chain_type_from_chain_id_evm() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     let result = get_chain_type_from_chain_id(31337, &config);
@@ -170,6 +174,8 @@ fn test_get_chain_type_from_chain_id_duplicate_chain_id_error() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 100,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
     config.connected_chain_mvm = Some(ChainConfig {
         name: "MVM Chain".to_string(),
@@ -222,6 +228,8 @@ fn test_config_validate_hub_evm_duplicate_chain_id() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 100, // Same as hub
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     let result = config.validate();
@@ -248,6 +256,8 @@ fn test_config_validate_mvm_evm_duplicate_chain_id() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 100, // Same as MVM
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     let result = config.validate();
@@ -275,6 +285,8 @@ fn test_config_validate_unique_chain_ids() {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337, // Different from hub and MVM
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
 
     let result = config.validate();

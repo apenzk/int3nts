@@ -207,6 +207,8 @@ pub fn build_test_config_with_evm() -> Config {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         chain_id: 31337,
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
+        gmp_endpoint_addr: None,
+        outflow_validator_addr: None,
     });
     config
 }
