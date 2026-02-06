@@ -1,6 +1,6 @@
 # GMP Integration Proposal
 
-**Status:** In Progress (Phase 2 Started)
+**Status:** In Progress (Phase 3 In Progress)
 **Date:** 2026-01-22
 **Summary:** Add Generic Message Passing (GMP) for cross-chain messaging. Production can use either Trusted GMP (our relay) or LZ. Validation moves on-chain; cross-chain messaging replaces approval signatures. Coordinator and Trusted GMP are assumed (already in place).
 
@@ -53,7 +53,7 @@ See execution phase documents for detailed implementation plan:
 
 - [Phase 1: Research & Design](gmp-plan-execution-phase1.md) ✅ **COMPLETE** - Interfaces, message schemas, wire format spec
 - [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) ✅ **COMPLETE** - Build both chains together for real cross-chain testing
-- [Phase 3: EVM Expansion](gmp-plan-execution-phase3.md) (1-2 days) - Add EVM connected chain support
+- [Phase 3: EVM Expansion & Architecture Alignment](gmp-plan-execution-phase3.md) 🔄 **IN PROGRESS** - EVM contracts, package split, naming, intent unification, SVM build perf
 - [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (1 day) - Add GMP message tracking to coordinator
 - [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (1-2 days) - Frontend, solver SDK, fee analysis, final cleanup
 
