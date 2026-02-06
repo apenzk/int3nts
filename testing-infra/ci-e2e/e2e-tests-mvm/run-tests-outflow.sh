@@ -72,9 +72,9 @@ echo " Step 3: Setting up chains, deploying contracts, funding accounts"
 echo "===================================================================="
 ./testing-infra/ci-e2e/chain-hub/setup-chain.sh
 ./testing-infra/ci-e2e/chain-hub/setup-requester-solver.sh
-./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
 ./testing-infra/ci-e2e/chain-connected-mvm/setup-chain.sh
 ./testing-infra/ci-e2e/chain-connected-mvm/setup-requester-solver.sh
+./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
 ./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh
 
 # Load chain info for balance assertions

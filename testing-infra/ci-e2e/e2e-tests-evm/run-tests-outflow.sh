@@ -73,12 +73,12 @@ log_and_echo ""
 
 log_and_echo " Step 3: Setting up chains and deploying contracts..."
 log_and_echo "======================================================"
-./testing-infra/ci-e2e/chain-connected-evm/setup-chain.sh
-./testing-infra/ci-e2e/chain-connected-evm/setup-requester-solver.sh
-./testing-infra/ci-e2e/chain-connected-evm/deploy-contract.sh
 ./testing-infra/ci-e2e/chain-hub/setup-chain.sh
 ./testing-infra/ci-e2e/chain-hub/setup-requester-solver.sh
+./testing-infra/ci-e2e/chain-connected-evm/setup-chain.sh
+./testing-infra/ci-e2e/chain-connected-evm/setup-requester-solver.sh
 ./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
+./testing-infra/ci-e2e/chain-connected-evm/deploy-contract.sh
 
 log_and_echo ""
 log_and_echo " Step 4: Configuring and starting coordinator and trusted-gmp (for negotiation routing)..."
