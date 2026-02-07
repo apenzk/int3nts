@@ -67,21 +67,6 @@ describe("IntentOutflowValidator", function () {
 
     /// 2. Test: Initialize Rejects Double Init
     /// (N/A for Solidity - constructor runs once)
-
-    /// 14. Test: test_initialize_rejects_zero_endpoint: Initialize Rejects Zero Endpoint
-    /// Verifies deployment fails with zero endpoint address.
-    /// Why: GMP endpoint is required.
-    it("should reject zero GMP endpoint", async function () {
-      const IntentOutflowValidator = await ethers.getContractFactory("IntentOutflowValidator");
-      await expect(
-        IntentOutflowValidator.deploy(
-          admin.address,
-          ethers.ZeroAddress,
-          HUB_CHAIN_ID,
-          TRUSTED_HUB_ADDR
-        )
-      ).to.be.revertedWithCustomError(outflowValidator, "E_INVALID_ADDRESS");
-    });
   });
 
   // ============================================================================
@@ -191,18 +176,6 @@ describe("IntentOutflowValidator", function () {
       await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 1);
     });
 
-    /// 13. Test: test_fulfill_intent_succeeds: Fulfill Intent Succeeds
-    /// Verifies solver can fulfill intent successfully.
-    /// Why: Core functionality - solver transfers tokens to requester.
-    it("should fulfill intent successfully", async function () {
-      await expect(
-        outflowValidator.connect(solver).fulfillIntent(INTENT_ID, token.target)
-      ).to.emit(outflowValidator, "FulfillmentSucceeded");
-
-      expect(await outflowValidator.isFulfilled(INTENT_ID)).to.equal(true);
-      expect(await token.balanceOf(requester.address)).to.equal(AMOUNT);
-    });
-
     /// 7. Test: test_fulfill_intent_rejects_already_fulfilled: Fulfill Rejects Already Fulfilled
     /// Verifies double fulfillment is rejected.
     /// Why: Prevents double payment.
@@ -249,33 +222,6 @@ describe("IntentOutflowValidator", function () {
       ).to.be.revertedWithCustomError(outflowValidator, "E_UNAUTHORIZED_SOLVER");
     });
 
-    /// 15. Test: test_allow_any_solver_zero_address: Allow Any Solver When Zero Address
-    /// Verifies any solver can fulfill when solver_addr is zero.
-    /// Why: Zero solver address means "any solver".
-    it("should allow any solver when solver_addr is zero", async function () {
-      // Create intent with zero solver address
-      const zeroSolverAddr = "0x0000000000000000000000000000000000000000000000000000000000000000";
-      const newIntentId = "0xdd000000000000000000000000000000000000000000000000000000000000ee";
-
-      const payload = await encodeIntentRequirements(
-        newIntentId,
-        requesterAddr32,
-        AMOUNT,
-        tokenAddr32,
-        zeroSolverAddr,
-        expiry
-      );
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 2);
-
-      // Admin (not the designated solver) should be able to fulfill
-      await token.mint(admin.address, AMOUNT);
-      await token.connect(admin).approve(outflowValidator.target, AMOUNT);
-
-      await expect(
-        outflowValidator.connect(admin).fulfillIntent(newIntentId, token.target)
-      ).to.emit(outflowValidator, "FulfillmentSucceeded");
-    });
-
     /// 10. Test: test_fulfill_intent_rejects_token_mismatch: Fulfill Rejects Token Mismatch
     /// Verifies fulfillment fails if token doesn't match.
     /// Why: Token must match requirements.
@@ -303,6 +249,60 @@ describe("IntentOutflowValidator", function () {
 
     /// 12. Test: Fulfill Rejects Recipient Mismatch
     /// (N/A - recipient comes from requirements, not input)
+
+    /// 13. Test: test_fulfill_intent_succeeds: Fulfill Intent Succeeds
+    /// Verifies solver can fulfill intent successfully.
+    /// Why: Core functionality - solver transfers tokens to requester.
+    it("should fulfill intent successfully", async function () {
+      await expect(
+        outflowValidator.connect(solver).fulfillIntent(INTENT_ID, token.target)
+      ).to.emit(outflowValidator, "FulfillmentSucceeded");
+
+      expect(await outflowValidator.isFulfilled(INTENT_ID)).to.equal(true);
+      expect(await token.balanceOf(requester.address)).to.equal(AMOUNT);
+    });
+
+    /// 14. Test: test_initialize_rejects_zero_endpoint: Initialize Rejects Zero Endpoint
+    /// Verifies deployment fails with zero endpoint address.
+    /// Why: GMP endpoint is required.
+    it("should reject zero GMP endpoint", async function () {
+      const IntentOutflowValidator = await ethers.getContractFactory("IntentOutflowValidator");
+      await expect(
+        IntentOutflowValidator.deploy(
+          admin.address,
+          ethers.ZeroAddress,
+          HUB_CHAIN_ID,
+          TRUSTED_HUB_ADDR
+        )
+      ).to.be.revertedWithCustomError(outflowValidator, "E_INVALID_ADDRESS");
+    });
+
+    /// 15. Test: test_allow_any_solver_zero_address: Allow Any Solver When Zero Address
+    /// Verifies any solver can fulfill when solver_addr is zero.
+    /// Why: Zero solver address means "any solver".
+    it("should allow any solver when solver_addr is zero", async function () {
+      // Create intent with zero solver address
+      const zeroSolverAddr = "0x0000000000000000000000000000000000000000000000000000000000000000";
+      const newIntentId = "0xdd000000000000000000000000000000000000000000000000000000000000ee";
+
+      const payload = await encodeIntentRequirements(
+        newIntentId,
+        requesterAddr32,
+        AMOUNT,
+        tokenAddr32,
+        zeroSolverAddr,
+        expiry
+      );
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 2);
+
+      // Admin (not the designated solver) should be able to fulfill
+      await token.mint(admin.address, AMOUNT);
+      await token.connect(admin).approve(outflowValidator.target, AMOUNT);
+
+      await expect(
+        outflowValidator.connect(admin).fulfillIntent(newIntentId, token.target)
+      ).to.emit(outflowValidator, "FulfillmentSucceeded");
+    });
 
     /// 16. Test: test_send_fulfillment_proof_to_hub: Send Fulfillment Proof to Hub
     /// Verifies FulfillmentProof is sent to hub.
