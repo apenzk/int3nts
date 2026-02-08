@@ -156,14 +156,15 @@ if [ -n "$E2E_TRUSTED_GMP_MOVE_ADDRESS" ]; then
     # Add relay as authorized relay in intent_gmp
     log "   - Adding relay as authorized in intent_gmp..."
     if aptos move run --profile intent-account-chain1 --assume-yes \
-        --function-id ${HUB_MODULE_ADDR}::intent_gmp::add_authorized_relay \
+        --function-id ${HUB_MODULE_ADDR}::intent_gmp::add_relay \
         --args address:${RELAY_ADDRESS} >> "$LOG_FILE" 2>&1; then
         log "   ✅ Relay added as authorized"
     else
         log "   ️ Could not add relay (may already be authorized)"
     fi
 else
-    log "   ️ WARNING: E2E_TRUSTED_GMP_MOVE_ADDRESS not set, skipping relay setup"
+    log_and_echo "   ❌ ERROR: E2E_TRUSTED_GMP_MOVE_ADDRESS not set after loading keys"
+    exit 1
 fi
 
 # Deploy USDhub test token

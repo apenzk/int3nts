@@ -15,13 +15,17 @@ PID_FILE="$PROJECT_ROOT/.tmp/solana-test-validator.pid"
 
 if [ -f "$PID_FILE" ]; then
     while IFS= read -r pid; do
-        if [ -n "$pid" ]; then
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             log "Stopping solana-test-validator (PID: $pid)..."
-            kill "$pid" 2>/dev/null || true
+            kill "$pid"
         fi
     done < "$PID_FILE"
     rm -f "$PID_FILE"
 fi
 
-pkill -f "solana-test-validator" || true
+# Kill any remaining validator processes
+if pgrep -f "solana-test-validator" >/dev/null; then
+    log "Killing remaining solana-test-validator processes..."
+    pkill -f "solana-test-validator"
+fi
 log "✅ SVM chain stopped"

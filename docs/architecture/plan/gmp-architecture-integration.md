@@ -385,6 +385,9 @@ LOCAL/CI:
 
 **What remains in all environments:**
 
-- Coordinator (hub-only reads: event monitoring, negotiation, UX)
+- Coordinator (event monitoring, negotiation, UX, readiness tracking)
+  - Monitors IntentRequirementsReceived events on connected chains
+  - Provides `ready_on_connected_chain` flag via API
+  - Does NOT track full GMP message lifecycle (MessageSent/MessageDelivered)
 - On-chain contracts (same code, different GMP endpoint config)
-- Frontend / solver bots read connected chain state directly (e.g., poll for `IntentRequirements` arrival before prompting escrow creation or fulfillment)
+- Frontend / solver bots query coordinator API for readiness status instead of polling connected chains directly

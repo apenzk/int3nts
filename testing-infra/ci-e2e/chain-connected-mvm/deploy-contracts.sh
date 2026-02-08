@@ -168,7 +168,7 @@ log ""
 log " Setting up native GMP relay authorization..."
 
 # Get the relay's Move address from trusted-gmp keys
-load_trusted_gmp_keys 2>/dev/null || true
+load_trusted_gmp_keys
 
 if [ -n "$E2E_TRUSTED_GMP_MOVE_ADDRESS" ]; then
     RELAY_ADDRESS="$E2E_TRUSTED_GMP_MOVE_ADDRESS"
@@ -185,14 +185,15 @@ if [ -n "$E2E_TRUSTED_GMP_MOVE_ADDRESS" ]; then
     # Add relay as authorized relay in intent_gmp
     log "   - Adding relay as authorized in intent_gmp..."
     if aptos move run --profile intent-account-chain2 --assume-yes \
-        --function-id ${CHAIN2_ADDR}::intent_gmp::add_authorized_relay \
+        --function-id ${CHAIN2_ADDR}::intent_gmp::add_relay \
         --args address:${RELAY_ADDRESS} >> "$LOG_FILE" 2>&1; then
         log "   ✅ Relay added as authorized"
     else
         log "   ️ Could not add relay (may already be authorized)"
     fi
 else
-    log "   ️ WARNING: E2E_TRUSTED_GMP_MOVE_ADDRESS not set, skipping relay setup"
+    log_and_echo "   ❌ ERROR: E2E_TRUSTED_GMP_MOVE_ADDRESS not set after loading keys"
+    exit 1
 fi
 
 # Deploy USDcon test token

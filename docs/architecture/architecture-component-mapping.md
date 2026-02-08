@@ -280,10 +280,18 @@ The former monolithic signer service has been split into two services:
   - **`mod.rs`**: Main monitor module with `EventMonitor` struct, shared types, and generic monitoring logic
   - **`inflow_mvm.rs`**: Move VM-specific escrow event polling (`poll_mvm_escrow_events()`)
   - **`inflow_evm.rs`**: EVM-specific escrow event polling (`poll_evm_escrow_events()`)
-  - **Purpose**: Monitors blockchain events from hub and connected chains (both Move VM and EVM)
+  - **`outflow_mvm.rs`**: MVM readiness monitoring (`poll_mvm_outflow_readiness()`)
+  - **`outflow_evm.rs`**: EVM readiness monitoring (`poll_evm_outflow_readiness()`)
+  - **`outflow_svm.rs`**: SVM readiness monitoring (`poll_svm_outflow_readiness()`)
+  - **Purpose**: Monitors blockchain events from hub and connected chains (MVM, EVM, SVM)
   - **Key Structures**: `RequestIntentEvent`, `EscrowEvent`, `FulfillmentEvent`, `EventMonitor`
   - **Key Functions**: `poll_hub_events()`, `poll_connected_events()`, `poll_evm_events()`, `monitor_hub_chain()`, `monitor_connected_chain()`, `monitor_evm_chain()`, `get_cached_events()`
-  - **Responsibilities**: Event polling from multiple chains, caching (both Move VM and EVM escrows), cross-chain event correlation, symmetrical handling of Move VM and EVM escrows
+  - **Responsibilities**:
+    - Event polling from multiple chains
+    - Event caching (MVM, EVM, SVM escrows)
+    - Cross-chain event correlation
+    - **Readiness tracking**: Monitors IntentRequirementsReceived events on connected chains, sets `ready_on_connected_chain` flag when requirements arrive
+    - Enables frontend to know when intents can proceed without polling connected chains directly
 
 #### Cross-Chain Validation (Trusted GMP)
 
@@ -451,6 +459,7 @@ This section documents comprehensive communication patterns between domains, inc
 **Validation Domain → Intent Management** (Layer 2 → Foundation):
 
 - **Event Monitoring**: Coordinator polls `LimitOrderEvent` and `LimitOrderFulfillmentEvent` via blockchain RPC
+- **Readiness Tracking**: Coordinator monitors IntentRequirementsReceived events on connected chains, sets `ready_on_connected_chain` flag for outflow intents
 - **Safety Validation**: Trusted-gmp calls `validate_intent_safety()` to check intent requirements (expiry, revocability)
 - **Fulfillment Validation**: Trusted-gmp calls `validate_fulfillment()` to verify fulfillment conditions match intent
 
@@ -550,4 +559,4 @@ This table provides a concise overview of domain boundaries, listing the primary
 | **Intent Management** | `intent.move`, `fa_intent.move`, `fa_intent_with_oracle.move`, `fa_intent_cross_chain.move`, `intent_reservation.move` | Intent lifecycle, creation, validation, event emission |
 | **Escrow** | `intent_escrow.move`, `intent_escrow_entry.move`, `intent_inflow_escrow.move`, `IntentInflowEscrow.sol` | Asset custody, fund locking, trusted-gmp integration |
 | **Settlement** | Functions in `fa_intent.move`, `intent_escrow.move`, `IntentInflowEscrow.sol` | Intent fulfillment, escrow completion, asset transfers |
-| **Validation (Coordinator + Trusted GMP)** | Coordinator: `monitor/`, `api/`, `config/`, `mvm_client.rs`, `storage/`; Trusted GMP: `validator/`, `crypto/`, `api/`, `config/`, `mvm_client.rs`, `evm_client.rs` | Coordinator: event monitoring (hub, Move VM, EVM), caching, negotiation routing; Trusted GMP: cross-chain validation, approval signatures (Ed25519 & ECDSA) |
+| **Validation (Coordinator + Trusted GMP)** | Coordinator: `monitor/`, `api/`, `config/`, `mvm_client.rs`, `svm_client.rs`, `storage/`; Trusted GMP: `validator/`, `crypto/`, `api/`, `config/`, `mvm_client.rs`, `evm_client.rs` | Coordinator: event monitoring (hub, MVM, EVM, SVM), readiness tracking (IntentRequirementsReceived), caching, negotiation routing; Trusted GMP: cross-chain validation, approval signatures (Ed25519 & ECDSA) |

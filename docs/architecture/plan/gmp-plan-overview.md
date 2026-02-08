@@ -52,10 +52,9 @@ Add **on-chain validation + GMP messaging** for cross-chain communication:
 See execution phase documents for detailed implementation plan:
 
 - [Phase 1: Research & Design](gmp-plan-execution-phase1.md) ✅ **COMPLETE** - Interfaces, message schemas, wire format spec
-- [Phase 2: SVM + MVM Core](gmp-plan-execution-phase2.md) ✅ **COMPLETE** - Build both chains together for real cross-chain testing
-- [Phase 3: EVM Expansion & Architecture Alignment](gmp-plan-execution-phase3.md) 🔄 **IN PROGRESS** - EVM contracts, package split, naming, intent unification, SVM build perf
-- [Phase 4: Coordinator GMP Integration](gmp-plan-execution-phase4.md) (1 day) - Add GMP message tracking to coordinator
-- [Phase 5: Integration & Documentation](gmp-plan-execution-phase5.md) (1-2 days) - Frontend, solver SDK, fee analysis, final cleanup
+- [Phase 2: Complete GMP Implementation (MVM, SVM, EVM) & Architecture Alignment](gmp-plan-execution-phase2.md) ✅ **COMPLETE** - GMP for all three chains, native relay, package restructuring, naming alignment (19 commits)
+- [Phase 3: Coordinator Readiness Tracking](gmp-plan-execution-phase3.md) ✅ **COMPLETE** - Readiness tracking for outflow intents (commit f46eb3d)
+- [Phase 4: Integration & Documentation](gmp-plan-execution-phase4.md) **BLOCKED** - Frontend/solver integration (blocked on Phase 3 API work), deployment, testing, docs
 
 **Total Timeline:** ~1.5 weeks (testnet only)
 

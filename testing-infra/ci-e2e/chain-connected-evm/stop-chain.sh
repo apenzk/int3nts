@@ -22,14 +22,14 @@ if [ -f "$PROJECT_ROOT/.tmp/hardhat-node.pid" ]; then
     while read -r pid; do
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             log "     Killing process (PID: $pid)..."
-            kill "$pid" 2>/dev/null || true
+            kill "$pid"
         fi
     done < "$PROJECT_ROOT/.tmp/hardhat-node.pid"
     sleep 1
     # Force kill any remaining
     while read -r pid; do
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            kill -9 "$pid" 2>/dev/null || true
+            kill -9 "$pid"
         fi
     done < "$PROJECT_ROOT/.tmp/hardhat-node.pid"
     rm -f "$PROJECT_ROOT/.tmp/hardhat-node.pid"
@@ -48,9 +48,10 @@ sleep 1
 # Verify port 8545 is free
 if lsof -i :8545 >/dev/null 2>&1; then
     log "   ️  Warning: Port 8545 is still in use"
-    log "   - Attempting to kill process on port 8545..."
-    lsof -ti :8545 | xargs kill -9 2>/dev/null || true
+    log "   - Killing process on port 8545..."
+    lsof -ti :8545 | xargs kill -9
     sleep 1
+    log "   ✅ Process on port 8545 killed"
 fi
 
 # Note: Hardhat node is stateless - no accounts or state to clean up

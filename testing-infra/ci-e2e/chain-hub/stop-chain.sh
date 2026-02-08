@@ -14,7 +14,26 @@ log " STOPPING HUB"
 log "================================"
 
 log " Stopping Hub..."
-docker-compose -f testing-infra/ci-e2e/chain-hub/docker-compose-hub-chain.yml -p aptos-chain1 down
+docker-compose -f testing-infra/ci-e2e/chain-hub/docker-compose-hub-chain.yml -p aptos-chain1 down -v
+
+# Force remove any orphaned containers
+log " Force removing any orphaned containers..."
+if docker ps -a --format '{{.Names}}' | grep -q "^aptos-localnet-chain1$"; then
+    log "   Found orphaned container aptos-localnet-chain1, removing..."
+    docker rm -f aptos-localnet-chain1
+    log "   ✅ Orphaned container removed"
+else
+    log "   No orphaned containers found"
+fi
+
+# Remove any remaining volumes
+log " Removing Docker volumes..."
+if docker volume ls --format '{{.Name}}' | grep -q "^aptos-chain1_aptos-data$"; then
+    docker volume rm aptos-chain1_aptos-data
+    log "   ✅ Volume aptos-chain1_aptos-data removed"
+else
+    log "   No volume found"
+fi
 
 log ""
 log " Cleaning up Hub Aptos CLI profiles..."

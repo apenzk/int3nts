@@ -1,16 +1,18 @@
-# Phase 2: SVM + MVM Core Implementation (2-3 days)
+# Phase 2: Complete GMP Implementation (MVM, SVM, EVM) & Architecture Alignment
 
-**Status:** ✅ Complete
+**Status:** ✅ Complete (19 commits)
 **Depends On:** Phase 1
 **Blocks:** Phase 3
 
-**Goal:** Build GMP support for both SVM (connected chain) and MVM (hub) together so we can test real cross-chain messaging from the start.
+**Goal:** Build complete GMP support for all three chain types (MVM, SVM, EVM) including hub and connected chain implementations, native GMP relay, and cross-chain architecture alignment.
 
 ---
 
 ## Commits
 
 > 📋 **Commit Conventions:** Before each commit, review `.claude/CLAUDE.md` and `.cursor/rules` for commit message format, test requirements, and coding standards. Run `/review-tests-new` to verify test coverage before committing.
+
+### Part 1: MVM + SVM Core GMP Implementation (Commits 1-13)
 
 ### Commit 1: Implement native GMP endpoint for Solana
 
@@ -419,6 +421,209 @@ RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet"
 
 ---
 
+### Part 2: EVM Integration & Cross-Chain Architecture Alignment (Commits 14-19)
+
+### Commit 14: Audit MVM connected chain modules
+
+**Files:**
+
+- `intent-frameworks/mvm/sources/gmp/intent_inflow_escrow.move`
+- `intent-frameworks/mvm/sources/gmp/intent_outflow_validator.move`
+- `docs/architecture/plan/gmp-phase6-audit-mvm-connected-chain.md`
+
+**Tasks:**
+
+- [x] Review `intent_inflow_escrow.move` dependencies
+- [x] Review `intent_outflow_validator.move` dependencies
+- [x] Identify shared code with hub modules
+- [x] Document minimal required dependencies
+- [x] Document audit results in `gmp-phase6-audit-mvm-connected-chain.md`
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+```
+
+> ⚠️ **All unit tests must pass before proceeding to Commit 15.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
+### Commit 15: Split MVM package into three separate packages
+
+**Files:**
+
+- `intent-frameworks/mvm/intent-gmp/` (new package)
+- `intent-frameworks/mvm/intent-hub/` (new package)
+- `intent-frameworks/mvm/intent-connected/` (new package)
+- Deployment scripts updated
+
+**Tasks:**
+
+- [x] Create three packages:
+  - **`intent-gmp`** (8KB bytecode, 16KB deploy) - gmp_common, gmp_sender, gmp_intent_state, gmp_endpoints
+  - **`intent-hub`** (35KB bytecode, 75KB deploy) - All core intent modules + hub-specific intent_gmp
+  - **`intent-connected`** (14KB bytecode, 14KB deploy) - intent_outflow_validator, intent_inflow_escrow + connected-specific intent_gmp
+- [x] Remove `is_initialized()` conditional routing - missing init is now a hard failure
+- [x] Update deployment scripts (hub deploys intent-gmp then intent-hub with `--chunked-publish`)
+- [x] Verify all 164 MVM tests passing across 3 packages
+
+**Note:** intent-hub still exceeds 60KB (75KB) and requires `--chunked-publish`
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+```
+
+> ⚠️ **All unit tests must pass before proceeding to Commit 16.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
+### Commit 16: Rename SVM programs for consistency
+
+**Files:**
+
+- `intent-frameworks/svm/programs/intent-gmp/` (renamed from native-gmp-endpoint)
+- `intent-frameworks/svm/programs/intent-outflow-validator/` (renamed from outflow-validator)
+- `intent-frameworks/svm/Cargo.toml`
+- `intent-frameworks/svm/scripts/build.sh`
+- `intent-frameworks/svm/scripts/test.sh`
+
+**Tasks:**
+
+- [x] Rename `native-gmp-endpoint` → `intent-gmp`
+- [x] Rename `outflow-validator` → `intent-outflow-validator`
+- [x] Update Cargo.toml workspace members
+- [x] Update Rust imports across all SVM programs
+- [x] Update build.sh and test.sh scripts
+- [x] Final SVM structure (2 logical groups, 3 programs):
+  - **`intent-gmp`** - GMP infrastructure
+  - **`intent-connected`** = `intent-escrow` + `intent-outflow-validator` (2 programs, logically grouped)
+
+**Note:** Unlike Move, Solana cannot bundle programs into packages - each is deployed separately
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+```
+
+> ⚠️ **All unit tests must pass before proceeding to Commit 17.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
+### Commit 17: Align EVM architecture with MVM/SVM patterns
+
+**Files:**
+
+- `intent-frameworks/evm/contracts/IntentGmp.sol` (new)
+- `intent-frameworks/evm/contracts/IntentOutflowValidator.sol` (new)
+- `intent-frameworks/evm/contracts/IntentInflowEscrow.sol` (new)
+- `intent-frameworks/evm/contracts/gmp-common/Messages.sol` (new)
+- `intent-frameworks/evm/contracts/gmp-common/Endpoints.sol` (new)
+- `trusted-gmp/src/native_gmp_relay.rs` (extended for EVM)
+- `solver/src/chains/connected_evm.rs` (added fulfill_outflow_via_gmp)
+- `solver/src/service/outflow.rs` (EVM uses GMP flow)
+- E2E deployment and test scripts
+
+**Tasks:**
+
+- [x] Create `IntentGmp.sol` - GMP infrastructure (like MVM intent-gmp, SVM intent-gmp)
+  - `send()` function emits `MessageSent` event
+  - `deliverMessage()` for relay to inject messages
+  - Trusted remote verification and relay authorization
+  - Message nonce tracking for replay protection
+- [x] Create `IntentOutflowValidator.sol` - Outflow validation (like MVM/SVM intent-outflow-validator)
+  - `receiveMessage()` receives intent requirements from hub (idempotent)
+  - `fulfillIntent()` for authorized solvers (pulls tokens via `transferFrom`, validates, forwards, sends GMP)
+- [x] Create `IntentInflowEscrow.sol` - Escrow for inflow (like SVM intent-inflow-escrow)
+  - `receiveMessage()` for intent requirements from hub (idempotent)
+  - `createEscrowWithValidation()` validates requirements match escrow details
+  - Auto-release on fulfillment proof receipt
+  - Sends `EscrowConfirmation` back to hub on creation
+- [x] Create shared message encoding/decoding libraries in `gmp-common/`
+- [x] Extend native GMP relay for EVM (event parsing, message delivery)
+- [x] Update solver to use GMP flow for EVM (added `fulfill_outflow_via_gmp()`)
+- [x] Update E2E deployment scripts for EVM GMP contracts
+- [x] Update E2E tests for GMP flow (inflow + outflow)
+
+**Tests:** EVM 161 unit tests, Solver 149, Trusted-GMP 191
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+
+# Run EVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-evm/run-tests-outflow.sh
+./testing-infra/ci-e2e/e2e-tests-evm/run-tests-inflow.sh
+```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 18.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
+### Commit 18: Auto-release escrow on FulfillmentProof receipt (GMP flow)
+
+**Files:**
+
+- `intent-frameworks/mvm/intent-connected/sources/intent_inflow_escrow.move`
+- `solver/src/service/inflow.rs`
+- `solver/src/chains/connected_mvm.rs`
+- MVM escrow tests
+
+**Tasks:**
+
+- [x] Update `receive_fulfillment_proof` to auto-release (transfer tokens to solver and mark fulfilled+released)
+- [x] Keep `release_escrow` as manual fallback
+- [x] Update solver to poll `is_escrow_released` instead of calling manual release
+- [x] Mark `release_gmp_escrow` as dead code in solver
+- [x] Update 5 Move tests to reflect auto-release behavior
+- [x] Verify E2E tests still pass (release happens faster now)
+
+**Note:** Collapsed two-step release into single step matching SVM behavior
+
+**Test:**
+
+```bash
+./testing-infra/run-all-unit-tests.sh
+
+# Run MVM e2e tests
+./testing-infra/ci-e2e/e2e-tests-mvm/run-tests-inflow.sh
+```
+
+> ⚠️ **CI e2e tests must pass before proceeding to Commit 19.** Run `/review-tests-new` then `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
+### Commit 19: Document current intent type differences
+
+**Files:**
+
+- `docs/architecture/plan/gmp-phase3-intent-type-analysis.md` (new)
+
+**Tasks:**
+
+- [x] Investigate whether hub intents can be unified into a single base type
+- [x] Document 5 shared fields between `FALimitOrder` and `OracleGuardedLimitOrder`
+- [x] Document key differences:
+  - `OracleGuardedLimitOrder` has defense-in-depth (type-level authorization)
+  - `FALimitOrder` relies on wrapper-level security only
+  - `intent_id` differs: `Option<address>` (inflow) vs `address` (outflow, always present)
+  - `OracleGuardedLimitOrder` has 2 unique fields: `requirement` (oracle) and `requester_addr_connected_chain`
+  - Cross-chain payment: outflow uses 0 payment on hub vs inflow always requires payment
+  - Outflow is non-revocable (security); inflow is revocable
+- [x] Document conclusion: separate types justified by security model
+
+**Test:**
+
+No code changes - documentation only
+
+> ⚠️ **Documentation review complete.** Run `/review-commit-tasks` then `/commit` to finalize.
+
+---
+
 ---
 
 ## Run All Tests
@@ -434,8 +639,12 @@ RUST_LOG=off nix develop ./nix -c bash -c "cd trusted-gmp && cargo test --quiet"
 
 ## Exit Criteria
 
-- [x] All 13 commits complete
+- [x] All 19 commits complete
 - [x] SVM programs build and pass unit tests
-- [x] MVM modules build and pass unit tests
-- [x] Native GMP relay works for MVM ↔ SVM
-- [x] Cross-chain E2E tests pass (outflow + inflow)
+- [x] MVM modules build and pass unit tests (split into 3 packages)
+- [x] EVM contracts build and pass unit tests
+- [x] Native GMP relay works for MVM ↔ MVM, MVM ↔ SVM, MVM ↔ EVM
+- [x] Cross-chain E2E tests pass for all chain combinations (outflow + inflow)
+- [x] MVM escrow auto-releases on FulfillmentProof (matches SVM/EVM behavior)
+- [x] Cross-chain architecture aligned across all three VMs (consistent naming, package structure)
+- [x] Intent type differences documented

@@ -2,15 +2,7 @@
 
 ## Testing
 
-1. **Balance Discrepancy Investigation**
-   - Bob's balance decrease doesn't match expected amount when fulfilling intent with 100M tokens
-   - Event confirms `provided_amount: 100,000,000` was transferred
-   - But Bob's balance only decreases by ~99.9M (less than 100M, not 100M + gas)
-   - Possible causes: Coin vs FA balance accounting; initial capture timing; gas treatment
-   - Investigate how `movement account balance` relates to FA operations and why loss < transfer amount
-   - Location: `testing-infra/ci-e2e/e2e-tests-mvm/fulfill-hub-intent.sh`
-
-2. **Test Improvements**
+1. **Test Improvements**
    - Add timeout scenario tests
    - Test with multiple concurrent intents (unit tests in `coordinator/tests/monitor_tests.rs`, `trusted-gmp/tests/monitor_tests.rs`)
    - Add negative test cases (rejected intents, failed fulfillments)
