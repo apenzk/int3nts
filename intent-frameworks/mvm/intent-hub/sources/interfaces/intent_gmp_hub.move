@@ -220,10 +220,11 @@ module mvmt_intent::intent_gmp_hub {
         false
     }
 
+    #[view]
     /// Get the trusted remote address for a destination chain.
     /// Returns the first trusted address (used for outbound messages).
     /// Aborts if not found.
-    fun get_trusted_remote(dst_chain_id: u32): vector<u8> acquires GmpHubConfig {
+    public fun get_trusted_remote(dst_chain_id: u32): vector<u8> acquires GmpHubConfig {
         let config = borrow_global<GmpHubConfig>(@mvmt_intent);
 
         assert!(

@@ -37,8 +37,6 @@ module mvmt_intent::fa_intent_outflow_tests {
         Object<aptos_framework::fungible_asset::Metadata>, // desired_metadata
         address, // solver_addr
         vector<u8>, // solver_signature_bytes
-        vector<u8>, // approver_public_key_bytes
-        ed25519::SecretKey, // approver_secret_key (needed to sign intent_id for fulfillment)
         address, // intent_id
         u64, // expiry_time
         u64, // offered_amount
@@ -71,20 +69,15 @@ module mvmt_intent::fa_intent_outflow_tests {
         // Initialize solver registry and intent registry
         solver_registry::init_for_test(mvmt_intent);
         intent_registry::init_for_test(mvmt_intent);
-        
-        // Generate key pairs for solver and approver
+
+        // Generate key pair for solver
         let (solver_secret_key, validated_solver_pk) = ed25519::generate_keys();
         let solver_public_key_bytes = ed25519::validated_public_key_to_bytes(&validated_solver_pk);
         let evm_addr = test_utils::create_test_evm_address(0);
-        
+
         // Register solver in registry
         solver_registry::register_solver(solver_signer, solver_public_key_bytes, @0x0, evm_addr, vector::empty<u8>());
-        
-        // Generate approver (integrated-gmp) key pair (need secret key for signing intent_id later)
-        let (approver_secret_key, validated_approver_pk) = ed25519::generate_keys();
-        let approver_public_key = ed25519::public_key_to_unvalidated(&validated_approver_pk);
-        let approver_public_key_bytes = ed25519::unvalidated_public_key_to_bytes(&approver_public_key);
-        
+
         // Step 1: Create draft intent (off-chain)
         let draft_intent = fa_intent_outflow::create_cross_chain_draft_intent(
             offered_metadata,
@@ -96,22 +89,20 @@ module mvmt_intent::fa_intent_outflow_tests {
             expiry_time,
             signer::address_of(requester_signer),
         );
-        
+
         // Step 2: Add solver to draft and create intent to sign
         let intent_to_sign = intent_reservation::add_solver_to_draft_intent(draft_intent, solver_addr);
-        
+
         // Step 3: Solver signs the intent (off-chain)
         let intent_hash = intent_reservation::hash_intent(intent_to_sign);
         let solver_signature = ed25519::sign_arbitrary_bytes(&solver_secret_key, intent_hash);
         let solver_signature_bytes = ed25519::signature_to_bytes(&solver_signature);
-        
+
         (
             offered_metadata,
             desired_metadata,
             solver_addr,
             solver_signature_bytes,
-            approver_public_key_bytes,
-            approver_secret_key,
             intent_id,
             expiry_time,
             offered_amount,
@@ -120,7 +111,7 @@ module mvmt_intent::fa_intent_outflow_tests {
     }
 
     /// Helper function to set up an outflow intent for testing.
-    /// Returns the intent object, metadata, approver signature bytes (for intent_id), and intent_id.
+    /// Returns the intent object, metadata, and intent_id.
     fun setup_outflow_intent(
         aptos_framework: &signer,
         mvmt_intent: &signer,
@@ -130,15 +121,14 @@ module mvmt_intent::fa_intent_outflow_tests {
         Object<Intent<fa_intent_with_oracle::FungibleStoreManager, fa_intent_with_oracle::OracleGuardedLimitOrder>>,
         Object<aptos_framework::fungible_asset::Metadata>,
         Object<aptos_framework::fungible_asset::Metadata>,
-        vector<u8>, // approver_signature_bytes (signs intent_id)
         address, // intent_id
     ) {
         // Set up test infrastructure using shared helper
-        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, approver_public_key_bytes, approver_secret_key, intent_id, expiry_time, offered_amount, desired_amount) = 
+        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, intent_id, expiry_time, offered_amount, desired_amount) =
             setup_outflow_test_infrastructure(aptos_framework, mvmt_intent, requester_signer, solver_signer);
-        
+
         let requester_addr_connected_chain = @0x9999; // Address on connected chain
-        
+
         // Create outflow intent (returns intent object)
         // Pass desired_metadata as address (for cross-chain support)
         let desired_metadata_addr = object::object_address(&desired_metadata);
@@ -153,19 +143,12 @@ module mvmt_intent::fa_intent_outflow_tests {
             expiry_time,
             intent_id,
             requester_addr_connected_chain,
-            approver_public_key_bytes,
             solver_addr,
             solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
         );
-        
-        // Generate approver signature (signs the intent_id to prove connected chain transfer)
-        // Uses the same approver secret key that corresponds to the public key used in intent creation
-        let intent_id_bytes = bcs::to_bytes(&intent_id);
-        let approver_signature = ed25519::sign_arbitrary_bytes(&approver_secret_key, intent_id_bytes);
-        let approver_signature_bytes = ed25519::signature_to_bytes(&approver_signature);
-        
-        (intent_obj, offered_metadata, desired_metadata, approver_signature_bytes, intent_id)
+
+        (intent_obj, offered_metadata, desired_metadata, intent_id)
     }
 
     // ============================================================================
@@ -187,14 +170,14 @@ module mvmt_intent::fa_intent_outflow_tests {
         solver_signer: &signer,
     ) {
         // Set up test infrastructure using shared helper
-        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, approver_public_key_bytes, _approver_secret_key, intent_id, expiry_time, offered_amount, desired_amount) = 
+        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, intent_id, expiry_time, offered_amount, desired_amount) =
             setup_outflow_test_infrastructure(aptos_framework, mvmt_intent, requester_signer, solver_signer);
-        
+
         let requester_addr_connected_chain = @0x9999; // Address on connected chain
-        
+
         // Verify requester_signer's initial balance
         assert!(primary_fungible_store::balance(signer::address_of(requester_signer), offered_metadata) == 100);
-        
+
         // Create outflow intent (returns intent object)
         // Pass desired_metadata as address (for cross-chain support)
         let desired_metadata_addr = object::object_address(&desired_metadata);
@@ -209,7 +192,6 @@ module mvmt_intent::fa_intent_outflow_tests {
             expiry_time,
             intent_id,
             requester_addr_connected_chain,
-            approver_public_key_bytes,
             solver_addr,
             solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
@@ -314,7 +296,7 @@ module mvmt_intent::fa_intent_outflow_tests {
     )]
     #[expected_failure(abort_code = 393223, location = aptos_framework::object)] // error::not_found(ERESOURCE_DOES_NOT_EXIST)
     /// What is tested: fulfilling an outflow intent with the inflow function aborts with ERESOURCE_DOES_NOT_EXIST
-    /// Why: Outflow intents require approver signature; using inflow function would skip that check
+    /// Why: Outflow intents use OracleGuardedLimitOrder type; inflow uses FALimitOrder — types are incompatible
     ///
     /// Note: The error ERESOURCE_DOES_NOT_EXIST occurs because object::address_to_object<T> checks
     /// if an object of type T exists at the address. The object exists, but not as the requested type,
@@ -326,13 +308,13 @@ module mvmt_intent::fa_intent_outflow_tests {
         solver_signer: &signer,
     ) {
         // Set up outflow intent using shared helper
-        let (intent_obj, _offered_metadata, _desired_metadata, _approver_signature_bytes, _intent_id) = setup_outflow_intent(
+        let (intent_obj, _offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
             aptos_framework,
             mvmt_intent,
             requester_signer,
             solver_signer,
         );
-        
+
         // Try to convert to FALimitOrder type (wrong type)
         // This should fail because the intent is OracleGuardedLimitOrder, not FALimitOrder
         // The type system prevents this conversion, which is what we're testing
@@ -365,7 +347,7 @@ module mvmt_intent::fa_intent_outflow_tests {
         use mvmt_intent::gmp_common;
 
         // Set up outflow intent using shared helper
-        let (intent_obj, offered_metadata, _desired_metadata, _approver_signature_bytes, intent_id) = setup_outflow_intent(
+        let (intent_obj, offered_metadata, _desired_metadata, intent_id) = setup_outflow_intent(
             aptos_framework,
             mvmt_intent,
             requester_signer,
@@ -443,7 +425,7 @@ module mvmt_intent::fa_intent_outflow_tests {
         use mvmt_intent::intent::Intent;
 
         // Set up outflow intent using shared helper
-        let (intent_obj, _offered_metadata, _desired_metadata, _approver_signature_bytes, _intent_id) = setup_outflow_intent(
+        let (intent_obj, _offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
             aptos_framework,
             mvmt_intent,
             requester_signer,
@@ -484,11 +466,11 @@ module mvmt_intent::fa_intent_outflow_tests {
         solver_signer: &signer,
     ) {
         // Set up test infrastructure using shared helper
-        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, approver_public_key_bytes, _approver_secret_key, intent_id, expiry_time, offered_amount, desired_amount) = 
+        let (offered_metadata, desired_metadata, solver_addr, solver_signature_bytes, intent_id, expiry_time, offered_amount, desired_amount) =
             setup_outflow_test_infrastructure(aptos_framework, mvmt_intent, requester_signer, solver_signer);
-        
+
         let requester_addr_connected_chain = @0x0; // Zero address - should be rejected
-        
+
         // Attempt to create outflow intent with zero address - should abort
         // Pass desired_metadata as address (for cross-chain support)
         let desired_metadata_addr = object::object_address(&desired_metadata);
@@ -503,7 +485,6 @@ module mvmt_intent::fa_intent_outflow_tests {
             expiry_time,
             intent_id,
             requester_addr_connected_chain, // Zero address - should cause abort
-            approver_public_key_bytes,
             solver_addr,
             solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,

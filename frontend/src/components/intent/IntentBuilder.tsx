@@ -1021,6 +1021,11 @@ export function IntentBuilder() {
           const requesterAddrHex = svmPubkeyToHex(svmPublicKey);
           const offeredMetadataHex = svmPubkeyToHex(savedDraftData.offeredMetadata);
 
+          if (!signature.solver_svm_addr) {
+            throw new Error('Solver has no SVM address registered. The solver must register with an SVM address to fulfill SVM inflow intents.');
+          }
+          const solverAddrConnectedChainHex = svmPubkeyToHex(signature.solver_svm_addr);
+
           functionName = `${INTENT_MODULE_ADDR}::fa_intent_inflow::create_inflow_intent_entry`;
           functionArguments = [
             offeredMetadataHex,
@@ -1032,6 +1037,7 @@ export function IntentBuilder() {
             savedDraftData.expiryTime.toString(),
             savedDraftData.intentId,
             signature.solver_hub_addr,
+            solverAddrConnectedChainHex,
             signatureArray,
             requesterAddrHex,
           ];
@@ -1040,6 +1046,11 @@ export function IntentBuilder() {
           const paddedRequesterAddr = padEvmAddressToMove(evmAddressForInflow);
           // Pad offered metadata (EVM token address) to 32 bytes
           const paddedOfferedMetadata = padEvmAddressToMove(savedDraftData.offeredMetadata);
+
+          if (!signature.solver_evm_addr) {
+            throw new Error('Solver has no EVM address registered. The solver must register with an EVM address to fulfill EVM inflow intents.');
+          }
+          const paddedSolverAddrConnectedChain = padEvmAddressToMove(signature.solver_evm_addr);
 
           functionName = `${INTENT_MODULE_ADDR}::fa_intent_inflow::create_inflow_intent_entry`;
           functionArguments = [
@@ -1052,6 +1063,7 @@ export function IntentBuilder() {
             savedDraftData.expiryTime.toString(),
             savedDraftData.intentId,
             signature.solver_hub_addr,
+            paddedSolverAddrConnectedChain,
             signatureArray,
             paddedRequesterAddr,
           ];
@@ -1067,6 +1079,11 @@ export function IntentBuilder() {
           const requesterAddrHex = svmPubkeyToHex(svmPublicKey);
           const desiredMetadataHex = svmPubkeyToHex(savedDraftData.desiredMetadata);
 
+          if (!signature.solver_svm_addr) {
+            throw new Error('Solver has no SVM address registered. The solver must register with an SVM address to fulfill SVM outflow intents.');
+          }
+          const solverAddrConnectedChainHex = svmPubkeyToHex(signature.solver_svm_addr);
+
           functionName = `${INTENT_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry`;
           functionArguments = [
             savedDraftData.offeredMetadata, // Move token - already 32 bytes
@@ -1079,6 +1096,7 @@ export function IntentBuilder() {
             savedDraftData.intentId,
             requesterAddrHex,
             signature.solver_hub_addr,
+            solverAddrConnectedChainHex,
             signatureArray,
           ];
         } else {
@@ -1090,6 +1108,11 @@ export function IntentBuilder() {
           // Pad desired metadata (EVM token address) to 32 bytes
           const paddedDesiredMetadata = padEvmAddressToMove(savedDraftData.desiredMetadata);
           console.log('Padded desired metadata:', paddedDesiredMetadata);
+
+          if (!signature.solver_evm_addr) {
+            throw new Error('Solver has no EVM address registered. The solver must register with an EVM address to fulfill EVM outflow intents.');
+          }
+          const paddedSolverAddrConnectedChain = padEvmAddressToMove(signature.solver_evm_addr);
 
           functionName = `${INTENT_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry`;
           functionArguments = [
@@ -1103,6 +1126,7 @@ export function IntentBuilder() {
             savedDraftData.intentId,
             paddedRequesterAddr,
             signature.solver_hub_addr,
+            paddedSolverAddrConnectedChain,
             signatureArray,
           ];
         }

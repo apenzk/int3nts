@@ -8,7 +8,7 @@ set -e
 
 # Get the script directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../../.." && pwd )"
 export PROJECT_ROOT
 
 # Source utilities from testing-infra (for CI testing infrastructure)
@@ -20,7 +20,7 @@ echo "   IntentGmp, IntentInflowEscrow, IntentOutflowValidator"
 echo ""
 
 # Load .env.testnet
-TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
+TESTNET_KEYS_FILE="$SCRIPT_DIR/../.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "❌ ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
@@ -90,6 +90,8 @@ export APPROVER_ADDR="$INTEGRATED_GMP_EVM_PUBKEY_HASH"
 export MOVEMENT_INTENT_MODULE_ADDR
 export HUB_CHAIN_ID="${HUB_CHAIN_ID:-250}"  # Movement Bardock testnet chain ID
 export BASE_SEPOLIA_RPC_URL
+# Relay address for integrated-gmp (derived from ECDSA key, different from deployer)
+export RELAY_ADDRESS="${INTEGRATED_GMP_EVM_PUBKEY_HASH}"
 
 echo " Environment configured for Hardhat"
 echo ""
@@ -127,7 +129,19 @@ GMP_ENDPOINT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentGmp:" | tail -1 | awk '{
 ESCROW_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentInflowEscrow:" | tail -1 | awk '{print $NF}' | tr -d '\n' || echo "")
 OUTFLOW_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentOutflowValidator:" | tail -1 | awk '{print $NF}' | tr -d '\n' || echo "")
 
+# Save deployed addresses to .env.testnet
+source "$SCRIPT_DIR/../lib/env-utils.sh"
+
 if [ -n "$GMP_ENDPOINT_ADDR" ] && [ -n "$ESCROW_ADDR" ]; then
+    update_env_var "$TESTNET_KEYS_FILE" "BASE_INTENT_GMP_ADDR" "$GMP_ENDPOINT_ADDR"
+    update_env_var "$TESTNET_KEYS_FILE" "BASE_GMP_ENDPOINT_ADDR" "$GMP_ENDPOINT_ADDR"
+    update_env_var "$TESTNET_KEYS_FILE" "BASE_INFLOW_ESCROW_ADDR" "$ESCROW_ADDR"
+    if [ -n "$OUTFLOW_ADDR" ]; then
+        update_env_var "$TESTNET_KEYS_FILE" "BASE_OUTFLOW_VALIDATOR_ADDR" "$OUTFLOW_ADDR"
+    fi
+    echo " Addresses saved to .env.testnet"
+    echo ""
+
     echo " Deployed contract addresses:"
     echo "   IntentGmp (GMP Endpoint):       $GMP_ENDPOINT_ADDR"
     echo "   IntentInflowEscrow:             $ESCROW_ADDR"

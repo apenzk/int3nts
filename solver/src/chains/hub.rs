@@ -230,7 +230,7 @@ impl HubChainClient {
                 .context("Failed to parse transactions response")?;
 
             // Count skipped vs new transactions
-            let mut skipped_count = 0;
+            let mut _skipped_count = 0;
             let mut new_count = 0;
             
             // Extract intent creation events from transactions
@@ -240,7 +240,7 @@ impl HubChainClient {
                 // Skip already-processed transactions
                 if let Some(processed) = processed_transactions {
                     if processed.contains(tx_hash) {
-                        skipped_count += 1;
+                        _skipped_count += 1;
                         continue; // Skip this transaction - already processed
                     }
                 }
@@ -250,55 +250,35 @@ impl HubChainClient {
                 let tx_hash_owned = tx_hash.to_string();
                 
                 if let Some(tx_events) = tx.get("events").and_then(|e| e.as_array()) {
-                    tracing::debug!("Transaction {} has {} events", tx_hash, tx_events.len());
-                    for (idx, event_json) in tx_events.iter().enumerate() {
+                    for event_json in tx_events.iter() {
                         let event_type = event_json
                             .get("type")
                             .and_then(|t| t.as_str())
                             .unwrap_or("");
 
-                        // Log ALL event types for debugging (only for new transactions)
-                        tracing::debug!("Transaction {} event {}: type = '{}'", tx_hash, idx, event_type);
-                        
-                        // Log full event structure for first event of each transaction to see structure
-                        if idx == 0 {
-                            tracing::debug!("Transaction {} first event keys: {:?}", tx_hash, 
-                                event_json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
-                        }
-                        
-                        // Log all event types for debugging
-                        if event_type.contains("intent") || event_type.contains("Intent") || 
-                           event_type.contains("Order") || event_type.contains("order") {
-                            tracing::info!("Found potentially relevant event type: {}", event_type);
-                        }
-
                         // Check for LimitOrderEvent (inflow) or OracleLimitOrderEvent (outflow)
                         // IMPORTANT: Check OracleLimitOrderEvent BEFORE LimitOrderEvent because
                         // "OracleLimitOrderEvent".contains("LimitOrderEvent") is true!
                         if event_type.contains("OracleLimitOrderEvent") || event_type.contains("LimitOrderEvent") {
-                            tracing::info!("Found intent creation event: {}", event_type);
                             match serde_json::from_value::<IntentCreatedEvent>(
                                 event_json.get("data").cloned().unwrap_or(serde_json::Value::Null),
                             ) {
                                 Ok(event_data) => {
-                                    // Check if event is expired before logging/adding
+                                    // Check if event is expired before adding
                                     let current_time = std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
                                         .unwrap()
                                         .as_secs();
                                     if let Ok(expiry) = event_data.expiry_time.parse::<u64>() {
                                         if expiry >= current_time {
-                                            tracing::info!("Intent {} is valid (expiry {} >= now {})", 
+                                            tracing::info!("New intent: {} (expiry {} >= now {})",
                                                 event_data.intent_id, expiry, current_time);
                                             events.push(event_data);
-                                        } else {
-                                            tracing::debug!("Intent {} is expired (expiry {} < now {})", 
-                                                event_data.intent_id, expiry, current_time);
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    tracing::warn!("Failed to parse intent event data: {} - data: {:?}", e, event_json.get("data"));
+                                    tracing::warn!("Failed to parse intent event data: {} - event_type: {}", e, event_type);
                                 }
                             }
                         }
@@ -309,9 +289,8 @@ impl HubChainClient {
                 transaction_hashes.push(tx_hash_owned);
             }
             
-            // Only log when there are new transactions to process
             if new_count > 0 {
-                tracing::debug!("Account {}: {} new transaction(s), {} already processed", account, new_count, skipped_count);
+                tracing::debug!("Account {}: scanned {} new tx(s)", account, new_count);
             }
         }
 

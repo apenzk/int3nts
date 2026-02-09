@@ -173,6 +173,7 @@ pub fn build_test_config_with_evm() -> Config {
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 31337,
+        event_block_range: 1000,
     });
     config
 }

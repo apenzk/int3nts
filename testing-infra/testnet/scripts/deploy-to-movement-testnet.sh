@@ -20,7 +20,7 @@ set -e
 
 # Get the script directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../../.." && pwd )"
 export PROJECT_ROOT
 
 echo " Deploying Move Intent Framework to Movement Bardock Testnet"
@@ -48,7 +48,7 @@ echo "✅ Movement CLI found: $(movement --version)"
 echo ""
 
 # Load .env.testnet for the funding account
-TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
+TESTNET_KEYS_FILE="$SCRIPT_DIR/../.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "❌ ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
@@ -124,7 +124,7 @@ echo ""
 # Fund the new address - try faucet first, fall back to transfer from deployer
 echo " Step 3: Funding module address..."
 
-FUND_AMOUNT=200000000  # 2 MOVE in octas (chunked publish requires more gas)
+FUND_AMOUNT=100000000  # 1 MOVE in octas
 FAUCET_SUCCESS=false
 
 # Try faucet via curl (Movement testnet faucet API)
@@ -384,25 +384,19 @@ movement move run \
 
 echo ""
 
-# Initialize integrated-gmp config for outflow intents (on-chain approver public key)
-echo " Step 14: Initializing integrated-gmp (approver) config..."
+# ============================================================================
+# Step 14: Save module private key and address to .env.testnet
+# ============================================================================
+# The configure step needs admin access to the module (admin = module address).
+# Save the private key so configure-movement-testnet.sh can create a CLI profile.
 
-if [ -z "$INTEGRATED_GMP_PUBLIC_KEY" ]; then
-    echo "   ⚠️  INTEGRATED_GMP_PUBLIC_KEY not set in .env.testnet"
-    echo "   Skipping approver initialization - outflow intents won't work until configured"
-    echo "   Generate keys and run fa_intent_outflow::initialize_approver manually"
-else
-    INTEGRATED_GMP_PUBLIC_KEY_HEX=$(echo "$INTEGRATED_GMP_PUBLIC_KEY" | base64 -d 2>/dev/null | xxd -p -c 1000 | tr -d '\n')
-    movement move run \
-      --profile "$TEMP_PROFILE" \
-      --function-id "${DEPLOY_ADDR_FULL}::fa_intent_outflow::initialize_approver" \
-      --args "hex:${INTEGRATED_GMP_PUBLIC_KEY_HEX}" \
-      --assume-yes && {
-        echo "   ✅ Integrated-gmp (approver) config initialized"
-      } || {
-        echo "   ⚠️  Approver initialization failed - may need manual setup"
-      }
-fi
+echo " Step 14: Saving module key and address to .env.testnet..."
+
+source "$SCRIPT_DIR/../lib/env-utils.sh"
+update_env_var "$TESTNET_KEYS_FILE" "MOVEMENT_MODULE_PRIVATE_KEY" "$DEPLOY_PRIVATE_KEY"
+update_env_var "$TESTNET_KEYS_FILE" "MOVEMENT_INTENT_MODULE_ADDR" "$DEPLOY_ADDR_FULL"
+echo "   ✅ MOVEMENT_MODULE_PRIVATE_KEY saved to .env.testnet"
+echo "   ✅ MOVEMENT_INTENT_MODULE_ADDR=$DEPLOY_ADDR_FULL saved to .env.testnet"
 
 echo ""
 
@@ -435,5 +429,7 @@ echo "      NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS=$DEPLOY_ADDR_FULL"
 echo ""
 echo " Next steps:"
 echo "   1. Update the config files above with the new module address"
-echo "   2. Proceed to deploy EVM IntentEscrow to Base Sepolia (if needed)"
+echo "   2. Deploy Base and Solana contracts"
+echo "   3. Run configure-movement-testnet.sh to set trusted remotes"
+echo "   (Or use deploy.sh to run the full pipeline)"
 echo ""

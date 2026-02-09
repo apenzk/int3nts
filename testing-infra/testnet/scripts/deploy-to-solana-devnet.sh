@@ -8,7 +8,7 @@ set -e
 
 # Get the script directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../../.." && pwd )"
 export PROJECT_ROOT
 
 # Re-exec inside nix develop if not already in a nix shell
@@ -21,7 +21,7 @@ echo "=========================================="
 echo ""
 
 # Load .env.testnet
-TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
+TESTNET_KEYS_FILE="$SCRIPT_DIR/../.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "❌ ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
@@ -223,17 +223,17 @@ echo "  Outflow Validator (SVM_OUTFLOW_ID): $OUTFLOW_ID"
 echo ""
 
 # =============================================================================
-# Initialize GMP components
+# Initialize self-contained components (no cross-chain dependencies)
 # =============================================================================
 
 echo ""
-echo " Initializing GMP components..."
-echo "================================"
+echo " Initializing self-contained components..."
+echo "============================================"
 echo ""
 
 # Check for integrated-gmp public key (used as on-chain approver)
 if [ -z "$INTEGRATED_GMP_PUBLIC_KEY" ]; then
-    echo "⚠️  WARNING: INTEGRATED_GMP_PUBLIC_KEY not set in .env.testnet"
+    echo "WARNING: INTEGRATED_GMP_PUBLIC_KEY not set in .env.testnet"
     echo "   Skipping initialization - you'll need to run it manually later"
     echo ""
 else
@@ -267,7 +267,7 @@ console.log(b58encode(Array.from(keyBytes)));
 ")
 
     if [ -z "$INTEGRATED_GMP_PUBKEY_BASE58" ]; then
-        echo "❌ ERROR: Failed to convert integrated-gmp public key to base58"
+        echo "ERROR: Failed to convert integrated-gmp public key to base58"
         echo "   Skipping initialization - you'll need to run it manually"
     else
         echo " Integrated-GMP public key (base58): $INTEGRATED_GMP_PUBKEY_BASE58"
@@ -282,63 +282,32 @@ console.log(b58encode(Array.from(keyBytes)));
         fi
 
         if [ ! -x "$CLI_BIN" ]; then
-            echo "⚠️  CLI not built - skipping initialization"
+            echo "CLI not built - skipping initialization"
             echo "   Run manually: ./intent-frameworks/svm/scripts/initialize-gmp.sh"
         else
-            # Pad hub address to 64 hex characters (32 bytes)
-            HUB_ADDR_CLEAN=$(echo "$MOVEMENT_INTENT_MODULE_ADDR" | sed 's/^0x//')
-            HUB_ADDR_PADDED=$(printf "%064s" "$HUB_ADDR_CLEAN" | tr ' ' '0')
-
             echo " 1. Initializing escrow with approver..."
             "$CLI_BIN" initialize \
                 --program-id "$ESCROW_ID" \
                 --payer "$DEPLOYER_KEYPAIR" \
                 --approver "$INTEGRATED_GMP_PUBKEY_BASE58" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ Escrow initialized" || echo "⚠️  Escrow init may have failed (OK if already initialized)"
+                --rpc "$SOLANA_RPC_URL" && echo "Escrow initialized" || echo "Escrow init may have failed (OK if already initialized)"
 
             echo " 2. Initializing GMP endpoint..."
             "$CLI_BIN" gmp-init \
                 --gmp-program-id "$GMP_ID" \
                 --payer "$DEPLOYER_KEYPAIR" \
                 --chain-id "$SVM_CHAIN_ID" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ GMP endpoint initialized" || echo "⚠️  GMP endpoint init may have failed (OK if already initialized)"
-
-            echo " 3. Setting hub as trusted remote..."
-            "$CLI_BIN" gmp-set-trusted-remote \
-                --gmp-program-id "$GMP_ID" \
-                --payer "$DEPLOYER_KEYPAIR" \
-                --src-chain-id "$HUB_CHAIN_ID" \
-                --trusted-addr "$HUB_ADDR_PADDED" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ Trusted remote set" || echo "⚠️  Trusted remote may have failed"
-
-            echo " 4. Initializing outflow validator..."
-            "$CLI_BIN" outflow-init \
-                --outflow-program-id "$OUTFLOW_ID" \
-                --payer "$DEPLOYER_KEYPAIR" \
-                --gmp-endpoint "$GMP_ID" \
-                --hub-chain-id "$HUB_CHAIN_ID" \
-                --hub-address "$HUB_ADDR_PADDED" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ Outflow validator initialized" || echo "⚠️  Outflow validator init may have failed"
-
-            echo " 5. Configuring escrow GMP..."
-            "$CLI_BIN" escrow-set-gmp-config \
-                --program-id "$ESCROW_ID" \
-                --payer "$DEPLOYER_KEYPAIR" \
-                --hub-chain-id "$HUB_CHAIN_ID" \
-                --hub-address "$HUB_ADDR_PADDED" \
-                --gmp-endpoint "$GMP_ID" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ Escrow GMP config set" || echo "⚠️  Escrow GMP config may have failed"
-
-            echo " 6. Setting GMP routing..."
-            "$CLI_BIN" gmp-set-routing \
-                --gmp-program-id "$GMP_ID" \
-                --payer "$DEPLOYER_KEYPAIR" \
-                --outflow-validator "$OUTFLOW_ID" \
-                --intent-escrow "$ESCROW_ID" \
-                --rpc "$SOLANA_RPC_URL" && echo "✅ GMP routing configured" || echo "⚠️  GMP routing may have failed"
+                --rpc "$SOLANA_RPC_URL" && echo "GMP endpoint initialized" || echo "GMP endpoint init may have failed (OK if already initialized)"
         fi
     fi
 fi
+
+# Save deployed program IDs to .env.testnet
+source "$SCRIPT_DIR/../lib/env-utils.sh"
+update_env_var "$TESTNET_KEYS_FILE" "SOLANA_PROGRAM_ID" "$ESCROW_ID"
+update_env_var "$TESTNET_KEYS_FILE" "SOLANA_GMP_ID" "$GMP_ID"
+update_env_var "$TESTNET_KEYS_FILE" "SOLANA_OUTFLOW_ID" "$OUTFLOW_ID"
+echo " Program IDs saved to .env.testnet"
 
 # Clean up temporary keypair
 rm -rf "$TEMP_KEYPAIR_DIR"
@@ -371,5 +340,7 @@ echo "   4. solver/config/solver_testnet.toml"
 echo "      escrow_program_id = \"$ESCROW_ID\""
 echo "      (in the [[connected_chain]] SVM section)"
 echo ""
-echo "   5. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
+echo "   5. Run configure-solana-devnet.sh to set up cross-chain config"
+echo "   6. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
+echo "   (Or use deploy.sh to run the full pipeline)"
 echo ""

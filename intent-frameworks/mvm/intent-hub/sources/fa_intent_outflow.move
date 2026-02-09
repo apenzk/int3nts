@@ -172,7 +172,6 @@ module mvmt_intent::fa_intent_outflow {
         expiry_time: u64,
         intent_id: address,
         requester_addr_connected_chain: address,
-        approver_public_key: vector<u8>,
         solver: address,
         solver_addr_connected_chain: address,
         solver_signature: vector<u8>
@@ -189,7 +188,6 @@ module mvmt_intent::fa_intent_outflow {
                 expiry_time,
                 intent_id,
                 requester_addr_connected_chain,
-                approver_public_key,
                 solver,
                 solver_addr_connected_chain,
                 solver_signature
@@ -218,7 +216,6 @@ module mvmt_intent::fa_intent_outflow {
     /// - `expiry_time`: Unix timestamp when intent expires
     /// - `intent_id`: Intent ID for cross-chain linking
     /// - `requester_addr_connected_chain`: Address on connected chain where solver should send tokens
-    /// - `approver_public_key`: Public key of the integrated-gmp (approver) that will approve the connected chain transaction (32 bytes)
     /// - `solver`: Address of the solver authorized to fulfill this intent (must be registered)
     /// - `solver_addr_connected_chain`: Solver's address on the connected chain (used in GMP message for authorization)
     /// - `solver_signature`: Ed25519 signature from the solver authorizing this intent
@@ -241,7 +238,6 @@ module mvmt_intent::fa_intent_outflow {
         expiry_time: u64,
         intent_id: address,
         requester_addr_connected_chain: address,
-        approver_public_key: vector<u8>, // 32 bytes
         solver: address,
         solver_addr_connected_chain: address,
         solver_signature: vector<u8>
@@ -287,16 +283,21 @@ module mvmt_intent::fa_intent_outflow {
             error::invalid_argument(E_INVALID_SIGNATURE)
         );
 
-        // Build ed25519::UnvalidatedPublicKey from bytes
-        let approver_pk =
-            ed25519::new_unvalidated_public_key_from_bytes(approver_public_key);
-
-        // Create oracle requirement: signature itself is the approval, min_reported_value is 0
-        // (the signature verification is what matters, not the reported_value)
+        // Placeholder oracle requirement — not used in GMP fulfillment flow.
+        // GMP proof (receive_fulfillment_proof) is the sole authorization for outflow.
+        // The OracleGuardedLimitOrder type still requires a requirement struct,
+        // but finish_fa_receiving_session_for_gmp never checks it.
+        // TODO: Migrate outflow to use fa_intent (FALimitOrder) like inflow does.
+        //       Requires adding desired_metadata_addr_override to fa_intent::create_fa_to_fa_intent
+        //       and a GMP-aware finish function, then this placeholder can be removed entirely.
+        let placeholder_pk =
+            ed25519::new_unvalidated_public_key_from_bytes(
+                x"0000000000000000000000000000000000000000000000000000000000000000"
+            );
         let requirement =
             fa_intent_with_oracle::new_oracle_signature_requirement(
-                0, // min_reported_value: signature verification is what matters, this check always passes
-                approver_pk
+                0,
+                placeholder_pk
             );
 
         // For outflow intents on hub chain:
@@ -317,7 +318,6 @@ module mvmt_intent::fa_intent_outflow {
             signer::address_of(requester_signer),
             requirement,
             false, // CRITICAL: All parts of a cross-chain intent MUST be non-revocable
-            // Ensures consistent safety guarantees for approvers across chains
             intent_id,
             option::some(requester_addr_connected_chain), // Store where solver should send tokens on connected chain
             reservation_result // Reserved for specific solver

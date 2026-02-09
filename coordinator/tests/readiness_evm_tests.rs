@@ -5,7 +5,7 @@
 
 use coordinator::monitor::{EventMonitor, poll_evm_requirements_received};
 use serde_json::json;
-use wiremock::matchers::{body_json_string, method};
+use wiremock::matchers::{body_json_string, body_partial_json, method};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[path = "mod.rs"]
@@ -15,6 +15,20 @@ use test_helpers::{build_test_config_with_evm, create_default_intent_evm, DUMMY_
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/// Mount an eth_blockNumber mock returning block 0x3e8 (1000).
+/// With event_block_range=1000, fromBlock = 1000 - 1000 = 0 = "0x0".
+async fn mount_eth_block_number_mock(mock_server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(body_partial_json(json!({"method": "eth_blockNumber"})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "result": "0x3e8"
+        })))
+        .mount(mock_server)
+        .await;
+}
 
 /// Create a mock eth_getLogs response with IntentRequirementsReceived event
 fn create_eth_get_logs_response(intent_id: &str) -> serde_json::Value {
@@ -61,6 +75,8 @@ fn create_eth_get_logs_response(intent_id: &str) -> serde_json::Value {
 #[tokio::test]
 async fn test_poll_evm_requirements_received_parses_event() {
     let mock_server = MockServer::start().await;
+
+    mount_eth_block_number_mock(&mock_server).await;
 
     // Mock the eth_getLogs endpoint
     let expected_body = json!({
@@ -116,8 +132,11 @@ async fn test_poll_evm_requirements_received_parses_event() {
 async fn test_poll_evm_requirements_received_handles_empty_events() {
     let mock_server = MockServer::start().await;
 
+    mount_eth_block_number_mock(&mock_server).await;
+
     // Mock empty event response
     Mock::given(method("POST"))
+        .and(body_partial_json(json!({"method": "eth_getLogs"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -144,11 +163,14 @@ async fn test_poll_evm_requirements_received_handles_empty_events() {
 async fn test_poll_evm_requirements_received_handles_multiple_events() {
     let mock_server = MockServer::start().await;
 
+    mount_eth_block_number_mock(&mock_server).await;
+
     let intent_id_1 = "0x0000000000000000000000000000000000000000000000000000000000000001";
     let intent_id_2 = "0x0000000000000000000000000000000000000000000000000000000000000002";
 
     // Mock multiple events
     Mock::given(method("POST"))
+        .and(body_partial_json(json!({"method": "eth_getLogs"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -215,12 +237,15 @@ async fn test_poll_evm_requirements_received_handles_multiple_events() {
 async fn test_poll_evm_requirements_received_normalizes_intent_id() {
     let mock_server = MockServer::start().await;
 
+    mount_eth_block_number_mock(&mock_server).await;
+
     // Event has intent ID with leading zeros
     let event_intent_id = "0x00000001";
     // Cached intent has normalized ID (no leading zeros)
     let cache_intent_id = "0x1";
 
     Mock::given(method("POST"))
+        .and(body_partial_json(json!({"method": "eth_getLogs"})))
         .respond_with(ResponseTemplate::new(200).set_body_json(
             create_eth_get_logs_response(event_intent_id),
         ))
