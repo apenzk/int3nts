@@ -443,6 +443,59 @@ impl CryptoService {
         Ok(final_sig)
     }
 
+    /// Signs a raw EVM transaction hash with the ECDSA key.
+    ///
+    /// Unlike `create_evm_approval_signature`, this does NOT apply the Ethereum signed message
+    /// prefix — the caller is expected to pass a keccak256 hash of a RLP-encoded transaction.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok((r, s, recovery_id))` — r and s are 32-byte big-endian, recovery_id is 0 or 1
+    pub fn sign_evm_transaction_hash(
+        &self,
+        tx_hash: &[u8; 32],
+    ) -> Result<([u8; 32], [u8; 32], u8)> {
+        use k256::ecdsa::signature::hazmat::PrehashSigner;
+        let signature: EcdsaSignature = self
+            .ecdsa_signing_key
+            .sign_prehash(tx_hash)
+            .map_err(|e| anyhow::anyhow!("Failed to sign transaction hash: {}", e))?;
+
+        let sig_bytes = signature.to_bytes();
+        if sig_bytes.len() != 64 {
+            return Err(anyhow::anyhow!(
+                "Invalid signature length: expected 64 bytes, got {}",
+                sig_bytes.len()
+            ));
+        }
+
+        let mut r = [0u8; 32];
+        let mut s = [0u8; 32];
+        r.copy_from_slice(&sig_bytes[..32]);
+        s.copy_from_slice(&sig_bytes[32..64]);
+
+        // Calculate recovery ID by trying both 0 and 1
+        let verifying_key = self.ecdsa_signing_key.verifying_key();
+        let public_key_point = verifying_key.to_encoded_point(false);
+        let public_key_bytes = public_key_point.as_bytes();
+
+        let recovery_id_0 = k256::ecdsa::RecoveryId::try_from(0u8).unwrap();
+        let recovery_id = if let Ok(recovered) =
+            EcdsaVerifyingKey::recover_from_prehash(tx_hash, &signature, recovery_id_0)
+        {
+            let recovered_point = recovered.to_encoded_point(false);
+            if recovered_point.as_bytes() == public_key_bytes {
+                0u8
+            } else {
+                1u8
+            }
+        } else {
+            1u8
+        };
+
+        Ok((r, s, recovery_id))
+    }
+
     /// Derives the Ethereum address from the ECDSA public key.
     ///
     /// The Ethereum address is computed as:
@@ -487,7 +540,6 @@ impl CryptoService {
     ///
     /// * `Ok(String)` - Move address as hex string (with 0x prefix)
     /// * `Err(anyhow::Error)` - Failed to derive address
-    #[allow(dead_code)]
     pub fn get_move_address(&self) -> Result<String> {
         let public_key_bytes = self.verifying_key.as_bytes();
 
@@ -502,5 +554,12 @@ impl CryptoService {
         let address_hex = format!("0x{}", hex::encode(hash));
 
         Ok(address_hex)
+    }
+
+    /// Derives the Solana address from the Ed25519 public key.
+    ///
+    /// The Solana address is the base58 encoding of the Ed25519 public key bytes.
+    pub fn get_solana_address(&self) -> String {
+        bs58::encode(self.verifying_key.as_bytes()).into_string()
     }
 }

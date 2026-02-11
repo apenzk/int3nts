@@ -92,13 +92,17 @@ pub async fn poll_evm_requirements_received(monitor: &EventMonitor) -> Result<us
     let current_block_num =
         u64::from_str_radix(current_block.strip_prefix("0x").unwrap_or(&current_block), 16)
             .unwrap_or(0);
-    let from_block = current_block_num.saturating_sub(connected_chain_evm.event_block_range);
+    // Cap to 9-block lookback so inclusive range [from, to] = 10 blocks (Alchemy free tier limit)
+    let range = connected_chain_evm.event_block_range.min(9);
+    let from_block = current_block_num.saturating_sub(range);
     let from_block_hex = format!("0x{:x}", from_block);
+    let to_block_hex = format!("0x{:x}", current_block_num);
 
     // Query eth_getLogs for IntentRequirementsReceived events
     let params = serde_json::json!([{
         "address": connected_chain_evm.outflow_validator_contract_addr,
         "fromBlock": from_block_hex,
+        "toBlock": to_block_hex,
         "topics": [event_signature]
     }]);
 

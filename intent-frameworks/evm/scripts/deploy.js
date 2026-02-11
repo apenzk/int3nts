@@ -49,6 +49,7 @@ async function main() {
   const IntentGmp = await hre.ethers.getContractFactory("IntentGmp");
   const gmpEndpoint = await IntentGmp.deploy(deployer.address);
   await gmpEndpoint.waitForDeployment();
+  await gmpEndpoint.deploymentTransaction().wait(1);
   const gmpEndpointAddress = await gmpEndpoint.getAddress();
   console.log("   IntentGmp deployed to:", gmpEndpointAddress);
 
@@ -62,6 +63,7 @@ async function main() {
     movementModuleAddr
   );
   await escrowGmp.waitForDeployment();
+  await escrowGmp.deploymentTransaction().wait(1);
   const escrowGmpAddress = await escrowGmp.getAddress();
   console.log("   IntentInflowEscrow deployed to:", escrowGmpAddress);
 
@@ -75,6 +77,7 @@ async function main() {
     movementModuleAddr
   );
   await outflowValidator.waitForDeployment();
+  await outflowValidator.deploymentTransaction().wait(1);
   const outflowValidatorAddress = await outflowValidator.getAddress();
   console.log("   IntentOutflowValidator deployed to:", outflowValidatorAddress);
 

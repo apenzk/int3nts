@@ -10,12 +10,14 @@
 #   2. Initialize outflow validator with hub config
 #   3. Configure escrow GMP with hub address
 #   4. Set GMP routing between programs
+#   5. Add GMP relay authorization (if INTEGRATED_GMP_SVM_ADDR is set)
 #
 # Requires:
 #   - .env.testnet with:
 #     - SOLANA_DEPLOYER_PRIVATE_KEY
 #     - MOVEMENT_INTENT_MODULE_ADDR (from deploy-to-movement-testnet.sh)
 #     - SOLANA_GMP_ID, SOLANA_PROGRAM_ID, SOLANA_OUTFLOW_ID (from deploy-to-solana-devnet.sh)
+#     - INTEGRATED_GMP_SVM_ADDR (optional, for relay authorization)
 #   - Node.js (for base58 conversion)
 #   - Solana CLI
 
@@ -41,7 +43,9 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
     exit 1
 fi
-source "$TESTNET_KEYS_FILE"
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
+fi
 
 require_var "SOLANA_DEPLOYER_PRIVATE_KEY" "$SOLANA_DEPLOYER_PRIVATE_KEY"
 require_var "MOVEMENT_INTENT_MODULE_ADDR" "$MOVEMENT_INTENT_MODULE_ADDR" "Run deploy-to-movement-testnet.sh first"
@@ -138,50 +142,73 @@ echo " Cross-chain configuration..."
 echo ""
 
 echo " 1. Setting hub as trusted remote..."
-"$CLI_BIN" gmp-set-trusted-remote \
+if ! "$CLI_BIN" gmp-set-trusted-remote \
     --gmp-program-id "$SOLANA_GMP_ID" \
     --payer "$DEPLOYER_KEYPAIR" \
     --src-chain-id "$HUB_CHAIN_ID" \
     --trusted-addr "$HUB_ADDR_PADDED" \
-    --rpc "$SOLANA_RPC_URL"
-
+    --rpc "$SOLANA_RPC_URL"; then
+    echo "   Command failed, verifying on-chain state..."
+fi
 # TrustedRemoteAccount: disc=3 base64=Aw==, size=38
 verify_solana_has_account "$SOLANA_GMP_ID" "$SOLANA_RPC_URL" "Aw==" 38 \
     "GMP trusted remote for hub (chain $HUB_CHAIN_ID)"
 
 echo " 2. Initializing outflow validator..."
-"$CLI_BIN" outflow-init \
+if ! "$CLI_BIN" outflow-init \
     --outflow-program-id "$SOLANA_OUTFLOW_ID" \
     --payer "$DEPLOYER_KEYPAIR" \
     --gmp-endpoint "$SOLANA_GMP_ID" \
     --hub-chain-id "$HUB_CHAIN_ID" \
     --hub-address "$HUB_ADDR_PADDED" \
-    --rpc "$SOLANA_RPC_URL"
+    --rpc "$SOLANA_RPC_URL"; then
+    echo "   Command failed, verifying on-chain state..."
+fi
+# ConfigAccount: disc=2 base64=Ag==, size=102
+verify_solana_has_account "$SOLANA_OUTFLOW_ID" "$SOLANA_RPC_URL" "Ag==" 102 \
+    "Outflow validator config"
 
 echo " 3. Configuring escrow GMP..."
-"$CLI_BIN" escrow-set-gmp-config \
+if ! "$CLI_BIN" escrow-set-gmp-config \
     --program-id "$SOLANA_PROGRAM_ID" \
     --payer "$DEPLOYER_KEYPAIR" \
     --hub-chain-id "$HUB_CHAIN_ID" \
     --hub-address "$HUB_ADDR_PADDED" \
     --gmp-endpoint "$SOLANA_GMP_ID" \
-    --rpc "$SOLANA_RPC_URL"
-
+    --rpc "$SOLANA_RPC_URL"; then
+    echo "   Command failed, verifying on-chain state..."
+fi
 # GmpConfig: disc="GMPCONFG" base64=R01QQ09ORkc=, size=109
 verify_solana_has_account "$SOLANA_PROGRAM_ID" "$SOLANA_RPC_URL" "R01QQ09ORkc=" 109 \
     "Escrow GMP config"
 
 echo " 4. Setting GMP routing..."
-"$CLI_BIN" gmp-set-routing \
+if ! "$CLI_BIN" gmp-set-routing \
     --gmp-program-id "$SOLANA_GMP_ID" \
     --payer "$DEPLOYER_KEYPAIR" \
     --outflow-validator "$SOLANA_OUTFLOW_ID" \
     --intent-escrow "$SOLANA_PROGRAM_ID" \
-    --rpc "$SOLANA_RPC_URL"
-
+    --rpc "$SOLANA_RPC_URL"; then
+    echo "   Command failed, verifying on-chain state..."
+fi
 # RoutingConfig: disc=6 base64=Bg==, size=66
 verify_solana_has_account "$SOLANA_GMP_ID" "$SOLANA_RPC_URL" "Bg==" 66 \
     "GMP routing config"
+
+# 5. Add GMP relay authorization (optional)
+if [ -n "$INTEGRATED_GMP_SVM_ADDR" ]; then
+    echo " 5. Adding GMP relay: $INTEGRATED_GMP_SVM_ADDR"
+    if ! "$CLI_BIN" gmp-add-relay \
+        --gmp-program-id "$SOLANA_GMP_ID" \
+        --payer "$DEPLOYER_KEYPAIR" \
+        --relay "$INTEGRATED_GMP_SVM_ADDR" \
+        --rpc "$SOLANA_RPC_URL"; then
+        echo "   Command failed, verifying on-chain state..."
+    fi
+    # RelayAccount: disc=2 base64=Ag==, size=35
+    verify_solana_has_account "$SOLANA_GMP_ID" "$SOLANA_RPC_URL" "Ag==" 35 \
+        "GMP relay authorization for $INTEGRATED_GMP_SVM_ADDR"
+fi
 
 # Clean up
 rm -rf "$TEMP_KEYPAIR_DIR"

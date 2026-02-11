@@ -13,6 +13,7 @@
 #     - MOVEMENT_MODULE_PRIVATE_KEY (from deploy-to-movement-testnet.sh)
 #     - BASE_GMP_ENDPOINT_ADDR + BASE_CHAIN_ID (from deploy-to-base-testnet.sh)
 #     - SOLANA_GMP_ID + SVM_CHAIN_ID (from deploy-to-solana-devnet.sh) [optional]
+#     - INTEGRATED_GMP_MVM_ADDR (from get_relay_addresses) [optional, for relay auth]
 
 set -e
 
@@ -38,7 +39,9 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
     exit 1
 fi
-source "$TESTNET_KEYS_FILE"
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
+fi
 
 require_var "MOVEMENT_INTENT_MODULE_ADDR" "$MOVEMENT_INTENT_MODULE_ADDR" "Run deploy-to-movement-testnet.sh first"
 require_var "MOVEMENT_MODULE_PRIVATE_KEY" "$MOVEMENT_MODULE_PRIVATE_KEY" "Should have been saved by deploy-to-movement-testnet.sh"
@@ -153,6 +156,26 @@ verify_movement_view "$MOVEMENT_RPC_URL" \
     "${MODULE_ADDR}::intent_gmp_hub::get_trusted_remote" \
     "[$SVM_CHAIN_ID]" \
     "intent_gmp_hub trusted remote for Solana (chain $SVM_CHAIN_ID)"
+
+echo ""
+
+# --- Add GMP relay as authorized relay ---
+if [ -n "$INTEGRATED_GMP_MVM_ADDR" ]; then
+    echo " Adding GMP relay as authorized relay: $INTEGRATED_GMP_MVM_ADDR"
+    movement move run \
+      --profile "$TEMP_PROFILE" \
+      --function-id "${MODULE_ADDR}::intent_gmp::add_relay" \
+      --args "address:${INTEGRATED_GMP_MVM_ADDR}" \
+      --assume-yes || echo "   (may already be added)"
+
+    verify_movement_view "$MOVEMENT_RPC_URL" \
+        "${MODULE_ADDR}::intent_gmp::is_relay_authorized" \
+        "[\"${INTEGRATED_GMP_MVM_ADDR}\"]" \
+        "intent_gmp relay authorization for GMP relay"
+else
+    echo " WARN: INTEGRATED_GMP_MVM_ADDR not set, skipping relay authorization"
+    echo "   Set it in .env.testnet (derive with: cd integrated-gmp && cargo run --bin get_relay_addresses)"
+fi
 
 echo ""
 echo " Movement configuration verified."

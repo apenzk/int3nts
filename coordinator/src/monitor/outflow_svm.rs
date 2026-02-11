@@ -42,12 +42,12 @@ pub async fn poll_svm_requirements_received(monitor: &EventMonitor) -> Result<us
 
     let mut count = 0;
 
-    // Process each transaction
+    // Process each transaction (skip ones that fail — old txs get pruned on devnet)
     for signature in signatures {
-        let logs = client
-            .get_transaction(&signature)
-            .await
-            .context("Failed to get transaction")?;
+        let logs = match client.get_transaction(&signature).await {
+            Ok(logs) => logs,
+            Err(_) => continue,
+        };
 
         // Look for IntentRequirementsReceived log messages
         for log in logs {

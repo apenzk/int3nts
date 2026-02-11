@@ -333,18 +333,18 @@ SVM: `intent-frameworks/svm/programs/intent-gmp/tests/endpoint_tests.rs`
 | 9 | test_relay_account_serialization | N/A | N/A | [x] |
 | 10 | test_trusted_remote_account_serialization | N/A | N/A | [x] |
 | 11 | test_outbound_nonce_account | N/A | N/A | [x] |
-| 12 | test_inbound_nonce_account_replay_detection | N/A | N/A | [x] |
+| 12 | test_delivered_message_serialization | N/A | N/A | [x] |
 | 13 | test_error_conversion | N/A | N/A | [x] |
 | 14 | test_error_codes_unique | N/A | N/A | [x] |
 | 15 | test_send_updates_nonce_state | [x] | [x] | [x] |
 | 16 | test_deliver_message_calls_receiver | [ ] | [x] | [x] |
-| 17 | test_deliver_message_rejects_replay | [x] | [x] | [x] |
+| 17 | test_deliver_message_rejects_replay (EVM/SVM revert, MVM idempotent) | [x] | [x] | [x] |
 | 18 | test_deliver_message_rejects_unauthorized_relay | [x] | [x] | [x] |
 | 19 | test_deliver_message_authorized_relay | [x] | [x] | [x] |
 | 20 | test_deliver_message_rejects_untrusted_remote | [x] | [x] | [x] |
 | 21 | test_deliver_message_rejects_no_trusted_remote | [x] | [x] | [x] |
 | 22 | test_set_trusted_remote_unauthorized | [x] | [x] | [x] |
-| 23 | test_deliver_message_rejects_lower_nonce | [x] | [x] | [x] |
+| 23 | test_deliver_message_different_msg_type_succeeds (dedupe per intent_id+msg_type) | [x] | [x] | [x] |
 | 24 | test_deliver_intent_requirements_stores_in_both_handlers | [x] | N/A | N/A |
 | 25 | test_add_relay_rejects_non_admin | [x] | [x] | [x] |
 | 26 | test_remove_relay_rejects_non_admin | [x] | [x] | [x] |
@@ -365,7 +365,7 @@ SVM: `intent-frameworks/svm/programs/intent-gmp/tests/endpoint_tests.rs`
 | 41 | test_deliver_fulfillment_proof_routes | N/A | [x] | N/A |
 | 42 | test_reject_unknown_message_type | N/A | [x] | N/A |
 | 43 | test_emit_message_delivered | N/A | [x] | N/A |
-| 44 | test_update_inbound_nonce | N/A | [x] | N/A |
+| 44 | test_is_message_delivered | N/A | [x] | N/A |
 | 45 | test_emit_message_sent | N/A | [x] | N/A |
 | 46 | test_only_handlers_can_send | N/A | [x] | N/A |
 | 47 | test_set_escrow_handler | N/A | [x] | N/A |

@@ -29,8 +29,10 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     exit 1
 fi
 
-# Source the keys file
-source "$TESTNET_KEYS_FILE"
+# Source the keys file (skip if parent already exported env)
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
+fi
 
 # Check required variables
 if [ -z "$SOLANA_DEPLOYER_PRIVATE_KEY" ]; then
@@ -302,12 +304,31 @@ console.log(b58encode(Array.from(keyBytes)));
     fi
 fi
 
-# Save deployed program IDs to .env.testnet
-source "$SCRIPT_DIR/../lib/env-utils.sh"
-update_env_var "$TESTNET_KEYS_FILE" "SOLANA_PROGRAM_ID" "$ESCROW_ID"
-update_env_var "$TESTNET_KEYS_FILE" "SOLANA_GMP_ID" "$GMP_ID"
-update_env_var "$TESTNET_KEYS_FILE" "SOLANA_OUTFLOW_ID" "$OUTFLOW_ID"
-echo " Program IDs saved to .env.testnet"
+# Output deployed program IDs for .env.testnet
+echo " Add these to .env.testnet:"
+echo ""
+echo "   SOLANA_PROGRAM_ID=$ESCROW_ID"
+echo "   SOLANA_GMP_ID=$GMP_ID"
+echo "   SOLANA_OUTFLOW_ID=$OUTFLOW_ID"
+echo ""
+
+# Save deployment log
+LOG_DIR="$SCRIPT_DIR/../logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/deploy-solana-devnet-$(date +%Y%m%d-%H%M%S).log"
+{
+    echo "Solana Devnet Deployment — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo ""
+    echo "Deployer:                  $SOLANA_DEPLOYER_ADDR"
+    echo "Hub chain ID:              $HUB_CHAIN_ID"
+    echo "SVM chain ID:              $SVM_CHAIN_ID"
+    echo "Hub module addr:           $MOVEMENT_INTENT_MODULE_ADDR"
+    echo ""
+    echo "Escrow (SOLANA_PROGRAM_ID):          $ESCROW_ID"
+    echo "GMP Endpoint (SOLANA_GMP_ID):        $GMP_ID"
+    echo "Outflow (SOLANA_OUTFLOW_ID):         $OUTFLOW_ID"
+} > "$LOG_FILE"
+echo " Deployment log saved to: $LOG_FILE"
 
 # Clean up temporary keypair
 rm -rf "$TEMP_KEYPAIR_DIR"

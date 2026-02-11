@@ -93,7 +93,7 @@ describe("IntentOutflowValidator", function () {
         expiry
       );
 
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 1);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 
       expect(await outflowValidator.hasRequirements(INTENT_ID)).to.equal(true);
       const req = await outflowValidator.getRequirements(INTENT_ID);
@@ -101,9 +101,9 @@ describe("IntentOutflowValidator", function () {
     });
 
     /// 4. Test: test_receive_idempotent: Receive Idempotent
-    /// Verifies duplicate requirements are handled gracefully.
-    /// Why: GMP may deliver same message multiple times.
-    it("should handle duplicate requirements idempotently", async function () {
+    /// Verifies duplicate delivery is blocked by GMP deduplication.
+    /// Why: (intent_id, msg_type) dedup prevents double-processing at the GMP layer.
+    it("should reject duplicate delivery at GMP level", async function () {
       const tokenAddr32 = await tokenToBytes32(token.target);
       const requesterAddr32 = await addressToBytes32(requester.address);
       const solverAddr32 = await addressToBytes32(solver.address);
@@ -119,12 +119,12 @@ describe("IntentOutflowValidator", function () {
         expiry
       );
 
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 1);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 
-      // Second delivery should emit duplicate event
+      // Second delivery with same payload blocked by GMP deduplication
       await expect(
-        gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 2)
-      ).to.emit(outflowValidator, "IntentRequirementsDuplicate");
+        gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload)
+      ).to.be.revertedWithCustomError(gmpEndpoint, "E_ALREADY_DELIVERED");
     });
 
     /// 5. Test: test_receive_rejects_untrusted_source: Receive Rejects Untrusted Source
@@ -137,7 +137,7 @@ describe("IntentOutflowValidator", function () {
       const payload = "0x01" + "00".repeat(144);
 
       await expect(
-        gmpEndpoint.deliverMessage(HUB_CHAIN_ID, untrustedAddr, payload, 1)
+        gmpEndpoint.deliverMessage(HUB_CHAIN_ID, untrustedAddr, payload)
       ).to.be.revertedWithCustomError(outflowValidator, "E_INVALID_SOURCE_ADDRESS");
     });
 
@@ -173,7 +173,7 @@ describe("IntentOutflowValidator", function () {
         solverAddr32,
         expiry
       );
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 1);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
     });
 
     /// 7. Test: test_fulfill_intent_rejects_already_fulfilled: Fulfill Rejects Already Fulfilled
@@ -203,7 +203,7 @@ describe("IntentOutflowValidator", function () {
         solverAddr32,
         pastExpiry
       );
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 2);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 
       await expect(
         outflowValidator.connect(solver).fulfillIntent(newIntentId, token.target)
@@ -293,7 +293,7 @@ describe("IntentOutflowValidator", function () {
         zeroSolverAddr,
         expiry
       );
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, 2);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 
       // Admin (not the designated solver) should be able to fulfill
       await token.mint(admin.address, AMOUNT);
@@ -350,7 +350,7 @@ describe("IntentOutflowValidator", function () {
         solverAddr32,
         expiry
       );
-      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, reqPayload, 1);
+      await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, reqPayload);
       expect(await outflowValidator.hasRequirements(INTENT_ID)).to.equal(true);
 
       // 2. Solver fulfills intent

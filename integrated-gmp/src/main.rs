@@ -26,6 +26,7 @@ mod svm_client;
 mod validator;
 
 use config::Config;
+use crypto::CryptoService;
 use integrated_gmp_relay::{NativeGmpRelay, NativeGmpRelayConfig};
 
 // ============================================================================
@@ -94,7 +95,8 @@ async fn main() -> Result<()> {
 
     // Initialize and run the integrated GMP relay
     let relay_config = NativeGmpRelayConfig::from_config(&config)?;
-    let relay = NativeGmpRelay::new(relay_config)?;
+    let crypto_service = CryptoService::new(&config)?;
+    let relay = NativeGmpRelay::new(relay_config, crypto_service)?;
 
     info!("Integrated GMP relay initialized successfully");
 

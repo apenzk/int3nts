@@ -4,6 +4,7 @@ module mvmt_intent::fa_intent_outflow_tests {
     use std::option;
     use std::vector;
     use std::bcs;
+    use aptos_framework::event;
     use aptos_framework::timestamp;
     use aptos_framework::object::{Self as object, Object};
     use aptos_framework::primary_fungible_store;
@@ -404,6 +405,10 @@ module mvmt_intent::fa_intent_outflow_tests {
 
         // Verify intent was unregistered from registry after fulfillment
         assert!(!intent_registry::is_intent_registered(intent_addr));
+
+        // Verify LimitOrderFulfillmentEvent was emitted (coordinator uses this to detect completion)
+        let fulfillment_events = event::emitted_events<fa_intent_outflow::LimitOrderFulfillmentEvent>();
+        assert!(vector::length(&fulfillment_events) == 1);
     }
 
     #[test(

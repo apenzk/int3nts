@@ -260,9 +260,26 @@ fi
 # Export HUB_RPC_URL for hash calculation
 export HUB_RPC_URL="$HUB_RPC"
 
+# Parse flags
+USE_RELEASE=false
+USE_DEBUG_LOG=false
+for arg in "$@"; do
+    case "$arg" in
+        --release) USE_RELEASE=true ;;
+        --debug)   USE_DEBUG_LOG=true ;;
+    esac
+done
+
+# Set log level
+if $USE_DEBUG_LOG; then
+    SOLVER_LOG_LEVEL="debug"
+    echo "   Log level: debug"
+else
+    SOLVER_LOG_LEVEL="info,solver::service::tracker=debug,solver::chains::hub=debug"
+fi
+
 # Prepare environment variables for nix develop
-# Use debug logging for tracker and hub client to see intent detection
-ENV_VARS="SOLVER_CONFIG_PATH='$SOLVER_CONFIG' RUST_LOG=info,solver::service::tracker=debug,solver::chains::hub=debug HUB_RPC_URL='$HUB_RPC'"
+ENV_VARS="SOLVER_CONFIG_PATH='$SOLVER_CONFIG' RUST_LOG=$SOLVER_LOG_LEVEL HUB_RPC_URL='$HUB_RPC'"
 if [ -n "$BASE_SOLVER_PRIVATE_KEY" ]; then
     ENV_VARS="$ENV_VARS BASE_SOLVER_PRIVATE_KEY='$BASE_SOLVER_PRIVATE_KEY'"
 fi
@@ -282,20 +299,27 @@ if [ -n "$SOLVER_SVM_ADDR" ]; then
     ENV_VARS="$ENV_VARS SOLVER_SVM_ADDR='$SOLVER_SVM_ADDR'"
 fi
 
+# Set up log file
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/solver-$(date +%Y%m%d-%H%M%S).log"
+
 # Check if --release flag is passed
-if [ "$1" = "--release" ]; then
+if $USE_RELEASE; then
     echo " Building release binary..."
     nix develop "$PROJECT_ROOT/nix" --command bash -c "cargo build --release --manifest-path solver/Cargo.toml"
     echo ""
     echo " Starting solver (release mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo ""
-    eval "$ENV_VARS ./solver/target/release/solver"
+    eval "$ENV_VARS ./solver/target/release/solver" 2>&1 | tee "$LOG_FILE"
 else
     echo " Starting solver (debug mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop "$PROJECT_ROOT/nix" --command bash -c "$ENV_VARS cargo run --manifest-path solver/Cargo.toml --bin solver"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "$ENV_VARS cargo run --manifest-path solver/Cargo.toml --bin solver" 2>&1 | tee "$LOG_FILE"
 fi
 

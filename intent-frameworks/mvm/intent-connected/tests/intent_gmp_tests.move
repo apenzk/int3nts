@@ -121,11 +121,10 @@ module mvmt_intent::intent_gmp_tests {
     // TODO: Implement - requires setting up a mock receiver module and verifying CPI
     // Placeholder: MVM delivery currently tested indirectly via test 24 (stores_in_both_handlers).
 
-    // 17. Test: DeliverMessage rejects replay
-    // Verifies that deliver_message rejects messages with a nonce <= the last processed nonce.
-    // Why: Replay protection prevents attackers from re-submitting old messages.
+    // 17. Test: DeliverMessage is idempotent on replay (same intent_id + msg_type)
+    // Verifies that deliver_message silently returns on duplicate (intent_id, msg_type).
+    // Why: Idempotent delivery means relay retries are safe and don't cause errors.
     #[test]
-    #[expected_failure(abort_code = 2, location = mvmt_intent::intent_gmp)]
     fun test_deliver_message_rejects_replay() {
         let admin = setup_test();
 
@@ -140,23 +139,28 @@ module mvmt_intent::intent_gmp_tests {
         // Create valid payload
         let payload = create_test_payload_intent_requirements();
 
-        // Deliver first message with nonce 1 - should succeed
+        // Deliver first message - should succeed
         intent_gmp::deliver_message(
             &admin,
             HUB_CHAIN_ID,
             copy trusted_addr,
             copy payload,
-            1,
         );
 
-        // Try to deliver same nonce again - should fail
+        // Verify message is delivered
+        let intent_id = create_test_32bytes(0x11);
+        assert!(intent_gmp::is_message_delivered(copy intent_id, 0x01), 1);
+
+        // Deliver same payload again - should return silently (idempotent)
         intent_gmp::deliver_message(
             &admin,
             HUB_CHAIN_ID,
             trusted_addr,
             payload,
-            1,
         );
+
+        // Message is still marked as delivered
+        assert!(intent_gmp::is_message_delivered(intent_id, 0x01), 2);
     }
 
     // 18. Test: DeliverMessage rejects unauthorized relay
@@ -188,7 +192,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             trusted_addr,
             payload,
-            1,
         );
     }
 
@@ -223,7 +226,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             trusted_addr,
             payload,
-            1,
         );
     }
 
@@ -255,7 +257,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             untrusted_addr,
             payload,
-            1,
         );
     }
 
@@ -279,7 +280,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             src_addr,
             payload,
-            1,
         );
     }
 
@@ -304,12 +304,16 @@ module mvmt_intent::intent_gmp_tests {
         );
     }
 
-    // 23. Test: DeliverMessage rejects lower nonce
-    // Verifies that deliver_message rejects messages with nonce less than the last processed.
-    // Why: Ensures strict ordering - can't go backwards in nonce sequence.
+    // 23. Test: DeliverMessage allows same intent_id with different msg_type
+    // Verifies that (intent_id, msg_type) dedup does NOT block a different msg_type for the same intent_id.
+    // Why: A single intent goes through multiple GMP phases (0x01 requirements, 0x03 fulfillment proof).
+    // Approach: Deliver 0x01 first, then attempt 0x03 for the same intent_id.
+    // If dedup correctly includes msg_type, 0x03 passes dedup and reaches the handler (which aborts
+    // with E_ESCROW_NOT_FOUND since no escrow exists). The expected_failure proves dedup didn't block it.
+    // If dedup incorrectly ignored msg_type, 0x03 would be silently skipped and the test would fail.
     #[test]
-    #[expected_failure(abort_code = 2, location = mvmt_intent::intent_gmp)]
-    fun test_deliver_message_rejects_lower_nonce() {
+    #[expected_failure(abort_code = 11, location = mvmt_intent::intent_inflow_escrow)]
+    fun test_deliver_message_different_msg_type_succeeds() {
         let admin = setup_test();
 
         // Setup trusted remote (must match the hub addr used in module initialization)
@@ -320,25 +324,33 @@ module mvmt_intent::intent_gmp_tests {
             copy trusted_addr,
         );
 
-        // Create valid payload
-        let payload = create_test_payload_intent_requirements();
-
-        // Deliver with nonce 5
+        // Step 1: Deliver IntentRequirements (0x01) for intent 0x11...11 - succeeds
+        let payload_req = create_test_payload_intent_requirements();
         intent_gmp::deliver_message(
             &admin,
             HUB_CHAIN_ID,
             copy trusted_addr,
-            copy payload,
-            5,
+            payload_req,
         );
 
-        // Try to deliver with nonce 3 (lower than 5) - should fail
+        // Step 2: Deliver FulfillmentProof (0x03) for the SAME intent_id
+        // Build payload: msg_type(1) + intent_id(32) + solver_addr(32) + amount(8) + timestamp(8)
+        let payload_proof = gmp_common::encode_fulfillment_proof(
+            &gmp_common::new_fulfillment_proof(
+                create_test_32bytes(0x11), // same intent_id as above
+                create_test_32bytes(0x44), // solver_addr
+                1000000,                   // amount
+                86400,                     // timestamp
+            )
+        );
+
+        // This reaches the handler (dedup passes) but aborts with E_ESCROW_NOT_FOUND (11)
+        // because no escrow was created. The abort proves dedup didn't falsely block 0x03.
         intent_gmp::deliver_message(
             &admin,
             HUB_CHAIN_ID,
             trusted_addr,
-            payload,
-            3,
+            payload_proof,
         );
     }
 
@@ -367,7 +379,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             trusted_hub_addr,
             payload,
-            1,
         );
 
         // Verify requirements stored in both handlers
@@ -436,7 +447,6 @@ module mvmt_intent::intent_gmp_tests {
             HUB_CHAIN_ID,
             trusted_hub_addr,
             payload,
-            1,
         );
     }
 }

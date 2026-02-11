@@ -133,19 +133,44 @@ cd "$PROJECT_ROOT/integrated-gmp"
 export INTEGRATED_GMP_PRIVATE_KEY
 export INTEGRATED_GMP_PUBLIC_KEY
 
+# Parse flags
+USE_RELEASE=false
+USE_DEBUG_LOG=false
+for arg in "$@"; do
+    case "$arg" in
+        --release) USE_RELEASE=true ;;
+        --debug)   USE_DEBUG_LOG=true ;;
+    esac
+done
+
+# Set log level
+if $USE_DEBUG_LOG; then
+    LOG_LEVEL="debug"
+    echo "   Log level: debug"
+else
+    LOG_LEVEL="info"
+fi
+
+# Set up log file
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/integrated-gmp-$(date +%Y%m%d-%H%M%S).log"
+
 # Check if --release flag is passed
-if [ "$1" = "--release" ]; then
+if $USE_RELEASE; then
     echo " Building release binary..."
     nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/integrated-gmp' && cargo build --release"
     echo ""
     echo " Starting integrated-gmp (release mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo ""
-    RUST_LOG=info ./target/release/integrated-gmp --testnet
+    RUST_LOG=$LOG_LEVEL ./target/release/integrated-gmp --testnet 2>&1 | tee "$LOG_FILE"
 else
     echo " Starting integrated-gmp (debug mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/integrated-gmp' && RUST_LOG=info cargo run --bin integrated-gmp -- --testnet"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/integrated-gmp' && RUST_LOG=$LOG_LEVEL cargo run --bin integrated-gmp -- --testnet" 2>&1 | tee "$LOG_FILE"
 fi

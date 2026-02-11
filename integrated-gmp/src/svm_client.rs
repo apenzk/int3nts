@@ -79,48 +79,6 @@ struct AccountInfoResult {
     value: Option<RpcAccount>,
 }
 
-/// Signature info from getSignaturesForAddress
-#[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
-pub struct SignatureInfo {
-    pub signature: String,
-    pub slot: u64,
-    #[serde(rename = "blockTime")]
-    pub block_time: Option<i64>,
-    pub err: Option<serde_json::Value>,
-}
-
-/// Transaction response from getTransaction
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct TransactionResponse {
-    pub slot: u64,
-    pub meta: Option<TransactionMeta>,
-    pub transaction: TransactionData,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct TransactionMeta {
-    pub err: Option<serde_json::Value>,
-    #[serde(rename = "logMessages")]
-    pub log_messages: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct TransactionData {
-    pub message: TransactionMessage,
-    pub signatures: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct TransactionMessage {
-    #[serde(rename = "accountKeys")]
-    pub account_keys: Vec<String>,
-}
-
 // ============================================================================
 // CLIENT
 // ============================================================================
@@ -209,83 +167,6 @@ impl SvmClient {
         Ok(escrows)
     }
 
-    /// Get recent signatures for an address (e.g., the GMP program).
-    /// Returns signatures in reverse chronological order (newest first).
-    pub async fn get_signatures_for_address(
-        &self,
-        address: &Pubkey,
-        limit: Option<usize>,
-        before: Option<&str>,
-    ) -> Result<Vec<SignatureInfo>> {
-        let mut config = serde_json::json!({
-            "limit": limit.unwrap_or(100)
-        });
-        if let Some(before_sig) = before {
-            config["before"] = serde_json::json!(before_sig);
-        }
-
-        let params = serde_json::json!([address.to_string(), config]);
-
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "getSignaturesForAddress".to_string(),
-            params,
-            id: 1,
-        };
-
-        let response: JsonRpcResponse<Vec<SignatureInfo>> = self
-            .client
-            .post(&self.rpc_url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to call getSignaturesForAddress")?
-            .json()
-            .await
-            .context("Failed to parse getSignaturesForAddress response")?;
-
-        if let Some(error) = response.error {
-            return Err(anyhow::anyhow!("SVM RPC error: {}", error.message));
-        }
-
-        Ok(response.result.unwrap_or_default())
-    }
-
-    /// Get transaction details including logs.
-    pub async fn get_transaction(&self, signature: &str) -> Result<Option<TransactionResponse>> {
-        let params = serde_json::json!([
-            signature,
-            {
-                "encoding": "json",
-                "maxSupportedTransactionVersion": 0
-            }
-        ]);
-
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "getTransaction".to_string(),
-            params,
-            id: 1,
-        };
-
-        let response: JsonRpcResponse<TransactionResponse> = self
-            .client
-            .post(&self.rpc_url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to call getTransaction")?
-            .json()
-            .await
-            .context("Failed to parse getTransaction response")?;
-
-        if let Some(error) = response.error {
-            return Err(anyhow::anyhow!("SVM RPC error: {}", error.message));
-        }
-
-        Ok(response.result)
-    }
-
     #[allow(dead_code)]
     async fn get_account_info(&self, pubkey: &Pubkey) -> Result<Option<EscrowWithPubkey>> {
         let params = serde_json::json!([
@@ -331,6 +212,164 @@ impl SvmClient {
             escrow,
         }))
     }
+
+    /// Read raw account data (base64-decoded) for any Solana account.
+    /// Returns None if the account doesn't exist.
+    pub async fn get_raw_account_data(&self, pubkey: &Pubkey) -> Result<Option<Vec<u8>>> {
+        let params = serde_json::json!([
+            pubkey.to_string(),
+            { "encoding": "base64" }
+        ]);
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "getAccountInfo".to_string(),
+            params,
+            id: 1,
+        };
+
+        let response: JsonRpcResponse<AccountInfoResult> = self
+            .client
+            .post(&self.rpc_url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to call getAccountInfo")?
+            .json()
+            .await
+            .context("Failed to parse getAccountInfo response")?;
+
+        if let Some(error) = response.error {
+            return Err(anyhow::anyhow!("SVM RPC error: {}", error.message));
+        }
+
+        let Some(result) = response.result else {
+            return Ok(None);
+        };
+
+        let Some(account) = result.value else {
+            return Ok(None);
+        };
+
+        let data = STANDARD
+            .decode(&account.data.0)
+            .context("Failed to decode base64 account data")?;
+        Ok(Some(data))
+    }
+
+    /// Read the outbound nonce for a destination chain from the GMP program.
+    /// PDA seeds: ["nonce_out", dst_chain_id.to_le_bytes()]
+    /// Returns the nonce value (next nonce to be assigned), or 0 if the account doesn't exist.
+    pub async fn get_outbound_nonce(
+        &self,
+        gmp_program_id: &Pubkey,
+        dst_chain_id: u32,
+    ) -> Result<u64> {
+        let chain_id_bytes = dst_chain_id.to_le_bytes();
+        let (nonce_pda, _) = Pubkey::find_program_address(
+            &[b"nonce_out", &chain_id_bytes],
+            gmp_program_id,
+        );
+
+        let data = self.get_raw_account_data(&nonce_pda).await?;
+        let Some(data) = data else {
+            return Ok(0); // No nonce account = no messages sent to this chain
+        };
+
+        // OutboundNonceAccount layout: disc(1) + dst_chain_id(4) + nonce(8) + bump(1) = 14 bytes
+        if data.len() < 13 {
+            anyhow::bail!("OutboundNonceAccount too short: {} bytes", data.len());
+        }
+
+        let nonce = u64::from_le_bytes(
+            data[5..13]
+                .try_into()
+                .context("Failed to parse nonce bytes")?,
+        );
+        Ok(nonce)
+    }
+
+    /// Read a stored outbound message from the GMP program.
+    /// PDA seeds: ["message", dst_chain_id.to_le_bytes(), nonce.to_le_bytes()]
+    /// Returns the parsed message, or None if the account doesn't exist.
+    pub async fn get_message_data(
+        &self,
+        gmp_program_id: &Pubkey,
+        dst_chain_id: u32,
+        nonce: u64,
+    ) -> Result<Option<SvmOutboundMessage>> {
+        let chain_id_bytes = dst_chain_id.to_le_bytes();
+        let nonce_bytes = nonce.to_le_bytes();
+        let (message_pda, _) = Pubkey::find_program_address(
+            &[b"message", &chain_id_bytes, &nonce_bytes],
+            gmp_program_id,
+        );
+
+        let data = self.get_raw_account_data(&message_pda).await?;
+        let Some(data) = data else {
+            return Ok(None);
+        };
+
+        // MessageAccount layout (Borsh):
+        //   disc(1) + src_chain_id(4) + dst_chain_id(4) + nonce(8) +
+        //   dst_addr(32) + src_addr(32) + payload_len(4) + payload(N) + bump(1)
+        if data.len() < 86 {
+            anyhow::bail!("MessageAccount too short: {} bytes", data.len());
+        }
+
+        let disc = data[0];
+        if disc != 7 {
+            anyhow::bail!(
+                "MessageAccount discriminator mismatch: expected 7, got {}",
+                disc
+            );
+        }
+
+        let src_chain_id =
+            u32::from_le_bytes(data[1..5].try_into().context("src_chain_id")?);
+        let dst_chain_id =
+            u32::from_le_bytes(data[5..9].try_into().context("dst_chain_id")?);
+        let msg_nonce =
+            u64::from_le_bytes(data[9..17].try_into().context("nonce")?);
+
+        let mut dst_addr = [0u8; 32];
+        dst_addr.copy_from_slice(&data[17..49]);
+
+        let mut src_addr = [0u8; 32];
+        src_addr.copy_from_slice(&data[49..81]);
+
+        let payload_len =
+            u32::from_le_bytes(data[81..85].try_into().context("payload_len")?) as usize;
+        if data.len() < 85 + payload_len {
+            anyhow::bail!(
+                "MessageAccount payload truncated: need {} bytes, have {}",
+                85 + payload_len,
+                data.len()
+            );
+        }
+        let payload = data[85..85 + payload_len].to_vec();
+
+        Ok(Some(SvmOutboundMessage {
+            src_chain_id,
+            dst_chain_id,
+            nonce: msg_nonce,
+            dst_addr,
+            src_addr,
+            payload,
+        }))
+    }
+}
+
+/// Parsed SVM outbound message from on-chain MessageAccount.
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct SvmOutboundMessage {
+    pub src_chain_id: u32,
+    pub dst_chain_id: u32,
+    pub nonce: u64,
+    pub dst_addr: [u8; 32],
+    pub src_addr: [u8; 32],
+    pub payload: Vec<u8>,
 }
 
 #[allow(dead_code)]

@@ -28,8 +28,10 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     exit 1
 fi
 
-# Source the keys file
-source "$TESTNET_KEYS_FILE"
+# Source the keys file (skip if parent already exported env)
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
+fi
 
 # Check required variables
 if [ -z "$BASE_DEPLOYER_PRIVATE_KEY" ]; then
@@ -51,13 +53,12 @@ if [ ! -f "$ASSETS_CONFIG_FILE" ]; then
     exit 1
 fi
 
-# Read Base Sepolia RPC URL from config
-BASE_SEPOLIA_RPC_URL=$(grep -A 5 "^\[base_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
-
-if [ -z "$BASE_SEPOLIA_RPC_URL" ]; then
-    echo "❌ ERROR: Base Sepolia RPC URL not found in testnet-assets.toml"
+if [ -z "$ALCHEMY_BASE_SEPOLIA_API_KEY" ]; then
+    echo "❌ ERROR: ALCHEMY_BASE_SEPOLIA_API_KEY not set in .env.testnet"
+    echo "   Get your free API key at: https://www.alchemy.com/"
     exit 1
 fi
+BASE_SEPOLIA_RPC_URL="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_BASE_SEPOLIA_API_KEY}"
 
 echo " Configuration:"
 echo "   Deployer Address: $BASE_DEPLOYER_ADDR"
@@ -104,12 +105,28 @@ if [ ! -d "node_modules" ]; then
     echo ""
 fi
 
+# Verify RPC is responsive before deploying
+echo " Checking RPC endpoint: $BASE_SEPOLIA_RPC_URL"
+RPC_RESPONSE=$(curl -s -m 10 -X POST "$BASE_SEPOLIA_RPC_URL" \
+    -H "Content-Type: application/json" \
+    -d '{"jsonrpc":"2.0","method":"eth_getBalance","params":["'"$BASE_DEPLOYER_ADDR"'","latest"],"id":1}' 2>&1)
+
+if ! echo "$RPC_RESPONSE" | grep -q '"result"'; then
+    echo "   RPC endpoint not responding or returned error:"
+    echo "   $RPC_RESPONSE"
+    exit 1
+fi
+echo "   RPC OK"
+echo ""
+
 # Deploy contracts (run from within nix develop ./nix shell)
 echo " Deploying all 3 contracts..."
 echo "   (Run this script from within 'nix develop ./nix' shell)"
 echo ""
+set +e
 DEPLOY_OUTPUT=$(npx hardhat run scripts/deploy.js --network baseSepolia 2>&1)
 DEPLOY_EXIT_CODE=$?
+set -e
 
 # Show deployment output
 echo "$DEPLOY_OUTPUT"
@@ -129,17 +146,14 @@ GMP_ENDPOINT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentGmp:" | tail -1 | awk '{
 ESCROW_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentInflowEscrow:" | tail -1 | awk '{print $NF}' | tr -d '\n' || echo "")
 OUTFLOW_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentOutflowValidator:" | tail -1 | awk '{print $NF}' | tr -d '\n' || echo "")
 
-# Save deployed addresses to .env.testnet
-source "$SCRIPT_DIR/../lib/env-utils.sh"
-
 if [ -n "$GMP_ENDPOINT_ADDR" ] && [ -n "$ESCROW_ADDR" ]; then
-    update_env_var "$TESTNET_KEYS_FILE" "BASE_INTENT_GMP_ADDR" "$GMP_ENDPOINT_ADDR"
-    update_env_var "$TESTNET_KEYS_FILE" "BASE_GMP_ENDPOINT_ADDR" "$GMP_ENDPOINT_ADDR"
-    update_env_var "$TESTNET_KEYS_FILE" "BASE_INFLOW_ESCROW_ADDR" "$ESCROW_ADDR"
+    echo " Add these to .env.testnet:"
+    echo ""
+    echo "   BASE_GMP_ENDPOINT_ADDR=$GMP_ENDPOINT_ADDR"
+    echo "   BASE_INFLOW_ESCROW_ADDR=$ESCROW_ADDR"
     if [ -n "$OUTFLOW_ADDR" ]; then
-        update_env_var "$TESTNET_KEYS_FILE" "BASE_OUTFLOW_VALIDATOR_ADDR" "$OUTFLOW_ADDR"
+        echo "   BASE_OUTFLOW_VALIDATOR_ADDR=$OUTFLOW_ADDR"
     fi
-    echo " Addresses saved to .env.testnet"
     echo ""
 
     echo " Deployed contract addresses:"
@@ -166,6 +180,25 @@ if [ -n "$GMP_ENDPOINT_ADDR" ] && [ -n "$ESCROW_ADDR" ]; then
     echo "      NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS=$ESCROW_ADDR"
     echo ""
     echo "   5. Run ./testing-infra/testnet/check-testnet-preparedness.sh to verify"
+
+    # Save deployment log
+    LOG_DIR="$SCRIPT_DIR/../logs"
+    mkdir -p "$LOG_DIR"
+    LOG_FILE="$LOG_DIR/deploy-base-sepolia-$(date +%Y%m%d-%H%M%S).log"
+    {
+        echo "Base Sepolia Deployment — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo ""
+        echo "Deployer:                  $BASE_DEPLOYER_ADDR"
+        echo "Relay:                     $INTEGRATED_GMP_EVM_PUBKEY_HASH"
+        echo "Hub chain ID:              $HUB_CHAIN_ID"
+        echo "Hub module addr:           $MOVEMENT_INTENT_MODULE_ADDR"
+        echo ""
+        echo "IntentGmp:                 $GMP_ENDPOINT_ADDR"
+        echo "IntentInflowEscrow:        $ESCROW_ADDR"
+        echo "IntentOutflowValidator:    $OUTFLOW_ADDR"
+    } > "$LOG_FILE"
+    echo ""
+    echo " Deployment log saved to: $LOG_FILE"
 else
     echo "️  Could not extract contract addresses from output"
     echo "   Please copy them manually from the deployment output above"

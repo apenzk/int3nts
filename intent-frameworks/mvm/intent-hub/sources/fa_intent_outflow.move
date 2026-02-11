@@ -14,6 +14,8 @@ module mvmt_intent::fa_intent_outflow {
     use mvmt_intent::gmp_intent_state;
     use mvmt_intent::gmp_common;
     use aptos_std::ed25519;
+    use aptos_framework::event;
+    use aptos_framework::timestamp;
 
     /// The solver signature is invalid and cannot be verified.
     const E_INVALID_SIGNATURE: u64 = 2;
@@ -21,6 +23,18 @@ module mvmt_intent::fa_intent_outflow {
     const E_INVALID_REQUESTER_ADDR: u64 = 3;
     /// Fulfillment proof not received for this intent.
     const E_FULFILLMENT_PROOF_NOT_RECEIVED: u64 = 7;
+
+    #[event]
+    /// Event emitted when an outflow intent is fulfilled.
+    /// Mirrors fa_intent::LimitOrderFulfillmentEvent so the coordinator detects completion.
+    struct LimitOrderFulfillmentEvent has store, drop {
+        intent_addr: address,
+        intent_id: address,
+        solver: address,
+        provided_metadata: Object<Metadata>,
+        provided_amount: u64,
+        timestamp: u64,
+    }
 
     // ============================================================================
     // SHARED UTILITIES
@@ -131,27 +145,39 @@ module mvmt_intent::fa_intent_outflow {
             error::invalid_state(E_FULFILLMENT_PROOF_NOT_RECEIVED)
         );
 
-        // 3. Get payment metadata from unlocked tokens BEFORE depositing
+        // 3. Capture token info from unlocked tokens BEFORE depositing
+        let provided_metadata = fungible_asset::metadata_from_asset(&unlocked_fa);
+        let provided_amount = fungible_asset::amount(&unlocked_fa);
         let payment_metadata = fungible_asset::asset_metadata(&unlocked_fa);
 
         // 4. Deposit unlocked tokens to solver (they get the locked tokens as reward)
         primary_fungible_store::deposit(solver_addr, unlocked_fa);
 
-        // 5. Withdraw 0 tokens as payment (desired_amount = 0 on hub for outflow)
+        // 5. Emit fulfillment event so coordinator/frontend detect completion
+        event::emit(LimitOrderFulfillmentEvent {
+            intent_addr,
+            intent_id: intent_id_addr,
+            solver: solver_addr,
+            provided_metadata,
+            provided_amount,
+            timestamp: timestamp::now_seconds(),
+        });
+
+        // 6. Withdraw 0 tokens as payment (desired_amount = 0 on hub for outflow)
         let solver_payment = primary_fungible_store::withdraw(
             solver, payment_metadata, 0
         );
 
-        // 6. Complete the intent using GMP proof flow (no oracle witness needed)
+        // 7. Complete the intent using GMP proof flow (no oracle witness needed)
         fa_intent_with_oracle::finish_fa_receiving_session_for_gmp(
             session,
             solver_payment,
         );
 
-        // 7. Unregister intent from the registry
+        // 8. Unregister intent from the registry
         intent_registry::unregister_intent(intent_addr);
 
-        // 8. Remove intent from GMP state tracking
+        // 9. Remove intent from GMP state tracking
         gmp_intent_state::remove_intent(intent_id_bytes);
     }
 

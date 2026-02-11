@@ -85,8 +85,10 @@ pub enum NativeGmpInstruction {
     /// 0. `[]` Config account (PDA: ["config"])
     /// 1. `[writable]` Outbound nonce account (PDA: ["nonce_out", dst_chain_id])
     /// 2. `[signer]` Sender (the program/user sending the message, for authorization)
-    /// 3. `[signer]` Payer (pays for nonce account creation if needed)
+    /// 3. `[signer]` Payer (pays for account creation)
     /// 4. `[]` System program
+    /// 5. `[writable]` Message account (PDA: ["message", dst_chain_id, nonce])
+    ///    Caller derives this from the current nonce value in the nonce_out account.
     Send {
         /// Destination chain endpoint ID (e.g., Movement = 30325)
         dst_chain_id: u32,
@@ -106,6 +108,9 @@ pub enum NativeGmpInstruction {
     /// on the source chain. The relay decodes the event, constructs this
     /// instruction, and submits it to the destination chain.
     ///
+    /// Deduplication uses (intent_id, msg_type) extracted from the payload,
+    /// making delivery immune to program redeployments (unlike sequential nonces).
+    ///
     /// Message routing (similar to MVM's route_message):
     /// - IntentRequirements (0x01): Routes to BOTH outflow_validator AND intent_escrow (if routing configured)
     /// - Other message types: Single destination (destination_program_1 account)
@@ -114,9 +119,9 @@ pub enum NativeGmpInstruction {
     /// 0. `[]` Config account (PDA: ["config"])
     /// 1. `[]` Relay account (PDA: ["relay", relay_pubkey])
     /// 2. `[]` Trusted remote account (PDA: ["trusted_remote", src_chain_id])
-    /// 3. `[writable]` Inbound nonce account (PDA: ["nonce_in", src_chain_id])
+    /// 3. `[writable]` Delivered message account (PDA: ["delivered", intent_id, &[msg_type]])
     /// 4. `[signer]` Relay (must be authorized)
-    /// 5. `[signer]` Payer (for nonce account creation if needed)
+    /// 5. `[signer]` Payer (for delivered message account creation)
     /// 6. `[]` System program
     /// 7. `[]` Routing config account (PDA: ["routing"]) - pass any account if routing not configured
     /// 8. `[]` Destination program 1 (outflow_validator for routing, or single destination)
@@ -129,7 +134,5 @@ pub enum NativeGmpInstruction {
         src_addr: [u8; 32],
         /// Message payload (encoded GMP message)
         payload: Vec<u8>,
-        /// Nonce for replay protection
-        nonce: u64,
     },
 }

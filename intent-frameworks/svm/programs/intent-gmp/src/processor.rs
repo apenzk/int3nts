@@ -1,6 +1,8 @@
 //! Instruction processor for the integrated GMP endpoint program.
 
 use borsh::{BorshDeserialize, BorshSerialize};
+#[allow(deprecated)]
+use solana_program::system_instruction;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
@@ -9,20 +11,19 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
-    system_instruction,
     sysvar::Sysvar,
 };
 
 use crate::error::GmpError;
 use crate::instruction::NativeGmpInstruction;
 use crate::state::{
-    seeds, ConfigAccount, InboundNonceAccount, OutboundNonceAccount, RelayAccount,
+    seeds, ConfigAccount, DeliveredMessage, MessageAccount, OutboundNonceAccount, RelayAccount,
     RoutingConfig, TrustedRemoteAccount,
 };
 
 /// Message type constants (matches MVM's gmp_common)
 const MESSAGE_TYPE_INTENT_REQUIREMENTS: u8 = 0x01;
-const MESSAGE_TYPE_ESCROW_CONFIRMATION: u8 = 0x02;
+const _MESSAGE_TYPE_ESCROW_CONFIRMATION: u8 = 0x02;
 const MESSAGE_TYPE_FULFILLMENT_PROOF: u8 = 0x03;
 
 /// Program entrypoint processor.
@@ -74,10 +75,9 @@ pub fn process_instruction(
             src_chain_id,
             src_addr,
             payload,
-            nonce,
         } => {
             msg!("Instruction: DeliverMessage");
-            process_deliver_message(program_id, accounts, src_chain_id, src_addr, payload, nonce)
+            process_deliver_message(program_id, accounts, src_chain_id, src_addr, payload)
         }
     }
 }
@@ -402,7 +402,11 @@ fn process_set_routing(
     Ok(())
 }
 
-/// Process Send instruction - emit event for relay to pick up.
+/// Process Send instruction - store message on-chain for relay to read.
+///
+/// Creates a MessageAccount PDA that the relay reads via getAccountInfo,
+/// eliminating the need for getSignaturesForAddress (which is rate-limited
+/// on public Solana RPC endpoints).
 fn process_send(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -417,6 +421,7 @@ fn process_send(
     let sender = next_account_info(account_info_iter)?;
     let payer = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
+    let message_account = next_account_info(account_info_iter)?;
 
     // Verify sender is signer
     if !sender.is_signer {
@@ -466,11 +471,56 @@ fn process_send(
         nonce
     };
 
-    // Emit MessageSent event for GMP relay
-    // Format: structured for easy parsing by the relay
-    // Note: Use src_addr provided by caller (e.g., outflow-validator program ID) so destination
-    // can verify trusted remote. The sender account is only used for authorization.
-    // src_addr is emitted as base58 Pubkey for relay compatibility.
+    // Create message account PDA to store the outbound message on-chain.
+    // Relay reads this via getAccountInfo (not rate-limited) instead of
+    // scanning transaction logs via getSignaturesForAddress (rate-limited).
+    let nonce_bytes = nonce.to_le_bytes();
+    let (message_pda, message_bump) = Pubkey::find_program_address(
+        &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_bytes],
+        program_id,
+    );
+
+    if message_account.key != &message_pda {
+        return Err(GmpError::InvalidPda.into());
+    }
+
+    let message_space = MessageAccount::size(payload.len());
+    let rent = Rent::get()?;
+    let message_lamports = rent.minimum_balance(message_space);
+
+    invoke_signed(
+        &system_instruction::create_account(
+            payer.key,
+            message_account.key,
+            message_lamports,
+            message_space as u64,
+            program_id,
+        ),
+        &[
+            payer.clone(),
+            message_account.clone(),
+            system_program.clone(),
+        ],
+        &[&[
+            seeds::MESSAGE_SEED,
+            &chain_id_bytes,
+            &nonce_bytes,
+            &[message_bump],
+        ]],
+    )?;
+
+    let message_data = MessageAccount::new(
+        config.chain_id,
+        dst_chain_id,
+        nonce,
+        dst_addr,
+        src_addr,
+        payload.clone(),
+        message_bump,
+    );
+    message_data.serialize(&mut &mut message_account.data.borrow_mut()[..])?;
+
+    // Also emit log for backward compatibility / debugging
     let src_addr_pubkey = Pubkey::new_from_array(src_addr);
     msg!(
         "MessageSent: src_chain_id={}, dst_chain_id={}, src_addr={}, dst_addr={}, nonce={}, payload_len={}, payload_hex={}",
@@ -488,6 +538,9 @@ fn process_send(
 
 /// Process DeliverMessage instruction - verify relay and route to destination(s).
 ///
+/// Deduplication uses (intent_id, msg_type) extracted from the payload,
+/// making delivery immune to program redeployments (unlike sequential nonces).
+///
 /// Message routing (similar to MVM's route_message):
 /// - IntentRequirements (0x01): Routes to BOTH outflow_validator AND intent_escrow (if configured)
 /// - Other message types: Single destination (destination_program account)
@@ -496,7 +549,7 @@ fn process_send(
 /// 0. Config account (PDA: ["config"])
 /// 1. Relay account (PDA: ["relay", relay_pubkey])
 /// 2. Trusted remote account (PDA: ["trusted_remote", src_chain_id])
-/// 3. Inbound nonce account (PDA: ["nonce_in", src_chain_id])
+/// 3. Delivered message account (PDA: ["delivered", intent_id, &[msg_type]])
 /// 4. Relay signer
 /// 5. Payer
 /// 6. System program
@@ -510,13 +563,20 @@ fn process_deliver_message(
     src_chain_id: u32,
     src_addr: [u8; 32],
     payload: Vec<u8>,
-    nonce: u64,
 ) -> ProgramResult {
+    // Extract intent_id and msg_type from payload for dedup
+    // All GMP messages: msg_type (1 byte) + intent_id (32 bytes) at the start
+    if payload.len() < 33 {
+        return Err(GmpError::InvalidPayload.into());
+    }
+    let msg_type = payload[0];
+    let intent_id = &payload[1..33];
+
     let account_info_iter = &mut accounts.iter();
     let config_account = next_account_info(account_info_iter)?;
     let relay_account = next_account_info(account_info_iter)?;
     let trusted_remote_account = next_account_info(account_info_iter)?;
-    let nonce_account = next_account_info(account_info_iter)?;
+    let delivered_account = next_account_info(account_info_iter)?;
     let relay_signer = next_account_info(account_info_iter)?;
     let payer = next_account_info(account_info_iter)?;
     let system_program = next_account_info(account_info_iter)?;
@@ -577,55 +637,48 @@ fn process_deliver_message(
         return Err(GmpError::UntrustedRemote.into());
     }
 
-    // Check nonce for replay protection
-    let (nonce_pda, nonce_bump) =
-        Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], program_id);
+    // Replay protection: deduplicate by (intent_id, msg_type) via DeliveredMessage PDA
+    let (delivered_pda, delivered_bump) = Pubkey::find_program_address(
+        &[seeds::DELIVERED_SEED, intent_id, &[msg_type]],
+        program_id,
+    );
 
-    if nonce_account.key != &nonce_pda {
+    if delivered_account.key != &delivered_pda {
         return Err(GmpError::InvalidPda.into());
     }
 
-    // Create or check nonce account
-    if nonce_account.data_is_empty() {
-        // First message from this chain - create nonce account
-        let rent = Rent::get()?;
-        let space = InboundNonceAccount::SIZE;
-        let lamports = rent.minimum_balance(space);
-
-        invoke_signed(
-            &system_instruction::create_account(
-                payer.key,
-                nonce_account.key,
-                lamports,
-                space as u64,
-                program_id,
-            ),
-            &[payer.clone(), nonce_account.clone(), system_program.clone()],
-            &[&[seeds::NONCE_IN_SEED, &chain_id_bytes, &[nonce_bump]]],
-        )?;
-
-        let mut nonce_data = InboundNonceAccount::new(src_chain_id, nonce_bump);
-        nonce_data.update_nonce(nonce);
-        nonce_data.serialize(&mut &mut nonce_account.data.borrow_mut()[..])?;
-    } else {
-        let mut nonce_data = InboundNonceAccount::try_from_slice(&nonce_account.data.borrow())
-            .map_err(|_| GmpError::InvalidDiscriminator)?;
-
-        if nonce_data.is_replay(nonce) {
-            msg!(
-                "Replay detected: nonce={}, last_nonce={}",
-                nonce,
-                nonce_data.last_nonce
-            );
-            return Err(GmpError::ReplayDetected.into());
-        }
-
-        nonce_data.update_nonce(nonce);
-        nonce_data.serialize(&mut &mut nonce_account.data.borrow_mut()[..])?;
+    // If the delivered account already exists, the message was already delivered
+    if !delivered_account.data_is_empty() {
+        msg!(
+            "Already delivered: intent_id={}, msg_type={}",
+            hex_encode(intent_id),
+            msg_type
+        );
+        return Err(GmpError::AlreadyDelivered.into());
     }
 
+    // Create the delivered message PDA to mark this message as delivered
+    let rent = Rent::get()?;
+    let space = DeliveredMessage::SIZE;
+    let lamports = rent.minimum_balance(space);
+
+    invoke_signed(
+        &system_instruction::create_account(
+            payer.key,
+            delivered_account.key,
+            lamports,
+            space as u64,
+            program_id,
+        ),
+        &[payer.clone(), delivered_account.clone(), system_program.clone()],
+        &[&[seeds::DELIVERED_SEED, intent_id, &[msg_type], &[delivered_bump]]],
+    )?;
+
+    let delivered_data = DeliveredMessage::new(delivered_bump);
+    delivered_data.serialize(&mut &mut delivered_account.data.borrow_mut()[..])?;
+
     // Check message type and determine routing
-    let message_type = payload.first().copied().unwrap_or(0);
+    let message_type = msg_type;
 
     // Check if routing config exists and is valid
     let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], program_id);
@@ -670,10 +723,10 @@ fn process_deliver_message(
             }
 
             msg!(
-                "MessageDelivered (routed): src_chain_id={}, src_addr={}, nonce={}, payload_len={}, dest1={}, dest2={}",
+                "MessageDelivered (routed): src_chain_id={}, src_addr={}, intent_id={}, payload_len={}, dest1={}, dest2={}",
                 src_chain_id,
                 hex_encode(&src_addr),
-                nonce,
+                hex_encode(intent_id),
                 payload.len(),
                 destination_program_1.key,
                 destination_program_2.key
@@ -712,10 +765,10 @@ fn process_deliver_message(
             }
 
             msg!(
-                "MessageDelivered (FulfillmentProof to escrow): src_chain_id={}, src_addr={}, nonce={}, payload_len={}, dest={}",
+                "MessageDelivered (FulfillmentProof to escrow): src_chain_id={}, src_addr={}, intent_id={}, payload_len={}, dest={}",
                 src_chain_id,
                 hex_encode(&src_addr),
-                nonce,
+                hex_encode(intent_id),
                 payload.len(),
                 destination_program_2.key
             );
@@ -736,10 +789,10 @@ fn process_deliver_message(
         _ => {
             // Single destination: use destination_program_1 account
             msg!(
-                "MessageDelivered: src_chain_id={}, src_addr={}, nonce={}, payload_len={}, destination={}",
+                "MessageDelivered: src_chain_id={}, src_addr={}, intent_id={}, payload_len={}, destination={}",
                 src_chain_id,
                 hex_encode(&src_addr),
-                nonce,
+                hex_encode(intent_id),
                 payload.len(),
                 destination_program_1.key
             );

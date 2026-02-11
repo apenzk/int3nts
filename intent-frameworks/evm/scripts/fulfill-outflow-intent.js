@@ -47,9 +47,27 @@ async function main() {
     evmTokenAddr = "0x" + tokenAddr.slice(-40);
   }
 
-  // signers[2] is the solver account (Hardhat account #2)
-  const signers = await hre.ethers.getSigners();
-  const solver = signers[2];
+  // Get solver signer
+  let solver;
+
+  if (hre.network.name === "hardhat") {
+    // In-memory Hardhat network (unit tests) - getSigners() works fine here
+    const signers = await hre.ethers.getSigners();
+    solver = signers[2];
+  } else if (process.env.BASE_SOLVER_PRIVATE_KEY) {
+    // Testnet: Create wallet from private key using raw ethers
+    const { ethers } = require("ethers");
+    const rpcUrl = hre.network.config.url || "http://127.0.0.1:8545";
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    solver = new ethers.Wallet(process.env.BASE_SOLVER_PRIVATE_KEY, provider);
+  } else {
+    // External network (E2E tests): use raw ethers with node-managed accounts
+    const { ethers } = require("ethers");
+    const rpcUrl = hre.network.config.url || "http://127.0.0.1:8545";
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
+    const accounts = await provider.send("eth_accounts", []);
+    solver = new ethers.Wallet(accounts[2], provider);
+  }
 
   console.log(`Solver address: ${solver.address}`);
   console.log(`Outflow validator: ${outflowValidatorAddr}`);
@@ -80,9 +98,11 @@ async function main() {
   console.log(`Approval tx: ${approveTx.hash}`);
 
   // Call fulfillIntent(intentId, token)
+  // Set gasLimit to skip estimateGas — avoids stale-state race after approval
   const fulfillTx = await outflowValidator.fulfillIntent(
     intentIdBytes32,
-    evmTokenAddr
+    evmTokenAddr,
+    { gasLimit: 500_000 }
   );
   const receipt = await fulfillTx.wait();
   console.log(`Transaction hash: ${fulfillTx.hash}`);

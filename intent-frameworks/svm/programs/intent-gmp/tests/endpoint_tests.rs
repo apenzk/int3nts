@@ -1,13 +1,13 @@
 //! Interface tests for the integrated GMP endpoint program.
 //!
 //! These tests verify that instructions and state can be correctly serialized,
-//! and that the nonce tracking logic works correctly for replay protection.
+//! and that the (intent_id, msg_type) deduplication logic works correctly for replay protection.
 
 use borsh::BorshDeserialize;
 use intent_gmp::{
     instruction::NativeGmpInstruction,
     state::{
-        ConfigAccount, InboundNonceAccount, OutboundNonceAccount, RelayAccount,
+        ConfigAccount, DeliveredMessage, OutboundNonceAccount, RelayAccount,
         RoutingConfig, TrustedRemoteAccount,
     },
     GmpError,
@@ -89,13 +89,11 @@ fn test_deliver_message_instruction_serialization() {
     let original_src_chain_id = DUMMY_CHAIN_ID_MVM;
     let original_src_addr = dummy_src_addr();
     let original_payload = dummy_payload();
-    let original_nonce = 42u64;
 
     let instruction = NativeGmpInstruction::DeliverMessage {
         src_chain_id: original_src_chain_id,
         src_addr: original_src_addr,
         payload: original_payload.clone(),
-        nonce: original_nonce,
     };
 
     let encoded = borsh::to_vec(&instruction).unwrap();
@@ -106,12 +104,10 @@ fn test_deliver_message_instruction_serialization() {
             src_chain_id,
             src_addr,
             payload,
-            nonce,
         } => {
             assert_eq!(src_chain_id, original_src_chain_id);
             assert_eq!(src_addr, original_src_addr);
             assert_eq!(payload, original_payload);
-            assert_eq!(nonce, original_nonce);
         }
         _ => panic!("Wrong instruction variant"),
     }
@@ -325,38 +321,22 @@ fn test_outbound_nonce_account() {
     assert_eq!(nonce_account.nonce, 2);
 }
 
-/// 12. Test: InboundNonceAccount replay detection
-/// Verifies that replay detection correctly identifies previously processed nonces.
-/// Why: Replay protection prevents double-processing of messages. Bugs here would allow replay attacks.
+/// 12. Test: DeliveredMessage serialization roundtrip
+/// Verifies that DeliveredMessage state can be serialized and deserialized correctly.
+/// Why: Delivered message markers prevent double-processing of messages. Serialization bugs could allow replay attacks.
 #[test]
-fn test_inbound_nonce_account_replay_detection() {
-    let mut nonce_account = InboundNonceAccount::new(DUMMY_CHAIN_ID_MVM, 251);
+fn test_delivered_message_serialization() {
+    let original_bump = 251u8;
 
-    assert_eq!(nonce_account.last_nonce, 0);
+    let delivered = DeliveredMessage::new(original_bump);
 
-    // Nonce 1 is not a replay (first message)
-    assert!(!nonce_account.is_replay(1));
-    nonce_account.update_nonce(1);
-    assert_eq!(nonce_account.last_nonce, 1);
+    let encoded = borsh::to_vec(&delivered).unwrap();
+    assert_eq!(encoded.len(), DeliveredMessage::SIZE, "Serialized size should match SIZE constant");
 
-    // Nonce 1 is now a replay
-    assert!(nonce_account.is_replay(1));
+    let decoded = DeliveredMessage::try_from_slice(&encoded).unwrap();
 
-    // Nonce 0 is a replay
-    assert!(nonce_account.is_replay(0));
-
-    // Nonce 2 is not a replay
-    assert!(!nonce_account.is_replay(2));
-    nonce_account.update_nonce(2);
-
-    // Skip to nonce 5 (gaps allowed)
-    assert!(!nonce_account.is_replay(5));
-    nonce_account.update_nonce(5);
-    assert_eq!(nonce_account.last_nonce, 5);
-
-    // Nonce 3 and 4 are now replays (even though never seen)
-    assert!(nonce_account.is_replay(3));
-    assert!(nonce_account.is_replay(4));
+    assert_eq!(decoded.discriminator, DeliveredMessage::DISCRIMINATOR);
+    assert_eq!(decoded.bump, original_bump);
 }
 
 // ============================================================================
@@ -392,7 +372,7 @@ fn test_error_codes_unique() {
         GmpError::UnauthorizedAdmin,
         GmpError::UnauthorizedRelay,
         GmpError::UntrustedRemote,
-        GmpError::ReplayDetected,
+        GmpError::AlreadyDelivered,
         GmpError::InvalidDiscriminator,
     ];
 
@@ -434,15 +414,15 @@ mod integration {
     use borsh::{BorshDeserialize, BorshSerialize};
     use intent_gmp::{
         instruction::NativeGmpInstruction,
-        state::{seeds, ConfigAccount, OutboundNonceAccount, RelayAccount, RoutingConfig, TrustedRemoteAccount, InboundNonceAccount},
+        state::{seeds, DeliveredMessage, MessageAccount, OutboundNonceAccount},
     };
     use solana_program::instruction::{AccountMeta, Instruction};
     use solana_program_test::{processor, ProgramTest, ProgramTestContext};
+    #[allow(deprecated)]
+    use solana_sdk::system_program;
     use solana_sdk::{
-        account::Account,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_program,
         transaction::Transaction,
     };
 
@@ -597,6 +577,10 @@ mod integration {
     }
 
     /// Helper: create Send instruction
+    ///
+    /// `current_nonce` is the current value in the OutboundNonceAccount (or 0 if
+    /// the account doesn't exist yet). The message PDA is derived from this nonce
+    /// because `increment()` returns the current value before advancing.
     fn create_send_ix(
         program_id: Pubkey,
         sender: Pubkey,
@@ -605,11 +589,17 @@ mod integration {
         dst_addr: [u8; 32],
         src_addr: [u8; 32],
         payload: Vec<u8>,
+        current_nonce: u64,
     ) -> Instruction {
         let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
         let chain_id_bytes = dst_chain_id.to_le_bytes();
         let (nonce_pda, _) = Pubkey::find_program_address(
             &[seeds::NONCE_OUT_SEED, &chain_id_bytes],
+            &program_id,
+        );
+        let nonce_bytes = current_nonce.to_le_bytes();
+        let (message_pda, _) = Pubkey::find_program_address(
+            &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_bytes],
             &program_id,
         );
         Instruction {
@@ -620,12 +610,16 @@ mod integration {
                 AccountMeta::new_readonly(sender, true),
                 AccountMeta::new(payer, true),
                 AccountMeta::new_readonly(system_program::id(), false),
+                AccountMeta::new(message_pda, false),
             ],
             data: NativeGmpInstruction::Send { dst_chain_id, dst_addr, src_addr, payload }.try_to_vec().unwrap(),
         }
     }
 
     /// Helper: create DeliverMessage instruction
+    ///
+    /// Payload must be >= 33 bytes: msg_type(1) + intent_id(32) + ...
+    /// The delivered_pda is derived from the payload's intent_id and msg_type.
     fn create_deliver_message_ix(
         program_id: Pubkey,
         relay: Pubkey,
@@ -634,7 +628,6 @@ mod integration {
         src_chain_id: u32,
         src_addr: [u8; 32],
         payload: Vec<u8>,
-        nonce: u64,
     ) -> Instruction {
         let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
         let (relay_pda, _) = Pubkey::find_program_address(&[seeds::RELAY_SEED, relay.as_ref()], &program_id);
@@ -643,13 +636,16 @@ mod integration {
             &[seeds::TRUSTED_REMOTE_SEED, &chain_id_bytes],
             &program_id,
         );
-        let (nonce_pda, _) = Pubkey::find_program_address(
-            &[seeds::NONCE_IN_SEED, &chain_id_bytes],
+        // Derive delivered PDA from payload (intent_id + msg_type)
+        let msg_type = payload[0];
+        let intent_id = &payload[1..33];
+        let (delivered_pda, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, intent_id, &[msg_type]],
             &program_id,
         );
         let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], &program_id);
-        // Account order (updated for routing support):
-        // 0. Config, 1. Relay, 2. TrustedRemote, 3. NonceIn, 4. RelaySigner, 5. Payer
+        // Account order:
+        // 0. Config, 1. Relay, 2. TrustedRemote, 3. DeliveredMessage, 4. RelaySigner, 5. Payer
         // 6. SystemProgram, 7. RoutingConfig, 8. DestProgram1, 9. DestProgram2, 10+. Remaining
         // For tests without routing, we pass destination_program as both dest1 and dest2
         Instruction {
@@ -658,7 +654,7 @@ mod integration {
                 AccountMeta::new_readonly(config_pda, false),
                 AccountMeta::new_readonly(relay_pda, false),
                 AccountMeta::new_readonly(trusted_remote_pda, false),
-                AccountMeta::new(nonce_pda, false),
+                AccountMeta::new(delivered_pda, false),
                 AccountMeta::new_readonly(relay, true),
                 AccountMeta::new(payer, true),
                 AccountMeta::new_readonly(system_program::id(), false),
@@ -666,7 +662,7 @@ mod integration {
                 AccountMeta::new_readonly(destination_program, false), // dest program 1
                 AccountMeta::new_readonly(destination_program, false), // dest program 2 (same for tests)
             ],
-            data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload, nonce }.try_to_vec().unwrap(),
+            data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload }.try_to_vec().unwrap(),
         }
     }
 
@@ -703,7 +699,6 @@ mod integration {
         src_chain_id: u32,
         src_addr: [u8; 32],
         payload: Vec<u8>,
-        nonce: u64,
         remaining_accounts: Vec<AccountMeta>,
     ) -> Instruction {
         let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
@@ -713,8 +708,11 @@ mod integration {
             &[seeds::TRUSTED_REMOTE_SEED, &chain_id_bytes],
             &program_id,
         );
-        let (nonce_pda, _) = Pubkey::find_program_address(
-            &[seeds::NONCE_IN_SEED, &chain_id_bytes],
+        // Derive delivered PDA from payload
+        let msg_type = payload[0];
+        let intent_id = &payload[1..33];
+        let (delivered_pda, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, intent_id, &[msg_type]],
             &program_id,
         );
         let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], &program_id);
@@ -722,7 +720,7 @@ mod integration {
             AccountMeta::new_readonly(config_pda, false),
             AccountMeta::new_readonly(relay_pda, false),
             AccountMeta::new_readonly(trusted_remote_pda, false),
-            AccountMeta::new(nonce_pda, false),
+            AccountMeta::new(delivered_pda, false),
             AccountMeta::new_readonly(relay, true),
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(system_program::id(), false),
@@ -734,7 +732,7 @@ mod integration {
         Instruction {
             program_id,
             accounts,
-            data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload, nonce }.try_to_vec().unwrap(),
+            data: NativeGmpInstruction::DeliverMessage { src_chain_id, src_addr, payload }.try_to_vec().unwrap(),
         }
     }
 
@@ -766,7 +764,7 @@ mod integration {
         let dst_addr = [0xab; 32];
         let src_addr = program_id.to_bytes(); // Use program ID as src_addr (typical for on-chain callers)
         let payload1 = vec![0x01, 0x02, 0x03];
-        let send_ix = create_send_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, dst_addr, src_addr, payload1);
+        let send_ix = create_send_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, dst_addr, src_addr, payload1.clone(), 0);
         send_tx(&mut context, &admin, &[send_ix], &[]).await.unwrap();
 
         // Verify nonce account created with nonce = 1 (after first send)
@@ -776,12 +774,25 @@ mod integration {
         assert_eq!(nonce_account.nonce, 1, "Nonce should be 1 after first send (got {})", nonce_account.nonce);
         assert_eq!(nonce_account.dst_chain_id, CHAIN_ID_MVM);
 
+        // Verify message account was created for nonce=0
+        let nonce_0_bytes = 0u64.to_le_bytes();
+        let (message_pda, _) = Pubkey::find_program_address(
+            &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_0_bytes], &program_id);
+        let message: MessageAccount = read_account(&mut context, message_pda).await;
+        assert_eq!(message.discriminator, MessageAccount::DISCRIMINATOR);
+        assert_eq!(message.src_chain_id, CHAIN_ID_SVM);
+        assert_eq!(message.dst_chain_id, CHAIN_ID_MVM);
+        assert_eq!(message.nonce, 0);
+        assert_eq!(message.dst_addr, dst_addr);
+        assert_eq!(message.src_addr, src_addr);
+        assert_eq!(message.payload, payload1);
+
         // Warp to a new slot to ensure transaction uniqueness in test framework
         context.warp_to_slot(100).unwrap();
 
         // Send second message (different payload for unique transaction)
         let payload2 = vec![0x04, 0x05, 0x06];
-        let send_ix2 = create_send_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, dst_addr, src_addr, payload2);
+        let send_ix2 = create_send_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, dst_addr, src_addr, payload2, 1);
         send_tx(&mut context, &admin, &[send_ix2], &[]).await.unwrap();
 
         // Verify nonce incremented
@@ -817,8 +828,11 @@ mod integration {
         let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
         send_tx(&mut context, &admin, &[set_trusted_ix], &[]).await.unwrap();
 
-        // Deliver message (nonce = 1)
-        let payload = vec![0x01, 0x02, 0x03];
+        // Deliver message with intent_id_1
+        // Payload: msg_type(1) + intent_id(32) + extra data
+        let mut payload = vec![0x01]; // msg_type = IntentRequirements
+        payload.extend_from_slice(&[0xA1; 32]); // intent_id_1
+        payload.extend_from_slice(&[0x02, 0x03]); // extra data
         let deliver_ix = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -826,20 +840,27 @@ mod integration {
             mock_receiver_id(),
             CHAIN_ID_MVM,
             src_addr,
-            payload,
-            1, // nonce
+            payload.clone(),
         );
         // This should succeed - the mock receiver accepts any instruction
         send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
 
-        // Verify inbound nonce updated
-        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
-        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], &program_id);
-        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
-        assert_eq!(nonce_account.last_nonce, 1, "Last nonce should be 1 after first delivery");
+        // Verify delivered message PDA was created
+        let intent_id_1 = &[0xA1u8; 32];
+        let (delivered_pda, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, &intent_id_1[..], &[0x01]],
+            &program_id,
+        );
+        let delivered: DeliveredMessage = read_account(&mut context, delivered_pda).await;
+        assert_eq!(delivered.discriminator, DeliveredMessage::DISCRIMINATOR);
 
-        // Deliver another message (nonce = 2) - should succeed
-        let payload2 = vec![0x04, 0x05];
+        // Warp to a new slot to ensure transaction uniqueness in test framework
+        context.warp_to_slot(100).unwrap();
+
+        // Deliver another message with different intent_id - should succeed
+        let mut payload2 = vec![0x01]; // same msg_type
+        payload2.extend_from_slice(&[0xA2; 32]); // intent_id_2 (different)
+        payload2.extend_from_slice(&[0x04, 0x05]); // extra data
         let deliver_ix2 = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -848,16 +869,21 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload2,
-            2, // nonce
         );
         send_tx(&mut context, &relay, &[deliver_ix2], &[]).await.unwrap();
 
-        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
-        assert_eq!(nonce_account.last_nonce, 2, "Last nonce should be 2 after second delivery");
+        // Verify second delivered message PDA was created
+        let intent_id_2 = &[0xA2u8; 32];
+        let (delivered_pda2, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, &intent_id_2[..], &[0x01]],
+            &program_id,
+        );
+        let delivered2: DeliveredMessage = read_account(&mut context, delivered_pda2).await;
+        assert_eq!(delivered2.discriminator, DeliveredMessage::DISCRIMINATOR);
     }
 
-    /// 17. Test: DeliverMessage rejects replay (duplicate nonce)
-    /// Verifies that replay protection works correctly.
+    /// 17. Test: DeliverMessage rejects replay (duplicate intent_id + msg_type)
+    /// Verifies that replay protection works correctly using (intent_id, msg_type) deduplication.
     /// Why: Replay attacks would allow double-processing of messages, potentially causing fund loss.
     #[tokio::test]
     async fn test_deliver_message_rejects_replay() {
@@ -878,8 +904,10 @@ mod integration {
         let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
         send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
 
-        // Deliver first message (nonce = 1)
-        let payload1 = vec![0x01];
+        // Deliver first message
+        let mut payload1 = vec![0x01]; // msg_type = IntentRequirements
+        payload1.extend_from_slice(&[0xBB; 32]); // intent_id
+        payload1.extend_from_slice(&[0x01, 0x02]); // extra data
         let deliver_ix = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -887,16 +915,15 @@ mod integration {
             mock_receiver_id(),
             CHAIN_ID_MVM,
             src_addr,
-            payload1,
-            1,
+            payload1.clone(),
         );
         send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
 
         // Warp to a new slot to ensure transaction uniqueness in test framework
         context.warp_to_slot(100).unwrap();
 
-        // Try to replay same nonce with different payload - should fail
-        let payload2 = vec![0x02]; // Different payload to ensure unique transaction
+        // Try to deliver same intent_id + msg_type again - should fail (AlreadyDelivered)
+        // Same payload means same intent_id and msg_type -> same DeliveredMessage PDA (already exists)
         let deliver_replay = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -904,11 +931,10 @@ mod integration {
             mock_receiver_id(),
             CHAIN_ID_MVM,
             src_addr,
-            payload2,
-            1, // same nonce - should be rejected as replay
+            payload1, // same intent_id + msg_type
         );
         let result = send_tx(&mut context, &relay, &[deliver_replay], &[]).await;
-        assert!(result.is_err(), "Replay should be rejected");
+        assert!(result.is_err(), "Replay should be rejected (same intent_id + msg_type)");
     }
 
     /// 18. Test: Unauthorized relay rejected
@@ -933,7 +959,8 @@ mod integration {
         send_tx(&mut context, &admin, &[init_ix, set_trusted_ix], &[]).await.unwrap();
 
         // Try to deliver message with unauthorized relay - should fail
-        let payload = vec![0x01, 0x02];
+        let mut payload = vec![0x01]; // msg_type
+        payload.extend_from_slice(&[0xCC; 32]); // intent_id
         let deliver_ix = create_deliver_message_ix(
             program_id,
             unauthorized_relay.pubkey(), // not authorized
@@ -942,7 +969,6 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload,
-            1, // nonce
         );
         let result = send_tx(&mut context, &unauthorized_relay, &[deliver_ix], &[]).await;
         assert!(result.is_err(), "Unauthorized relay should be rejected");
@@ -971,7 +997,9 @@ mod integration {
         send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
 
         // Verify relay is authorized by successfully delivering a message
-        let payload = vec![0x01, 0x02];
+        let mut payload = vec![0x01]; // msg_type
+        payload.extend_from_slice(&[0xDD; 32]); // intent_id
+        payload.extend_from_slice(&[0x02]); // extra
         let deliver_ix = create_deliver_message_ix(
             program_id,
             authorized_relay.pubkey(), // explicitly authorized
@@ -980,15 +1008,17 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload,
-            1, // nonce
         );
         send_tx(&mut context, &authorized_relay, &[deliver_ix], &[]).await.unwrap();
 
-        // Verify inbound nonce was updated (proves message was delivered)
-        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
-        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], &program_id);
-        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
-        assert_eq!(nonce_account.last_nonce, 1, "Message should have been delivered");
+        // Verify delivered message PDA was created (proves message was delivered)
+        let intent_id = &[0xDDu8; 32];
+        let (delivered_pda, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, &intent_id[..], &[0x01]],
+            &program_id,
+        );
+        let delivered: DeliveredMessage = read_account(&mut context, delivered_pda).await;
+        assert_eq!(delivered.discriminator, DeliveredMessage::DISCRIMINATOR, "Message should have been delivered");
     }
 
     /// 20. Test: Untrusted remote address rejected
@@ -1015,7 +1045,8 @@ mod integration {
 
         // Try to deliver message from untrusted address
         let untrusted_addr = [0xFF; 32]; // different from trusted_addr
-        let payload = vec![0x01, 0x02];
+        let mut payload = vec![0x01]; // msg_type
+        payload.extend_from_slice(&[0xEE; 32]); // intent_id
         let deliver_ix = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -1024,7 +1055,6 @@ mod integration {
             CHAIN_ID_MVM,
             untrusted_addr, // not the trusted address
             payload,
-            1, // nonce
         );
         let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
         assert!(result.is_err(), "Untrusted remote should be rejected");
@@ -1052,7 +1082,8 @@ mod integration {
 
         // Try to deliver message - should fail because no trusted remote is configured
         let src_addr = [0x66; 32];
-        let payload = vec![0x01, 0x02];
+        let mut payload = vec![0x01]; // msg_type
+        payload.extend_from_slice(&[0xFF; 32]); // intent_id
         let deliver_ix = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -1061,7 +1092,6 @@ mod integration {
             CHAIN_ID_MVM, // no trusted remote configured for this chain
             src_addr,
             payload,
-            1, // nonce
         );
         let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
         assert!(result.is_err(), "Message from chain with no trusted remote should be rejected");
@@ -1093,11 +1123,12 @@ mod integration {
         assert!(result.is_err(), "Non-admin should not be able to set trusted remote");
     }
 
-    /// 23. Test: Lower nonce rejected
-    /// Verifies that delivering a message with a nonce lower than the last processed fails.
-    /// Why: Strictly increasing nonces prevent out-of-order message processing attacks.
+    /// 23. Test: Same intent_id with different msg_type succeeds (not a duplicate)
+    /// Verifies that dedup is per (intent_id, msg_type) pair, not just intent_id.
+    /// Why: The same intent legitimately receives different message types (e.g., IntentRequirements
+    /// then FulfillmentProof). These must not be treated as duplicates.
     #[tokio::test]
-    async fn test_deliver_message_rejects_lower_nonce() {
+    async fn test_deliver_message_different_msg_type_succeeds() {
         let pt = program_test();
         let mut context = pt.start_with_context().await;
         let admin = context.payer.insecure_clone();
@@ -1115,8 +1146,11 @@ mod integration {
         let set_trusted_ix = create_set_trusted_remote_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, src_addr);
         send_tx(&mut context, &admin, &[init_ix, add_relay_ix, set_trusted_ix], &[]).await.unwrap();
 
-        // Deliver message with nonce = 5
-        let payload1 = vec![0x01];
+        // Deliver IntentRequirements (0x01) for intent_id
+        let intent_id = [0xF1u8; 32];
+        let mut payload1 = vec![0x01]; // msg_type = IntentRequirements
+        payload1.extend_from_slice(&intent_id);
+        payload1.extend_from_slice(&[0x00; 10]); // extra data
         let deliver_ix = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
@@ -1125,16 +1159,19 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload1,
-            5, // nonce
         );
         send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
 
-        // Warp to a new slot to ensure transaction uniqueness in test framework
+        // Warp to a new slot
         context.warp_to_slot(100).unwrap();
 
-        // Try to deliver with lower nonce = 3 - should fail
-        let payload2 = vec![0x02];
-        let deliver_ix_lower = create_deliver_message_ix(
+        // Deliver FulfillmentProof (0x03) for same intent_id - should succeed (different msg_type)
+        let mut payload2 = vec![0x03]; // msg_type = FulfillmentProof (different!)
+        payload2.extend_from_slice(&intent_id); // same intent_id
+        payload2.extend_from_slice(&[0xBB; 32]); // solver_addr
+        payload2.extend_from_slice(&0u64.to_be_bytes()); // amount
+        payload2.extend_from_slice(&0u64.to_be_bytes()); // timestamp
+        let deliver_ix2 = create_deliver_message_ix(
             program_id,
             relay.pubkey(),
             relay.pubkey(),
@@ -1142,17 +1179,84 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload2,
-            3, // lower than 5 - should fail
         );
-        let result = send_tx(&mut context, &relay, &[deliver_ix_lower], &[]).await;
-        assert!(result.is_err(), "Lower nonce should be rejected");
+        send_tx(&mut context, &relay, &[deliver_ix2], &[]).await.unwrap();
+
+        // Verify both delivered message PDAs exist
+        let (delivered_pda1, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, &intent_id[..], &[0x01]],
+            &program_id,
+        );
+        let (delivered_pda2, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, &intent_id[..], &[0x03]],
+            &program_id,
+        );
+        let _d1: DeliveredMessage = read_account(&mut context, delivered_pda1).await;
+        let _d2: DeliveredMessage = read_account(&mut context, delivered_pda2).await;
+    }
+
+    // ========================================================================
+    // ADMIN TESTS
+    // ========================================================================
+
+    /// 25. Test: Non-admin cannot add relay
+    /// Verifies that only the admin can add authorized relays.
+    /// Why: Relay management is security-critical; must be admin-only.
+    #[tokio::test]
+    async fn test_add_relay_rejects_non_admin() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let non_admin = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund non-admin
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &non_admin.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize endpoint
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        send_tx(&mut context, &admin, &[init_ix], &[]).await.unwrap();
+
+        // Non-admin tries to add relay - should fail
+        let new_relay = Keypair::new();
+        let add_relay_ix = create_add_relay_ix(program_id, non_admin.pubkey(), non_admin.pubkey(), new_relay.pubkey());
+        let result = send_tx(&mut context, &non_admin, &[add_relay_ix], &[]).await;
+        assert!(result.is_err(), "Non-admin should not be able to add relay");
+    }
+
+    /// 26. Test: Non-admin cannot remove relay
+    /// Verifies that only the admin can remove authorized relays.
+    /// Why: Relay management is security-critical; must be admin-only.
+    #[tokio::test]
+    async fn test_remove_relay_rejects_non_admin() {
+        let pt = program_test();
+        let mut context = pt.start_with_context().await;
+        let admin = context.payer.insecure_clone();
+        let non_admin = Keypair::new();
+        let relay = Keypair::new();
+        let program_id = gmp_program_id();
+
+        // Fund non-admin
+        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &non_admin.pubkey(), 1_000_000_000);
+        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
+
+        // Initialize endpoint and add a relay as admin
+        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
+        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
+        send_tx(&mut context, &admin, &[init_ix, add_relay_ix], &[]).await.unwrap();
+
+        // Non-admin tries to remove relay - should fail
+        let remove_relay_ix = create_remove_relay_ix(program_id, non_admin.pubkey(), relay.pubkey());
+        let result = send_tx(&mut context, &non_admin, &[remove_relay_ix], &[]).await;
+        assert!(result.is_err(), "Non-admin should not be able to remove relay");
     }
 
     // ========================================================================
     // FULFILLMENT PROOF ROUTING TESTS
     // ========================================================================
 
-    /// 24. Test: FulfillmentProof (0x03) routes to intent_escrow when routing is configured
+    /// 28. Test: FulfillmentProof (0x03) routes to intent_escrow when routing is configured
     /// Verifies that message type 0x03 is routed to destination_program_2 (intent_escrow).
     /// Why: FulfillmentProof releases escrow funds on the connected chain. It must route to
     /// intent_escrow, not outflow_validator. This test validates the MESSAGE_TYPE_FULFILLMENT_PROOF
@@ -1217,22 +1321,24 @@ mod integration {
             mock_escrow_receiver_id(), // intent_escrow (should be called)
             CHAIN_ID_MVM,
             src_addr,
-            payload,
-            1, // nonce
+            payload.clone(),
             remaining_accounts,
         );
 
         // The transaction should succeed (message delivered to mock_escrow_receiver)
         send_tx(&mut context, &relay, &[deliver_ix], &[]).await.unwrap();
 
-        // Verify inbound nonce was updated (proves message was processed)
-        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
-        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_IN_SEED, &chain_id_bytes], &program_id);
-        let nonce_account: InboundNonceAccount = read_account(&mut context, nonce_pda).await;
-        assert_eq!(nonce_account.last_nonce, 1, "Message should have been delivered");
+        // Verify delivered message PDA was created (proves message was processed)
+        let intent_id = &payload[1..33];
+        let (delivered_pda, _) = Pubkey::find_program_address(
+            &[seeds::DELIVERED_SEED, intent_id, &[0x03]],
+            &program_id,
+        );
+        let delivered: DeliveredMessage = read_account(&mut context, delivered_pda).await;
+        assert_eq!(delivered.discriminator, DeliveredMessage::DISCRIMINATOR, "Message should have been delivered");
     }
 
-    /// 25. Test: FulfillmentProof fails with insufficient accounts
+    /// 29. Test: FulfillmentProof fails with insufficient accounts
     /// Verifies that FulfillmentProof routing fails when fewer than 7 remaining accounts provided.
     /// Why: LzReceiveFulfillmentProof requires 7 accounts for token transfer. The GMP endpoint
     /// must validate account count before attempting CPI.
@@ -1288,65 +1394,11 @@ mod integration {
             CHAIN_ID_MVM,
             src_addr,
             payload,
-            1,
             insufficient_accounts,
         );
 
         // Should fail due to insufficient accounts
         let result = send_tx(&mut context, &relay, &[deliver_ix], &[]).await;
         assert!(result.is_err(), "Should fail with insufficient accounts for FulfillmentProof");
-    }
-
-    /// 27. Test: Non-admin cannot add relay
-    /// Verifies that only the admin can add authorized relays.
-    /// Why: Relay management is security-critical; must be admin-only.
-    #[tokio::test]
-    async fn test_add_relay_rejects_non_admin() {
-        let pt = program_test();
-        let mut context = pt.start_with_context().await;
-        let admin = context.payer.insecure_clone();
-        let non_admin = Keypair::new();
-        let program_id = gmp_program_id();
-
-        // Fund non-admin
-        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &non_admin.pubkey(), 1_000_000_000);
-        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
-
-        // Initialize endpoint
-        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
-        send_tx(&mut context, &admin, &[init_ix], &[]).await.unwrap();
-
-        // Non-admin tries to add relay - should fail
-        let new_relay = Keypair::new();
-        let add_relay_ix = create_add_relay_ix(program_id, non_admin.pubkey(), non_admin.pubkey(), new_relay.pubkey());
-        let result = send_tx(&mut context, &non_admin, &[add_relay_ix], &[]).await;
-        assert!(result.is_err(), "Non-admin should not be able to add relay");
-    }
-
-    /// 28. Test: Non-admin cannot remove relay
-    /// Verifies that only the admin can remove authorized relays.
-    /// Why: Relay management is security-critical; must be admin-only.
-    #[tokio::test]
-    async fn test_remove_relay_rejects_non_admin() {
-        let pt = program_test();
-        let mut context = pt.start_with_context().await;
-        let admin = context.payer.insecure_clone();
-        let non_admin = Keypair::new();
-        let relay = Keypair::new();
-        let program_id = gmp_program_id();
-
-        // Fund non-admin
-        let fund_ix = solana_sdk::system_instruction::transfer(&admin.pubkey(), &non_admin.pubkey(), 1_000_000_000);
-        send_tx(&mut context, &admin, &[fund_ix], &[]).await.unwrap();
-
-        // Initialize endpoint and add a relay as admin
-        let init_ix = create_initialize_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_SVM);
-        let add_relay_ix = create_add_relay_ix(program_id, admin.pubkey(), admin.pubkey(), relay.pubkey());
-        send_tx(&mut context, &admin, &[init_ix, add_relay_ix], &[]).await.unwrap();
-
-        // Non-admin tries to remove relay - should fail
-        let remove_relay_ix = create_remove_relay_ix(program_id, non_admin.pubkey(), relay.pubkey());
-        let result = send_tx(&mut context, &non_admin, &[remove_relay_ix], &[]).await;
-        assert!(result.is_err(), "Non-admin should not be able to remove relay");
     }
 }

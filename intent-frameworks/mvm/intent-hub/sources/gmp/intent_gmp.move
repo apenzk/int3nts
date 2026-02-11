@@ -63,8 +63,8 @@ module mvmt_intent::intent_gmp {
         src_addr: vector<u8>,
         /// Message payload (encoded GMP message)
         payload: vector<u8>,
-        /// Nonce from source chain
-        nonce: u64,
+        /// Intent ID extracted from payload (bytes 1..33)
+        intent_id: vector<u8>,
     }
 
     // ============================================================================
@@ -81,8 +81,9 @@ module mvmt_intent::intent_gmp {
         /// Changed from single address to vector to support multiple trusted sources per chain
         /// (e.g., both outflow-validator and intent-escrow on SVM)
         trusted_remotes: Table<u32, vector<vector<u8>>>,
-        /// Inbound nonces per source chain (chain_id -> last_nonce)
-        inbound_nonces: Table<u32, u64>,
+        /// Delivered messages: key is intent_id (32 bytes) ++ msg_type (1 byte) = 33 bytes.
+        /// Replaces sequential nonce tracking — immune to module redeployments.
+        delivered_messages: Table<vector<u8>, bool>,
     }
 
     // ============================================================================
@@ -103,7 +104,7 @@ module mvmt_intent::intent_gmp {
             authorized_relays,
             admin: admin_addr,
             trusted_remotes: table::new(),
-            inbound_nonces: table::new(),
+            delivered_messages: table::new(),
         });
     }
 
@@ -117,23 +118,25 @@ module mvmt_intent::intent_gmp {
     /// on the source chain. The relay decodes the event, constructs this
     /// call, and submits it to the destination chain.
     ///
+    /// Deduplication uses (intent_id, msg_type) extracted from the payload,
+    /// making delivery immune to module redeployments (unlike sequential nonces).
+    /// Idempotent: delivering the same message twice is a silent no-op.
+    ///
     /// # Arguments
     /// - `relay`: The authorized relay account (must be in authorized_relays list)
     /// - `src_chain_id`: Source chain endpoint ID
     /// - `src_addr`: Source address (32 bytes, the sending program)
     /// - `payload`: Message payload (encoded GMP message)
-    /// - `nonce`: Nonce from source chain (for ordering/replay protection)
     ///
     /// # Aborts
     /// - E_UNAUTHORIZED_RELAY: If caller is not an authorized relay
     /// - E_UNTRUSTED_REMOTE: If source address is not trusted for the chain
-    /// - E_NONCE_ALREADY_USED: If nonce has already been processed (replay)
+    /// - E_INVALID_PAYLOAD: If payload is too short to extract intent_id
     public fun deliver_message(
         relay: &signer,
         src_chain_id: u32,
         src_addr: vector<u8>,
         payload: vector<u8>,
-        nonce: u64,
     ) acquires EndpointConfig {
         let relay_addr = signer::address_of(relay);
 
@@ -146,22 +149,26 @@ module mvmt_intent::intent_gmp {
         let trusted_addrs = table::borrow(&config.trusted_remotes, src_chain_id);
         assert!(is_trusted_address(trusted_addrs, &src_addr), E_UNTRUSTED_REMOTE);
 
-        // Replay protection: check and update inbound nonce
-        if (table::contains(&config.inbound_nonces, src_chain_id)) {
-            let last_nonce = *table::borrow(&config.inbound_nonces, src_chain_id);
-            assert!(nonce > last_nonce, E_NONCE_ALREADY_USED);
-            *table::borrow_mut(&mut config.inbound_nonces, src_chain_id) = nonce;
-        } else {
-            // First message from this chain
-            table::add(&mut config.inbound_nonces, src_chain_id, nonce);
+        // Replay protection: deduplicate by (intent_id, msg_type)
+        // All GMP messages have: msg_type (1 byte) + intent_id (32 bytes) at the start
+        assert!(vector::length(&payload) >= 33, E_INVALID_PAYLOAD);
+        let dedup_key = build_dedup_key(&payload);
+
+        if (table::contains(&config.delivered_messages, dedup_key)) {
+            // Already delivered — idempotent, return silently
+            return
         };
+        table::add(&mut config.delivered_messages, dedup_key, true);
+
+        // Extract intent_id for event (bytes 1..33 of payload)
+        let intent_id = slice(payload, 1, 32);
 
         // Emit delivery event (copy payload before routing consumes it)
         event::emit(MessageDelivered {
             src_chain_id,
             src_addr: copy src_addr,
             payload: copy payload,
-            nonce,
+            intent_id,
         });
 
         // Route message to destination module based on payload type
@@ -200,9 +207,8 @@ module mvmt_intent::intent_gmp {
         src_chain_id: u32,
         src_addr: vector<u8>,
         payload: vector<u8>,
-        nonce: u64,
     ) acquires EndpointConfig {
-        deliver_message(relay, src_chain_id, src_addr, payload, nonce);
+        deliver_message(relay, src_chain_id, src_addr, payload);
     }
 
     // ============================================================================
@@ -331,15 +337,13 @@ module mvmt_intent::intent_gmp {
     }
 
     #[view]
-    /// Get the last processed inbound nonce for a source chain.
-    /// Returns 0 if no messages have been received from this chain.
-    public fun get_inbound_nonce(src_chain_id: u32): u64 acquires EndpointConfig {
+    /// Check if a specific message has already been delivered.
+    /// Uses (intent_id, msg_type) as the dedup key.
+    public fun is_message_delivered(intent_id: vector<u8>, msg_type: u8): bool acquires EndpointConfig {
         let config = borrow_global<EndpointConfig>(@mvmt_intent);
-        if (table::contains(&config.inbound_nonces, src_chain_id)) {
-            *table::borrow(&config.inbound_nonces, src_chain_id)
-        } else {
-            0
-        }
+        let key = copy intent_id;
+        vector::push_back(&mut key, msg_type);
+        table::contains(&config.delivered_messages, key)
     }
 
     #[view]
@@ -377,5 +381,24 @@ module mvmt_intent::intent_gmp {
             i = i + 1;
         };
         false
+    }
+
+    /// Build dedup key from payload: intent_id (bytes 1..33) ++ msg_type (byte 0).
+    /// Result is 33 bytes: [intent_id(32)] [msg_type(1)].
+    fun build_dedup_key(payload: &vector<u8>): vector<u8> {
+        let key = slice(*payload, 1, 32);
+        vector::push_back(&mut key, *vector::borrow(payload, 0));
+        key
+    }
+
+    /// Extract a sub-vector of `len` bytes starting at `start`.
+    fun slice(data: vector<u8>, start: u64, len: u64): vector<u8> {
+        let result = vector::empty<u8>();
+        let i = 0;
+        while (i < len) {
+            vector::push_back(&mut result, *vector::borrow(&data, start + i));
+            i = i + 1;
+        };
+        result
     }
 }

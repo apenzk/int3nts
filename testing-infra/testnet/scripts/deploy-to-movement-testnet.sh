@@ -56,7 +56,9 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     exit 1
 fi
 
-source "$TESTNET_KEYS_FILE"
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
+fi
 
 # Check required variables for funding account
 if [ -z "$MOVEMENT_DEPLOYER_PRIVATE_KEY" ]; then
@@ -385,20 +387,31 @@ movement move run \
 echo ""
 
 # ============================================================================
-# Step 14: Save module private key and address to .env.testnet
+# Step 14: Output module private key and address for .env.testnet
 # ============================================================================
 # The configure step needs admin access to the module (admin = module address).
-# Save the private key so configure-movement-testnet.sh can create a CLI profile.
 
-echo " Step 14: Saving module key and address to .env.testnet..."
-
-source "$SCRIPT_DIR/../lib/env-utils.sh"
-update_env_var "$TESTNET_KEYS_FILE" "MOVEMENT_MODULE_PRIVATE_KEY" "$DEPLOY_PRIVATE_KEY"
-update_env_var "$TESTNET_KEYS_FILE" "MOVEMENT_INTENT_MODULE_ADDR" "$DEPLOY_ADDR_FULL"
-echo "   ✅ MOVEMENT_MODULE_PRIVATE_KEY saved to .env.testnet"
-echo "   ✅ MOVEMENT_INTENT_MODULE_ADDR=$DEPLOY_ADDR_FULL saved to .env.testnet"
+echo " Step 14: Add these to .env.testnet:"
+echo ""
+echo "   MOVEMENT_MODULE_PRIVATE_KEY=$DEPLOY_PRIVATE_KEY"
+echo "   MOVEMENT_INTENT_MODULE_ADDR=$DEPLOY_ADDR_FULL"
 
 echo ""
+
+# Save deployment log
+LOG_DIR="$SCRIPT_DIR/../logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/deploy-movement-testnet-$(date +%Y%m%d-%H%M%S).log"
+{
+    echo "Movement Bardock Deployment — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo ""
+    echo "Funder:                    $FUNDER_ADDR_FULL"
+    echo "Module address:            $DEPLOY_ADDR_FULL"
+    echo "Module private key:        $DEPLOY_PRIVATE_KEY"
+    echo "Network:                   Movement Bardock Testnet"
+    echo "RPC URL:                   https://testnet.movementnetwork.xyz/v1"
+} > "$LOG_FILE"
+echo " Deployment log saved to: $LOG_FILE"
 
 # Cleanup temp profile (but keep the key info for reference)
 echo " Cleaning up..."
@@ -408,9 +421,10 @@ echo ""
 echo " Deployment Complete!"
 echo "======================"
 echo ""
-echo " NEW Module Address: $DEPLOY_ADDR_FULL"
+echo " NEW Module Address:     $DEPLOY_ADDR_FULL"
+echo " NEW Module Private Key: $DEPLOY_PRIVATE_KEY"
 echo ""
-echo "️  IMPORTANT: Update these files with the new module address:"
+echo "️  IMPORTANT: Update these files with the new module address and private key:"
 echo ""
 echo "   1. coordinator/config/coordinator_testnet.toml:"
 echo "      intent_module_addr = \"$DEPLOY_ADDR_FULL\""

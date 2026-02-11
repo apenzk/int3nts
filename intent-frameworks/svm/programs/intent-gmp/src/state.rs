@@ -128,42 +128,28 @@ impl OutboundNonceAccount {
     }
 }
 
-/// Nonce tracker for inbound messages (per source chain).
-/// PDA seeds: ["nonce_in", src_chain_id (as bytes)]
+/// Delivered message marker for replay protection.
+/// PDA seeds: ["delivered", intent_id (32 bytes), &[msg_type]]
+///
+/// Replaces nonce-based replay protection — immune to program redeployments.
+/// Each unique (intent_id, msg_type) pair gets its own PDA. If the account
+/// exists, the message has already been delivered.
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
-pub struct InboundNonceAccount {
+pub struct DeliveredMessage {
     /// Discriminator for account type
     pub discriminator: u8,
-    /// Source chain endpoint ID
-    pub src_chain_id: u32,
-    /// Last processed nonce (for replay protection)
-    pub last_nonce: u64,
     /// Bump seed for PDA derivation
     pub bump: u8,
 }
 
-impl InboundNonceAccount {
+impl DeliveredMessage {
     pub const DISCRIMINATOR: u8 = 5;
-    pub const SIZE: usize = 1 + 4 + 8 + 1; // 14 bytes
+    pub const SIZE: usize = 1 + 1; // 2 bytes
 
-    pub fn new(src_chain_id: u32, bump: u8) -> Self {
+    pub fn new(bump: u8) -> Self {
         Self {
             discriminator: Self::DISCRIMINATOR,
-            src_chain_id,
-            last_nonce: 0,
             bump,
-        }
-    }
-
-    /// Check if a nonce has already been processed.
-    pub fn is_replay(&self, nonce: u64) -> bool {
-        nonce <= self.last_nonce
-    }
-
-    /// Update the last processed nonce.
-    pub fn update_nonce(&mut self, nonce: u64) {
-        if nonce > self.last_nonce {
-            self.last_nonce = nonce;
         }
     }
 }
@@ -209,12 +195,72 @@ impl RoutingConfig {
     }
 }
 
+/// Stored outbound message for relay to read via getAccountInfo.
+/// PDA seeds: ["message", dst_chain_id (as bytes), nonce (as bytes)]
+///
+/// TODO: These accounts accumulate forever (~0.001 SOL rent each). Add a
+/// `CloseMessage` instruction that lets the relay (or admin) close the account
+/// after successful delivery and reclaim the rent lamports back to the payer.
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
+pub struct MessageAccount {
+    /// Discriminator for account type
+    pub discriminator: u8,
+    /// Source chain endpoint ID (this chain)
+    pub src_chain_id: u32,
+    /// Destination chain endpoint ID
+    pub dst_chain_id: u32,
+    /// Sequence number assigned by the outbound nonce counter
+    pub nonce: u64,
+    /// Destination address (32 bytes, zero-padded)
+    pub dst_addr: [u8; 32],
+    /// Source address (32 bytes — application-level sender, e.g. outflow-validator program ID)
+    pub src_addr: [u8; 32],
+    /// GMP message payload (variable length)
+    pub payload: Vec<u8>,
+    /// Bump seed for PDA derivation
+    pub bump: u8,
+}
+
+impl MessageAccount {
+    pub const DISCRIMINATOR: u8 = 7;
+    /// Fixed-size portion (excluding payload data):
+    /// discriminator(1) + src_chain_id(4) + dst_chain_id(4) + nonce(8)
+    /// + dst_addr(32) + src_addr(32) + payload_len_prefix(4) + bump(1) = 86
+    pub const FIXED_SIZE: usize = 1 + 4 + 4 + 8 + 32 + 32 + 4 + 1;
+
+    pub fn size(payload_len: usize) -> usize {
+        Self::FIXED_SIZE + payload_len
+    }
+
+    pub fn new(
+        src_chain_id: u32,
+        dst_chain_id: u32,
+        nonce: u64,
+        dst_addr: [u8; 32],
+        src_addr: [u8; 32],
+        payload: Vec<u8>,
+        bump: u8,
+    ) -> Self {
+        Self {
+            discriminator: Self::DISCRIMINATOR,
+            src_chain_id,
+            dst_chain_id,
+            nonce,
+            dst_addr,
+            src_addr,
+            payload,
+            bump,
+        }
+    }
+}
+
 /// Seeds for PDA derivation
 pub mod seeds {
     pub const CONFIG_SEED: &[u8] = b"config";
     pub const RELAY_SEED: &[u8] = b"relay";
     pub const TRUSTED_REMOTE_SEED: &[u8] = b"trusted_remote";
     pub const NONCE_OUT_SEED: &[u8] = b"nonce_out";
-    pub const NONCE_IN_SEED: &[u8] = b"nonce_in";
+    pub const DELIVERED_SEED: &[u8] = b"delivered";
     pub const ROUTING_SEED: &[u8] = b"routing";
+    pub const MESSAGE_SEED: &[u8] = b"message";
 }

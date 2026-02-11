@@ -1,15 +1,17 @@
 #!/bin/bash
 
-# Configure Base Sepolia Testnet - Verify EVM contract configuration
+# Configure Base Sepolia Testnet - Set GMP trusted remote and verify contracts
 #
-# The EVM contracts are fully configured during deployment:
-# - Hardhat deploy.js sets trusted remotes, escrow/outflow handlers, and relay
-# - Hub chain address is passed as constructor argument
-#
-# This script verifies the on-chain configuration is correct.
+# Steps:
+#   1. Verify all 3 contracts are deployed on-chain
+#   2. Set trusted remote on IntentGmp for hub chain (Movement)
 #
 # Requires:
-#   - .env.testnet with deployed addresses (from deploy-to-base-testnet.sh)
+#   - .env.testnet with:
+#     - BASE_DEPLOYER_PRIVATE_KEY
+#     - BASE_GMP_ENDPOINT_ADDR, BASE_INFLOW_ESCROW_ADDR, BASE_OUTFLOW_VALIDATOR_ADDR
+#     - MOVEMENT_INTENT_MODULE_ADDR
+#   - Node.js + Hardhat (for contract interaction)
 
 set -e
 
@@ -28,35 +30,38 @@ if [ ! -f "$TESTNET_KEYS_FILE" ]; then
     echo "ERROR: .env.testnet not found at $TESTNET_KEYS_FILE"
     exit 1
 fi
-source "$TESTNET_KEYS_FILE"
-
-require_var "BASE_GMP_ENDPOINT_ADDR" "$BASE_GMP_ENDPOINT_ADDR" "Run deploy-to-base-testnet.sh first"
-
-# Load RPC URL from assets config
-ASSETS_CONFIG_FILE="$PROJECT_ROOT/testing-infra/testnet/config/testnet-assets.toml"
-BASE_SEPOLIA_RPC_URL=$(grep -A 5 "^\[base_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
-
-if [ -z "$BASE_SEPOLIA_RPC_URL" ]; then
-    echo "ERROR: Base Sepolia RPC URL not found in testnet-assets.toml"
-    exit 1
+if [ "${DEPLOY_ENV_SOURCED:-}" != "1" ]; then
+    source "$TESTNET_KEYS_FILE"
 fi
 
-echo " EVM contracts are configured during deployment by Hardhat deploy.js."
-echo " Verifying deployed contracts are accessible..."
+require_var "BASE_DEPLOYER_PRIVATE_KEY" "$BASE_DEPLOYER_PRIVATE_KEY"
+require_var "BASE_GMP_ENDPOINT_ADDR" "$BASE_GMP_ENDPOINT_ADDR" "Run deploy-to-base-testnet.sh first"
+require_var "MOVEMENT_INTENT_MODULE_ADDR" "$MOVEMENT_INTENT_MODULE_ADDR" "Run deploy-to-movement-testnet.sh first"
+
+require_var "ALCHEMY_BASE_SEPOLIA_API_KEY" "$ALCHEMY_BASE_SEPOLIA_API_KEY" "Get your free API key at: https://www.alchemy.com/"
+BASE_SEPOLIA_RPC_URL="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_BASE_SEPOLIA_API_KEY}"
+
+HUB_CHAIN_ID="${HUB_CHAIN_ID:-250}"
+
+echo " Configuration:"
+echo "   GMP Endpoint:  $BASE_GMP_ENDPOINT_ADDR"
+echo "   Hub Chain ID:  $HUB_CHAIN_ID"
+echo "   Hub Module:    $MOVEMENT_INTENT_MODULE_ADDR"
 echo ""
 
-# Verify GMP endpoint contract exists by checking code at address
+# 1. Verify contracts are deployed
+echo " 1. Verifying deployed contracts..."
+
 GMP_CODE=$(curl -s --max-time 10 -X POST "$BASE_SEPOLIA_RPC_URL" \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$BASE_GMP_ENDPOINT_ADDR\",\"latest\"],\"id\":1}" \
     | jq -r '.result // ""' 2>/dev/null)
 
-if [ -n "$GMP_CODE" ] && [ "$GMP_CODE" != "0x" ] && [ "$GMP_CODE" != "" ]; then
-    echo "   IntentGmp ($BASE_GMP_ENDPOINT_ADDR): deployed"
-else
-    echo "   ERROR: IntentGmp contract not found at $BASE_GMP_ENDPOINT_ADDR"
+if [ -z "$GMP_CODE" ] || [ "$GMP_CODE" = "0x" ] || [ "$GMP_CODE" = "" ]; then
+    echo "FATAL: IntentGmp contract not found at $BASE_GMP_ENDPOINT_ADDR"
     exit 1
 fi
+echo "   IntentGmp ($BASE_GMP_ENDPOINT_ADDR): deployed"
 
 require_var "BASE_INFLOW_ESCROW_ADDR" "$BASE_INFLOW_ESCROW_ADDR" "Run deploy-to-base-testnet.sh first"
 ESCROW_CODE=$(curl -s --max-time 10 -X POST "$BASE_SEPOLIA_RPC_URL" \
@@ -81,6 +86,36 @@ if [ -z "$OUTFLOW_CODE" ] || [ "$OUTFLOW_CODE" = "0x" ] || [ "$OUTFLOW_CODE" = "
     exit 1
 fi
 echo "   IntentOutflowValidator ($BASE_OUTFLOW_VALIDATOR_ADDR): deployed"
+echo ""
+
+# 2. Set trusted remote on GMP endpoint
+echo " 2. Setting trusted remote for hub chain $HUB_CHAIN_ID..."
+
+cd "$PROJECT_ROOT/intent-frameworks/evm"
+
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "   Installing dependencies..."
+    npm install
+fi
+
+export DEPLOYER_PRIVATE_KEY="$BASE_DEPLOYER_PRIVATE_KEY"
+export BASE_SEPOLIA_RPC_URL
+export GMP_ENDPOINT_ADDR="$BASE_GMP_ENDPOINT_ADDR"
+export HUB_CHAIN_ID
+export MOVEMENT_INTENT_MODULE_ADDR
+
+set +e
+CONFIGURE_OUTPUT=$(npx hardhat run scripts/configure-gmp.js --network baseSepolia 2>&1)
+CONFIGURE_EXIT=$?
+set -e
+
+echo "$CONFIGURE_OUTPUT"
+
+if [ $CONFIGURE_EXIT -ne 0 ]; then
+    echo "FATAL: Failed to set trusted remote on IntentGmp"
+    exit 1
+fi
 
 echo ""
 echo " Base Sepolia configuration verified."

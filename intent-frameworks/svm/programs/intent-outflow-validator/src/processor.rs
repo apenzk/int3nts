@@ -2,6 +2,8 @@
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use gmp_common::messages::{FulfillmentProof, IntentRequirements};
+#[allow(deprecated)]
+use solana_program::system_instruction;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     clock::Clock,
@@ -12,7 +14,6 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
-    system_instruction,
     sysvar::Sysvar,
 };
 

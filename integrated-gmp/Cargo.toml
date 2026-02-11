@@ -23,6 +23,11 @@ name = "get_approver_eth_address"
 path = "src/bin/get_approver_eth_address.rs"
 test = false
 
+[[bin]]
+name = "get_relay_addresses"
+path = "src/bin/get_relay_addresses.rs"
+test = false
+
 [dependencies]
 # Async runtime (matching aptos-core version)
 tokio = { version = "1.35.1", features = ["full"] }

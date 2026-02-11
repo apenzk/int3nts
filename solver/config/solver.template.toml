@@ -41,7 +41,7 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 # [[connected_chain]]
 # type = "evm"
 # name = "Connected EVM Chain"            # Human-readable name for the chain
-# rpc_url = "https://sepolia.base.org"     # RPC endpoint URL for EVM chain
+# rpc_url = "https://base-sepolia.g.alchemy.com/v2/YOUR_KEY"  # RPC endpoint URL for EVM chain
 # chain_id = 84532                         # Chain ID (e.g., 84532 for Base Sepolia)
 # escrow_contract_addr = "0x..."         # Address of the IntentEscrow contract
 # private_key_env = "SOLVER_EVM_PRIVATE_KEY"  # Environment variable containing EVM private key

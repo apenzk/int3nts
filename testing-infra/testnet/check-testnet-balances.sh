@@ -118,21 +118,11 @@ if [ -z "$MOVEMENT_RPC_URL" ]; then
     echo "   Movement balance checks will fail"
 fi
 
-BASE_RPC_URL=$(grep -A 5 "^\[base_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
-if [ -z "$BASE_RPC_URL" ]; then
-    echo "️  WARNING: Base Sepolia RPC URL not found in testnet-assets.toml"
+if [ -z "$ALCHEMY_BASE_SEPOLIA_API_KEY" ]; then
+    echo "️  WARNING: ALCHEMY_BASE_SEPOLIA_API_KEY not set in .env.testnet"
     echo "   Base Sepolia balance checks will fail"
 fi
-
-# Substitute API key in Base Sepolia RPC URL if placeholder is present
-if [[ "$BASE_RPC_URL" == *"ALCHEMY_API_KEY"* ]]; then
-    if [ -n "$ALCHEMY_BASE_SEPOLIA_API_KEY" ]; then
-        BASE_RPC_URL="${BASE_RPC_URL/ALCHEMY_API_KEY/$ALCHEMY_BASE_SEPOLIA_API_KEY}"
-    else
-        echo "️  WARNING: ALCHEMY_BASE_SEPOLIA_API_KEY not set in .env.testnet"
-        echo "   Base Sepolia balance checks will fail"
-    fi
-fi
+BASE_RPC_URL="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_BASE_SEPOLIA_API_KEY}"
 
 SEPOLIA_RPC_URL=$(grep -A 5 "^\[ethereum_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
 if [ -z "$SEPOLIA_RPC_URL" ]; then

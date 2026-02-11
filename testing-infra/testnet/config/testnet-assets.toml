@@ -68,7 +68,7 @@ usdc_decimals = 6
 
 [base_sepolia]
 chain_id = 84532
-rpc_url = "https://base-sepolia-rpc.publicnode.com"
+# RPC URL is constructed from ALCHEMY_BASE_SEPOLIA_API_KEY in .env.testnet
 
 # Native token (ETH)
 native_token = "ETH"

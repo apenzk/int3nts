@@ -123,21 +123,11 @@ if [ -z "$MOVEMENT_RPC_URL" ]; then
     echo "   Movement balance checks will fail"
 fi
 
-BASE_RPC_URL=$(grep -A 5 "^\[base_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
-if [ -z "$BASE_RPC_URL" ]; then
-    echo "❌ Base Sepolia RPC URL not found in testnet-assets.toml"
-    echo "   Base Sepolia balance checks will fail"
+if [ -z "$ALCHEMY_BASE_SEPOLIA_API_KEY" ]; then
+    echo "❌ ALCHEMY_BASE_SEPOLIA_API_KEY not set in .env.testnet"
+    echo "   Base Sepolia checks will fail"
 fi
-
-# Substitute API key in Base Sepolia RPC URL if placeholder is present
-if [[ "$BASE_RPC_URL" == *"ALCHEMY_API_KEY"* ]]; then
-    if [ -n "$ALCHEMY_BASE_SEPOLIA_API_KEY" ]; then
-        BASE_RPC_URL="${BASE_RPC_URL/ALCHEMY_API_KEY/$ALCHEMY_BASE_SEPOLIA_API_KEY}"
-    else
-        echo "❌ ALCHEMY_BASE_SEPOLIA_API_KEY not set in .env.testnet"
-        echo "   Base Sepolia balance checks will fail"
-    fi
-fi
+BASE_RPC_URL="https://base-sepolia.g.alchemy.com/v2/${ALCHEMY_BASE_SEPOLIA_API_KEY}"
 
 SEPOLIA_RPC_URL=$(grep -A 5 "^\[ethereum_sepolia\]" "$ASSETS_CONFIG_FILE" | grep "^rpc_url = " | sed 's/.*= "\(.*\)".*/\1/' | tr -d '"' || echo "")
 if [ -z "$SEPOLIA_RPC_URL" ]; then
@@ -416,6 +406,13 @@ else
     display_movement_balances "$MOVEMENT_SOLVER_ADDR"
 fi
 
+if [ -z "$INTEGRATED_GMP_MVM_ADDR" ]; then
+    echo "   ❌ INTEGRATED_GMP_MVM_ADDR not set in .env.testnet"
+else
+    echo "   Relay     ($INTEGRATED_GMP_MVM_ADDR)"
+    display_movement_balances "$INTEGRATED_GMP_MVM_ADDR"
+fi
+
 echo ""
 
 # Check Solana Devnet balances
@@ -474,6 +471,15 @@ else
     fi
 fi
 
+if [ -z "$INTEGRATED_GMP_SVM_ADDR" ]; then
+    echo "   ❌ INTEGRATED_GMP_SVM_ADDR not set in .env.testnet"
+else
+    sol_balance=$(get_solana_balance "$INTEGRATED_GMP_SVM_ADDR" "$SOLANA_RPC_URL")
+    sol_formatted=$(format_balance "$sol_balance" 9 "SOL")
+    echo "   Relay     ($INTEGRATED_GMP_SVM_ADDR)"
+    echo "             $sol_formatted"
+fi
+
 echo ""
 
 # Check Base Sepolia balances
@@ -528,6 +534,21 @@ else
     else
         echo "             $eth_formatted (USDC n/a)"
     fi
+fi
+
+# Relay EVM address: from .env.testnet or from integrated-gmp config
+GMP_RELAY_EVM_ADDR="${INTEGRATED_GMP_EVM_PUBKEY_HASH:-}"
+if [ -z "$GMP_RELAY_EVM_ADDR" ] && [ -f "$INTEGRATED_GMP_CONFIG" ]; then
+    GMP_RELAY_EVM_ADDR=$(grep -A10 "\[connected_chain_evm\]" "$INTEGRATED_GMP_CONFIG" | grep "approver_evm_pubkey_hash" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
+fi
+
+if [ -z "$GMP_RELAY_EVM_ADDR" ]; then
+    echo "   ❌ INTEGRATED_GMP_EVM_PUBKEY_HASH not set in .env.testnet"
+else
+    eth_balance=$(get_base_eth_balance "$GMP_RELAY_EVM_ADDR")
+    eth_formatted=$(format_balance "$eth_balance" "$BASE_NATIVE_DECIMALS")
+    echo "   Relay     ($GMP_RELAY_EVM_ADDR)"
+    echo "             $eth_formatted"
 fi
 
 echo ""
@@ -587,6 +608,13 @@ else
     fi
 fi
 
+if [ -n "$GMP_RELAY_EVM_ADDR" ]; then
+    eth_balance=$(get_evm_eth_balance "$GMP_RELAY_EVM_ADDR" "$SEPOLIA_RPC_URL")
+    eth_formatted=$(format_balance "$eth_balance" "$SEPOLIA_NATIVE_DECIMALS")
+    echo "   Relay     ($GMP_RELAY_EVM_ADDR)"
+    echo "             $eth_formatted"
+fi
+
 echo ""
 
 # =============================================================================
@@ -595,10 +623,7 @@ echo ""
 
 echo " Deployed Contracts"
 echo "---------------------"
-echo "   Legend:"
-echo "      Deployed:             Contract bytecode exists on-chain"
-echo "      On-chain Configured:  Contract state is set up (e.g., approver set)"
-echo "      Locally Configured:   Address is in local config file (TOML/.env)"
+echo "   ✅/❌ = on-chain check passed/failed, followed by the configured value"
 
 # Check Movement Intent Module
 check_movement_module() {
@@ -716,11 +741,12 @@ check_gmp_trusted_remote() {
         -d "{\"function\":\"${module_addr}::${module_name}::get_trusted_remote\",\"type_arguments\":[],\"arguments\":[$chain_id]}" \
         2>/dev/null)
 
-    # If successful, response contains a non-empty byte vector
-    local result=$(echo "$response" | jq -r '.[0] // ""' 2>/dev/null)
+    # Response is [value] where value may be a string ("0x...") or array (["0x..."])
+    # intent_gmp returns vector<vector<u8>> → [["0x..."]], intent_gmp_hub returns vector<u8> → ["0x..."]
+    local result=$(echo "$response" | jq -r '.[0] | if type == "array" then .[0] else . end // ""' 2>/dev/null)
 
     if [ -n "$result" ] && [ "$result" != "" ] && [ "$result" != "null" ] && [ "$result" != "0x" ]; then
-        echo "✅"
+        echo "✅ $result"
     else
         echo "❌"
     fi
@@ -743,14 +769,14 @@ check_evm_nonzero_result() {
         | jq -r '.result // "0x"' 2>/dev/null)
 
     if [ -n "$result" ] && [ "$result" != "0x" ] && [ "$result" != "0x0000000000000000000000000000000000000000000000000000000000000000" ]; then
-        echo "✅"
+        echo "✅ $result"
     else
         echo "❌"
     fi
 }
 
-# Check if EVM GMP endpoint has a trusted remote for a given chain ID
-# Calls hasTrustedRemote(uint32) → selector 0x48cc1a3a
+# Check EVM trusted remote for a given chain ID
+# Calls getTrustedRemotes(uint32) → selector 0x0ea9197f, returns bytes32[] (dynamic array)
 check_evm_has_trusted_remote() {
     local contract_addr="$1"
     local rpc_url="$2"
@@ -761,15 +787,24 @@ check_evm_has_trusted_remote() {
     fi
 
     local chain_id_hex=$(printf "%064x" "$chain_id")
-    local data="0x48cc1a3a${chain_id_hex}"
+    local data="0x0ea9197f${chain_id_hex}"
 
     local result=$(curl -s --max-time 10 -X POST "$rpc_url" \
         -H "Content-Type: application/json" \
         -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"to\":\"$contract_addr\",\"data\":\"$data\"},\"latest\"],\"id\":1}" \
         | jq -r '.result // "0x"' 2>/dev/null)
 
-    if [ -n "$result" ] && [ "$result" != "0x" ] && [ "$result" != "0x0000000000000000000000000000000000000000000000000000000000000000" ]; then
-        echo "✅"
+    # getTrustedRemotes returns a dynamic bytes32 array, ABI-encoded as:
+    #   0x20 (offset) + length (32 bytes) + element0 (32 bytes) + ...
+    # Empty array: offset + length=0 → 0x0000...0020 0000...0000 (128 hex chars)
+    # Extract first element: skip offset (64 chars) + length (64 chars) = chars 130..194
+    if [ -n "$result" ] && [ ${#result} -gt 130 ]; then
+        local first_element="0x${result:130:64}"
+        if [ "$first_element" != "0x0000000000000000000000000000000000000000000000000000000000000000" ]; then
+            echo "✅ $first_element"
+        else
+            echo "❌"
+        fi
     else
         echo "❌"
     fi
@@ -797,6 +832,115 @@ check_solana_has_account() {
     fi
 }
 
+# Check if MVM relay is authorized via is_relay_authorized(address) view function
+check_mvm_relay_authorized() {
+    local module_addr="$1"
+    local relay_addr="$2"
+
+    if [[ ! "$module_addr" =~ ^0x ]]; then
+        module_addr="0x${module_addr}"
+    fi
+    if [[ ! "$relay_addr" =~ ^0x ]]; then
+        relay_addr="0x${relay_addr}"
+    fi
+
+    local response=$(curl -s --max-time 10 -X POST "${MOVEMENT_RPC_URL}/view" \
+        -H "Content-Type: application/json" \
+        -d "{\"function\":\"${module_addr}::intent_gmp::is_relay_authorized\",\"type_arguments\":[],\"arguments\":[\"$relay_addr\"]}" \
+        2>/dev/null)
+
+    local result=$(echo "$response" | jq -r '.[0] // "false"' 2>/dev/null)
+
+    if [ "$result" = "true" ]; then
+        echo "✅"
+    else
+        echo "❌"
+    fi
+}
+
+# Check if EVM relay is authorized via isRelayAuthorized(address)
+# Selector: 0xe4082869
+check_evm_relay_authorized() {
+    local contract_addr="$1"
+    local rpc_url="$2"
+    local relay_addr="$3"
+
+    if [[ ! "$contract_addr" =~ ^0x ]]; then
+        contract_addr="0x${contract_addr}"
+    fi
+    if [[ ! "$relay_addr" =~ ^0x ]]; then
+        relay_addr="0x${relay_addr}"
+    fi
+
+    local addr_no_prefix="${relay_addr#0x}"
+    local addr_padded=$(printf "%064s" "$addr_no_prefix" | sed 's/ /0/g')
+    local data="0xe4082869${addr_padded}"
+
+    local result=$(curl -s --max-time 10 -X POST "$rpc_url" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_call\",\"params\":[{\"to\":\"$contract_addr\",\"data\":\"$data\"},\"latest\"],\"id\":1}" \
+        | jq -r '.result // "0x"' 2>/dev/null)
+
+    if [ -n "$result" ] && [ "$result" != "0x" ] && [ "$result" != "0x0000000000000000000000000000000000000000000000000000000000000000" ]; then
+        echo "✅"
+    else
+        echo "❌"
+    fi
+}
+
+# Check if SVM relay is authorized
+# Queries getProgramAccounts for RelayAccount (disc=2, size=35) matching relay pubkey at offset 1
+check_solana_relay_authorized() {
+    local program_id="$1"
+    local rpc_url="$2"
+    local relay_pubkey_b58="$3"
+
+    # Convert base58 pubkey to base64 for memcmp filter
+    local relay_b64
+    relay_b64=$(node -e "
+const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function b58decode(str) {
+    const bytes = [];
+    for (let i = 0; i < str.length; i++) {
+        const idx = ALPHABET.indexOf(str[i]);
+        if (idx < 0) throw new Error('Invalid base58');
+        let carry = idx;
+        for (let j = 0; j < bytes.length; j++) {
+            carry += bytes[j] * 58;
+            bytes[j] = carry & 0xff;
+            carry >>= 8;
+        }
+        while (carry > 0) {
+            bytes.push(carry & 0xff);
+            carry >>= 8;
+        }
+    }
+    for (let i = 0; i < str.length && str[i] === '1'; i++) bytes.push(0);
+    console.log(Buffer.from(bytes.reverse()).toString('base64'));
+}
+b58decode('$relay_pubkey_b58');
+" 2>/dev/null)
+
+    if [ -z "$relay_b64" ]; then
+        echo "❌"
+        return
+    fi
+
+    # Query RelayAccount (disc=2) with relay pubkey at offset 1
+    local response=$(curl -s --max-time 10 -X POST "$rpc_url" \
+        -H "Content-Type: application/json" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getProgramAccounts\",\"params\":[\"$program_id\",{\"encoding\":\"base64\",\"dataSlice\":{\"offset\":0,\"length\":0},\"filters\":[{\"dataSize\":35},{\"memcmp\":{\"offset\":0,\"bytes\":\"Ag==\",\"encoding\":\"base64\"}},{\"memcmp\":{\"offset\":1,\"bytes\":\"$relay_b64\",\"encoding\":\"base64\"}}]}],\"id\":1}" \
+        2>/dev/null)
+
+    local count=$(echo "$response" | jq -r '.result | length // 0' 2>/dev/null)
+
+    if [ "$count" -gt 0 ] 2>/dev/null; then
+        echo "✅"
+    else
+        echo "❌"
+    fi
+}
+
 # Read config files
 COORDINATOR_CONFIG="$PROJECT_ROOT/coordinator/config/coordinator_testnet.toml"
 INTEGRATED_GMP_CONFIG="$PROJECT_ROOT/integrated-gmp/config/integrated-gmp_testnet.toml"
@@ -812,9 +956,67 @@ if [ -f "$INTEGRATED_GMP_CONFIG" ]; then
     SOLANA_GMP_PROGRAM_ID=$(grep -A10 "\[connected_chain_svm\]" "$INTEGRATED_GMP_CONFIG" | grep "gmp_endpoint_program_id" | sed 's/.*= *"\(.*\)".*/\1/' | tr -d '"' || echo "")
 fi
 
+# ANSI colors
+BLUE='\033[1;34m'
+GREY='\033[90m'
+NC='\033[0m'
+
 # Track overall pass/fail - set to false on any ❌
 all_ok=true
-mark() { [ "$1" != "✅" ] && all_ok=false; }
+mark() { [[ "$1" != ✅* ]] && all_ok=false; }
+
+# Format 32-byte hex result as EVM address (last 20 bytes)
+fmt_addr() {
+    local hex="${1#0x}"
+    [ ${#hex} -ge 40 ] && echo "0x${hex: -40}" || echo "0x${hex}"
+}
+
+# Format hex to decimal
+fmt_uint() {
+    local hex="${1#0x}"
+    hex=$(echo "$hex" | sed 's/^0*//')
+    [ -z "$hex" ] && echo "0" && return
+    echo "obase=10; ibase=16; $(echo "$hex" | tr 'a-f' 'A-F')" | bc 2>/dev/null || echo "0"
+}
+
+# Print a check result line: "✅ Label — desc: value" or "❌ Label — desc"
+# Usage: print_check "Label" "$check_result" [format] [indent] [desc]
+# format: "address" | "uint" | "hex" | "" (default: no value shown)
+print_check() {
+    local label="$1"
+    local result="$2"
+    local format="${3:-}"
+    local indent="${4:-         }"
+    local desc="${5:-}"
+
+    local desc_suffix=""
+    if [ -n "$desc" ]; then
+        desc_suffix=" ${GREY}— ${desc}${NC}"
+    fi
+
+    if [[ "$result" == ✅* ]]; then
+        local raw="${result#✅ }"
+        # If raw equals "✅" (no value), or format is empty, show label only
+        if [ "$raw" = "✅" ] || [ -z "$format" ]; then
+            echo -e "${indent}✅ $label${desc_suffix}"
+        else
+            local formatted=""
+            case "$format" in
+                address) formatted=$(fmt_addr "$raw") ;;
+                uint) formatted=$(fmt_uint "$raw") ;;
+                hex) formatted="$raw" ;;
+                *) formatted="" ;;
+            esac
+            if [ -n "$formatted" ]; then
+                echo -e "${indent}✅ $label: ${GREY}${formatted}${NC}${desc_suffix}"
+            else
+                echo -e "${indent}✅ $label${desc_suffix}"
+            fi
+        fi
+    else
+        echo -e "${indent}❌ $label${desc_suffix}"
+    fi
+}
 
 # -----------------------------------------------------------------------------
 # Movement Bardock (Hub)
@@ -824,65 +1026,62 @@ echo "   Movement Bardock (Hub)"
 echo "   ----------------------"
 
 # Intent Module (fa_intent)
-echo "   Intent Module (fa_intent):"
+echo -e "   ${BLUE}Intent Module (fa_intent):${NC}"
 if [ -z "$MOVEMENT_INTENT_MODULE_ADDR" ] || [ "$MOVEMENT_INTENT_MODULE_ADDR" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (not set in coordinator_testnet.toml)"
+    echo "      ❌ Deployed (not locally configured)"
+    echo "      ❌ Locally Configured (not set in coordinator_testnet.toml)"
 else
     deployed_status=$(check_movement_module "$MOVEMENT_INTENT_MODULE_ADDR"); mark "$deployed_status"
     init_status=$(check_movement_initialized "$MOVEMENT_INTENT_MODULE_ADDR" "fa_intent::ChainInfo"); mark "$init_status"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         ChainInfo:         $init_status"
-    echo "      Locally Configured:   ✅ $MOVEMENT_INTENT_MODULE_ADDR"
+    print_check "Deployed" "$deployed_status" "" "      " "module bytecode on-chain"
+    print_check "ChainInfo" "$init_status" "" "      " "chain identity and config initialized"
+    echo -e "      ✅ Locally Configured: ${GREY}$MOVEMENT_INTENT_MODULE_ADDR${NC}"
 fi
 
 # GMP Module (intent_gmp) - bundled at same address as Intent Module
-echo "   GMP Module (intent_gmp):"
+echo -e "   ${BLUE}GMP Module (intent_gmp):${NC}"
 if [ -z "$MOVEMENT_INTENT_MODULE_ADDR" ] || [ "$MOVEMENT_INTENT_MODULE_ADDR" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (same address as Intent Module)"
+    echo "      ❌ Deployed (not locally configured)"
 else
     deployed_status=$(check_movement_gmp_module "$MOVEMENT_INTENT_MODULE_ADDR"); mark "$deployed_status"
     init_status=$(check_movement_initialized "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp::EndpointConfig"); mark "$init_status"
     tr_base=$(check_gmp_trusted_remote "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp" "$BASE_CHAIN_ID"); mark "$tr_base"
     tr_svm=$(check_gmp_trusted_remote "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp" "$SVM_CHAIN_ID"); mark "$tr_svm"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         EndpointConfig:    $init_status"
-    echo "         Trusted Remote (Base Sepolia $BASE_CHAIN_ID): $tr_base"
-    echo "         Trusted Remote (Solana Devnet $SVM_CHAIN_ID): $tr_svm"
-    echo "      Locally Configured:   ✅ (bundled at $MOVEMENT_INTENT_MODULE_ADDR)"
+    print_check "Deployed" "$deployed_status" "" "      " "module bytecode on-chain"
+    print_check "EndpointConfig" "$init_status" "" "      " "GMP endpoint initialized with chain ID"
+    print_check "Trusted Remote (Base Sepolia $BASE_CHAIN_ID)" "$tr_base" "hex" "      " "only accepts GMP from this Base address"
+    print_check "Trusted Remote (Solana Devnet $SVM_CHAIN_ID)" "$tr_svm" "hex" "      " "only accepts GMP from this Solana address"
+    if [ -n "$INTEGRATED_GMP_MVM_ADDR" ]; then
+        relay_auth=$(check_mvm_relay_authorized "$MOVEMENT_INTENT_MODULE_ADDR" "$INTEGRATED_GMP_MVM_ADDR"); mark "$relay_auth"
+        print_check "Relay Authorized ${GREY}($INTEGRATED_GMP_MVM_ADDR)${NC}" "$relay_auth" "" "      " "relay can deliver cross-chain messages"
+    fi
+    echo -e "      ✅ Locally Configured: ${GREY}bundled at $MOVEMENT_INTENT_MODULE_ADDR${NC}"
 fi
 
 # GMP Hub (intent_gmp_hub) - bundled at same address
-echo "   GMP Hub (intent_gmp_hub):"
+echo -e "   ${BLUE}GMP Hub (intent_gmp_hub):${NC}"
 if [ -z "$MOVEMENT_INTENT_MODULE_ADDR" ] || [ "$MOVEMENT_INTENT_MODULE_ADDR" = "" ]; then
     all_ok=false
-    echo "      On-chain Configured:  ❌"
+    echo "      ❌ GmpHubConfig"
 else
     hub_init=$(check_movement_initialized "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp_hub::GmpHubConfig"); mark "$hub_init"
     hub_tr_base=$(check_gmp_trusted_remote "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp_hub" "$BASE_CHAIN_ID"); mark "$hub_tr_base"
     hub_tr_svm=$(check_gmp_trusted_remote "$MOVEMENT_INTENT_MODULE_ADDR" "intent_gmp_hub" "$SVM_CHAIN_ID"); mark "$hub_tr_svm"
-    echo "      On-chain Configured:"
-    echo "         GmpHubConfig:      $hub_init"
-    echo "         Trusted Remote (Base Sepolia $BASE_CHAIN_ID): $hub_tr_base"
-    echo "         Trusted Remote (Solana Devnet $SVM_CHAIN_ID): $hub_tr_svm"
+    print_check "GmpHubConfig" "$hub_init" "" "      " "hub routing for cross-chain messages"
+    print_check "Trusted Remote (Base Sepolia $BASE_CHAIN_ID)" "$hub_tr_base" "hex" "      " "only accepts GMP from this Base address"
+    print_check "Trusted Remote (Solana Devnet $SVM_CHAIN_ID)" "$hub_tr_svm" "hex" "      " "only accepts GMP from this Solana address"
 fi
 
 # GMP Sender (gmp_sender)
-echo "   GMP Sender (gmp_sender):"
+echo -e "   ${BLUE}GMP Sender (gmp_sender):${NC}"
 if [ -z "$MOVEMENT_INTENT_MODULE_ADDR" ] || [ "$MOVEMENT_INTENT_MODULE_ADDR" = "" ]; then
     all_ok=false
-    echo "      On-chain Configured:  ❌"
+    echo "      ❌ SenderConfig"
 else
     sender_init=$(check_movement_initialized "$MOVEMENT_INTENT_MODULE_ADDR" "gmp_sender::SenderConfig"); mark "$sender_init"
-    echo "      On-chain Configured:"
-    echo "         SenderConfig:      $sender_init"
+    print_check "SenderConfig" "$sender_init" "" "      " "outbound message sender initialized"
 fi
 
 # -----------------------------------------------------------------------------
@@ -893,43 +1092,43 @@ echo "   Base Sepolia (EVM)"
 echo "   ------------------"
 
 # Escrow Contract (IntentInflowEscrow)
-echo "   Escrow Contract (IntentInflowEscrow):"
+echo -e "   ${BLUE}Escrow Contract (IntentInflowEscrow):${NC}"
 if [ -z "$BASE_ESCROW_CONTRACT_ADDR" ] || [ "$BASE_ESCROW_CONTRACT_ADDR" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (not set in coordinator_testnet.toml)"
+    echo "      ❌ Deployed (not locally configured)"
+    echo "      ❌ Locally Configured (not set in coordinator_testnet.toml)"
 else
     deployed_status=$(check_evm_contract "$BASE_ESCROW_CONTRACT_ADDR" "$BASE_RPC_URL"); mark "$deployed_status"
     gmp_ep=$(check_evm_nonzero_result "$BASE_ESCROW_CONTRACT_ADDR" "$BASE_RPC_URL" "0xb2ed7d86"); mark "$gmp_ep"
     hub_cid=$(check_evm_nonzero_result "$BASE_ESCROW_CONTRACT_ADDR" "$BASE_RPC_URL" "0x929f5840"); mark "$hub_cid"
     hub_addr=$(check_evm_nonzero_result "$BASE_ESCROW_CONTRACT_ADDR" "$BASE_RPC_URL" "0x46112810"); mark "$hub_addr"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         gmpEndpoint:       $gmp_ep"
-    echo "         hubChainId:        $hub_cid"
-    echo "         trustedHubAddr:    $hub_addr"
-    echo "      Locally Configured:   ✅ $BASE_ESCROW_CONTRACT_ADDR"
+    print_check "Deployed" "$deployed_status" "" "      " "contract bytecode on-chain"
+    print_check "gmpEndpoint" "$gmp_ep" "address" "      " "GMP contract for cross-chain messaging"
+    print_check "hubChainId" "$hub_cid" "uint" "      " "hub chain for outbound messages"
+    print_check "trustedHubAddr" "$hub_addr" "hex" "      " "hub address trusted for inbound messages"
+    echo -e "      ✅ Locally Configured: ${GREY}$BASE_ESCROW_CONTRACT_ADDR${NC}"
 fi
 
 # GMP Endpoint (IntentGmp)
-echo "   GMP Endpoint (IntentGmp):"
+echo -e "   ${BLUE}GMP Endpoint (IntentGmp):${NC}"
 if [ -z "$BASE_GMP_ENDPOINT_ADDR" ] || [ "$BASE_GMP_ENDPOINT_ADDR" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (not set in integrated-gmp_testnet.toml)"
+    echo "      ❌ Deployed (not locally configured)"
+    echo "      ❌ Locally Configured (not set in integrated-gmp_testnet.toml)"
 else
     deployed_status=$(check_evm_contract "$BASE_GMP_ENDPOINT_ADDR" "$BASE_RPC_URL"); mark "$deployed_status"
     escrow_h=$(check_evm_nonzero_result "$BASE_GMP_ENDPOINT_ADDR" "$BASE_RPC_URL" "0x87ad8f87"); mark "$escrow_h"
     outflow_h=$(check_evm_nonzero_result "$BASE_GMP_ENDPOINT_ADDR" "$BASE_RPC_URL" "0xa80693bc"); mark "$outflow_h"
     tr_hub=$(check_evm_has_trusted_remote "$BASE_GMP_ENDPOINT_ADDR" "$BASE_RPC_URL" "$MOVEMENT_CHAIN_ID"); mark "$tr_hub"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         escrowHandler:     $escrow_h"
-    echo "         outflowHandler:    $outflow_h"
-    echo "         Trusted Remote (Movement $MOVEMENT_CHAIN_ID): $tr_hub"
-    echo "      Locally Configured:   ✅ $BASE_GMP_ENDPOINT_ADDR"
+    print_check "Deployed" "$deployed_status" "" "      " "contract bytecode on-chain"
+    print_check "escrowHandler" "$escrow_h" "address" "      " "receives inbound token transfers"
+    print_check "outflowHandler" "$outflow_h" "address" "      " "validates outbound fulfillments"
+    print_check "Trusted Remote (Movement $MOVEMENT_CHAIN_ID)" "$tr_hub" "hex" "      " "only accepts GMP from this hub address"
+    if [ -n "$GMP_RELAY_EVM_ADDR" ]; then
+        relay_auth=$(check_evm_relay_authorized "$BASE_GMP_ENDPOINT_ADDR" "$BASE_RPC_URL" "$GMP_RELAY_EVM_ADDR"); mark "$relay_auth"
+        print_check "Relay Authorized ${GREY}($GMP_RELAY_EVM_ADDR)${NC}" "$relay_auth" "" "      " "relay can deliver cross-chain messages"
+    fi
+    echo -e "      ✅ Locally Configured: ${GREY}$BASE_GMP_ENDPOINT_ADDR${NC}"
 fi
 
 # -----------------------------------------------------------------------------
@@ -940,32 +1139,29 @@ echo "   Solana Devnet (SVM)"
 echo "   -------------------"
 
 # Escrow Program
-echo "   Escrow Program:"
+echo -e "   ${BLUE}Escrow Program:${NC}"
 if [ -z "$SOLANA_PROGRAM_ID" ] || [ "$SOLANA_PROGRAM_ID" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (not set in .env.testnet)"
+    echo "      ❌ Deployed (not locally configured)"
+    echo "      ❌ Locally Configured (not set in .env.testnet)"
 else
     deployed_status=$(check_solana_program "$SOLANA_PROGRAM_ID" "$SOLANA_RPC_URL"); mark "$deployed_status"
     # EscrowState: disc="ESCROWST" base64=RVNDUk9XU1Q=, size=40
     state_pda=$(check_solana_has_account "$SOLANA_PROGRAM_ID" "$SOLANA_RPC_URL" "RVNDUk9XU1Q=" 40); mark "$state_pda"
     # GmpConfig: disc="GMPCONFG" base64=R01QQ09ORkc=, size=109
     gmp_cfg=$(check_solana_has_account "$SOLANA_PROGRAM_ID" "$SOLANA_RPC_URL" "R01QQ09ORkc=" 109); mark "$gmp_cfg"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         State PDA:         $state_pda"
-    echo "         GMP Config PDA:    $gmp_cfg"
-    echo "      Locally Configured:   ✅ $SOLANA_PROGRAM_ID"
+    print_check "Deployed" "$deployed_status" "" "      " "program executable on-chain"
+    print_check "State PDA" "$state_pda" "" "      " "escrow state account"
+    print_check "GMP Config PDA" "$gmp_cfg" "" "      " "cross-chain messaging config"
+    echo -e "      ✅ Locally Configured: ${GREY}$SOLANA_PROGRAM_ID${NC}"
 fi
 
 # GMP Endpoint (intent-gmp program)
-echo "   GMP Endpoint (intent-gmp):"
+echo -e "   ${BLUE}GMP Endpoint (intent-gmp):${NC}"
 if [ -z "$SOLANA_GMP_PROGRAM_ID" ] || [ "$SOLANA_GMP_PROGRAM_ID" = "" ]; then
     all_ok=false
-    echo "      Deployed:             ❌ (not locally configured)"
-    echo "      On-chain Configured:  ❌"
-    echo "      Locally Configured:   ❌ (not set in integrated-gmp_testnet.toml)"
+    echo "      ❌ Deployed (not locally configured)"
+    echo "      ❌ Locally Configured (not set in integrated-gmp_testnet.toml)"
 else
     deployed_status=$(check_solana_program "$SOLANA_GMP_PROGRAM_ID" "$SOLANA_RPC_URL"); mark "$deployed_status"
     # ConfigAccount: disc=1 base64=AQ==, size=38
@@ -974,12 +1170,15 @@ else
     trusted_remote=$(check_solana_has_account "$SOLANA_GMP_PROGRAM_ID" "$SOLANA_RPC_URL" "Aw==" 38); mark "$trusted_remote"
     # RoutingConfig: disc=6 base64=Bg==, size=66
     routing_cfg=$(check_solana_has_account "$SOLANA_GMP_PROGRAM_ID" "$SOLANA_RPC_URL" "Bg==" 66); mark "$routing_cfg"
-    echo "      Deployed:             $deployed_status"
-    echo "      On-chain Configured:"
-    echo "         Config PDA:        $config_pda"
-    echo "         Trusted Remote (Movement $MOVEMENT_CHAIN_ID): $trusted_remote"
-    echo "         Routing Config:    $routing_cfg"
-    echo "      Locally Configured:   ✅ $SOLANA_GMP_PROGRAM_ID"
+    print_check "Deployed" "$deployed_status" "" "      " "program executable on-chain"
+    print_check "Config PDA" "$config_pda" "" "      " "endpoint config with chain ID"
+    print_check "Trusted Remote (Movement $MOVEMENT_CHAIN_ID)" "$trusted_remote" "" "      " "only accepts GMP from this hub address"
+    print_check "Routing Config" "$routing_cfg" "" "      " "routes to escrow and outflow programs"
+    if [ -n "$INTEGRATED_GMP_SVM_ADDR" ]; then
+        relay_auth=$(check_solana_relay_authorized "$SOLANA_GMP_PROGRAM_ID" "$SOLANA_RPC_URL" "$INTEGRATED_GMP_SVM_ADDR"); mark "$relay_auth"
+        print_check "Relay Authorized ${GREY}($INTEGRATED_GMP_SVM_ADDR)${NC}" "$relay_auth" "" "      " "relay can deliver cross-chain messages"
+    fi
+    echo -e "      ✅ Locally Configured: ${GREY}$SOLANA_GMP_PROGRAM_ID${NC}"
 fi
 
 echo ""

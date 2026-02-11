@@ -29,11 +29,11 @@ pub enum GmpError {
     #[error("Untrusted remote: source chain or address not configured")]
     UntrustedRemote,
 
-    #[error("Replay detected: nonce already processed")]
-    ReplayDetected,
+    #[error("Message already delivered")]
+    AlreadyDelivered,
 
-    #[error("Invalid nonce: expected sequential nonce")]
-    InvalidNonce,
+    #[error("Invalid payload: too short to extract intent_id")]
+    InvalidPayload,
 
     #[error("Destination program not provided")]
     MissingDestinationProgram,

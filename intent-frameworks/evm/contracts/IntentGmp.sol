@@ -30,8 +30,8 @@ contract IntentGmp is Ownable, ReentrancyGuard {
 
     /// @notice Caller is not an authorized relay
     error E_UNAUTHORIZED_RELAY();
-    /// @notice Message nonce already used (replay attack)
-    error E_NONCE_ALREADY_USED();
+    /// @notice Message already delivered (duplicate delivery)
+    error E_ALREADY_DELIVERED();
     /// @notice Source address is not trusted for the given chain
     error E_UNTRUSTED_REMOTE();
     /// @notice No trusted remote configured for the source chain
@@ -46,6 +46,8 @@ contract IntentGmp is Ownable, ReentrancyGuard {
     error E_ALREADY_EXISTS();
     /// @notice Address not in set
     error E_NOT_FOUND();
+    /// @notice Payload too short to extract intent_id
+    error E_INVALID_PAYLOAD();
 
     // ============================================================================
     // MESSAGE TYPE CONSTANTS (from GmpTypes)
@@ -64,7 +66,7 @@ contract IntentGmp is Ownable, ReentrancyGuard {
         uint32 indexed srcChainId,
         bytes32 srcAddr,
         bytes payload,
-        uint64 nonce
+        bytes32 intentId
     );
 
     /// @notice Emitted when a message is sent to another chain
@@ -103,8 +105,9 @@ contract IntentGmp is Ownable, ReentrancyGuard {
     /// @notice Trusted remote addresses per source chain (chainId => list of trusted 32-byte addresses)
     mapping(uint32 => bytes32[]) private trustedRemotes;
 
-    /// @notice Inbound nonces per source chain (chainId => lastNonce)
-    mapping(uint32 => uint64) public inboundNonces;
+    /// @notice Delivered messages: keccak256(intentId, msgType) => true.
+    /// Replaces sequential nonce tracking — immune to contract redeployments.
+    mapping(bytes32 => bool) public deliveredMessages;
 
     /// @notice Next outbound nonce for sending messages
     uint64 public nextOutboundNonce;
@@ -133,16 +136,16 @@ contract IntentGmp is Ownable, ReentrancyGuard {
     // ============================================================================
 
     /// @notice Deliver a cross-chain message from another chain
-    /// @dev Called by authorized relays after observing MessageSent on source chain
+    /// @dev Called by authorized relays after observing MessageSent on source chain.
+    ///      Deduplication uses (intent_id, msg_type) extracted from the payload,
+    ///      making delivery immune to contract redeployments (unlike sequential nonces).
     /// @param srcChainId Source chain endpoint ID
     /// @param srcAddr Source address (32 bytes)
     /// @param payload Message payload (encoded GMP message)
-    /// @param nonce Nonce from source chain for replay protection
     function deliverMessage(
         uint32 srcChainId,
         bytes32 srcAddr,
-        bytes calldata payload,
-        uint64 nonce
+        bytes calldata payload
     ) external nonReentrant {
         // Verify relay is authorized
         if (!authorizedRelays[msg.sender]) revert E_UNAUTHORIZED_RELAY();
@@ -152,12 +155,24 @@ contract IntentGmp is Ownable, ReentrancyGuard {
         if (trusted.length == 0) revert E_NO_TRUSTED_REMOTE();
         if (!_isTrustedAddress(trusted, srcAddr)) revert E_UNTRUSTED_REMOTE();
 
-        // Replay protection: nonce must be greater than last processed
-        if (nonce <= inboundNonces[srcChainId]) revert E_NONCE_ALREADY_USED();
-        inboundNonces[srcChainId] = nonce;
+        // Extract intent_id and msg_type from payload for dedup
+        // All GMP messages: msg_type (1 byte) + intent_id (32 bytes) at the start
+        if (payload.length < 33) revert E_INVALID_PAYLOAD();
+        uint8 msgType = uint8(payload[0]);
+        bytes32 intentId;
+        assembly {
+            // payload.offset points to start of calldata payload
+            // intent_id starts at byte 1 of payload
+            intentId := calldataload(add(payload.offset, 1))
+        }
+
+        // Replay protection: deduplicate by (intentId, msgType)
+        bytes32 dedupeKey = keccak256(abi.encodePacked(intentId, msgType));
+        if (deliveredMessages[dedupeKey]) revert E_ALREADY_DELIVERED();
+        deliveredMessages[dedupeKey] = true;
 
         // Emit delivery event
-        emit MessageDelivered(srcChainId, srcAddr, payload, nonce);
+        emit MessageDelivered(srcChainId, srcAddr, payload, intentId);
 
         // Route message based on type
         _routeMessage(srcChainId, srcAddr, payload);
@@ -313,11 +328,13 @@ contract IntentGmp is Ownable, ReentrancyGuard {
         return trustedRemotes[srcChainId].length > 0;
     }
 
-    /// @notice Get the last processed inbound nonce for a source chain
-    /// @param srcChainId Source chain endpoint ID
-    /// @return Last processed nonce (0 if none)
-    function getInboundNonce(uint32 srcChainId) external view returns (uint64) {
-        return inboundNonces[srcChainId];
+    /// @notice Check if a specific message has been delivered
+    /// @param intentId The intent ID (32 bytes)
+    /// @param msgType The message type (0x01, 0x02, or 0x03)
+    /// @return True if the message has been delivered
+    function isMessageDelivered(bytes32 intentId, uint8 msgType) external view returns (bool) {
+        bytes32 dedupeKey = keccak256(abi.encodePacked(intentId, msgType));
+        return deliveredMessages[dedupeKey];
     }
 
     // ============================================================================

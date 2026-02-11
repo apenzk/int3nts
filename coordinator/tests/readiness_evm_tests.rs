@@ -17,7 +17,7 @@ use test_helpers::{build_test_config_with_evm, create_default_intent_evm, DUMMY_
 // ============================================================================
 
 /// Mount an eth_blockNumber mock returning block 0x3e8 (1000).
-/// With event_block_range=1000, fromBlock = 1000 - 1000 = 0 = "0x0".
+/// With event_block_range capped to 9, fromBlock = 1000 - 9 = 991 = "0x3df", toBlock = "0x3e8".
 async fn mount_eth_block_number_mock(mock_server: &MockServer) {
     Mock::given(method("POST"))
         .and(body_partial_json(json!({"method": "eth_blockNumber"})))
@@ -79,12 +79,14 @@ async fn test_poll_evm_requirements_received_parses_event() {
     mount_eth_block_number_mock(&mock_server).await;
 
     // Mock the eth_getLogs endpoint
+    // With block=0x3e8 (1000) and range capped to 9: fromBlock=0x3df, toBlock=0x3e8
     let expected_body = json!({
         "jsonrpc": "2.0",
         "method": "eth_getLogs",
         "params": [{
             "address": "0x0000000000000000000000000000000000000010",
-            "fromBlock": "0x0",
+            "fromBlock": "0x3df",
+            "toBlock": "0x3e8",
             "topics": ["0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
         }],
         "id": 1

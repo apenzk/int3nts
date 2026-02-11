@@ -312,7 +312,7 @@ profile = "connected-profile"
 fn test_connected_chain_evm_deserialization() {
     let toml_str = format!(r#"
 name = "Connected EVM Chain"
-rpc_url = "https://sepolia.base.org"
+rpc_url = "https://base-sepolia.g.alchemy.com/v2/test-key"
 chain_id = 84532
 escrow_contract_addr = "{}"
 private_key_env = "BASE_SOLVER_PRIVATE_KEY"

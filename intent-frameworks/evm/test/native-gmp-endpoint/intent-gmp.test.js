@@ -70,8 +70,7 @@ describe("IntentGmp", function () {
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        VALID_PAYLOAD,
-        1
+        VALID_PAYLOAD
       );
 
       // Check that handler received the message
@@ -81,24 +80,22 @@ describe("IntentGmp", function () {
     });
 
     /// 17. Test: test_deliver_message_rejects_replay: Deliver Message Rejects Replay
-    /// Verifies duplicate nonce is rejected.
+    /// Verifies duplicate (intent_id, msg_type) is rejected.
     /// Why: Replay protection prevents double-processing.
-    it("should reject message with same nonce", async function () {
+    it("should reject duplicate delivery of same intent_id and msg_type", async function () {
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        VALID_PAYLOAD,
-        1
+        VALID_PAYLOAD
       );
 
       await expect(
         gmpEndpoint.deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
-      ).to.be.revertedWithCustomError(gmpEndpoint, "E_NONCE_ALREADY_USED");
+      ).to.be.revertedWithCustomError(gmpEndpoint, "E_ALREADY_DELIVERED");
     });
 
     /// 18. Test: test_deliver_message_rejects_unauthorized_relay: Deliver Message Rejects Unauthorized Relay
@@ -109,8 +106,7 @@ describe("IntentGmp", function () {
         gmpEndpoint.connect(user).deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
       ).to.be.revertedWithCustomError(gmpEndpoint, "E_UNAUTHORIZED_RELAY");
     });
@@ -125,8 +121,7 @@ describe("IntentGmp", function () {
         gmpEndpoint.connect(relay).deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
       ).to.emit(gmpEndpoint, "MessageDelivered");
     });
@@ -139,8 +134,7 @@ describe("IntentGmp", function () {
         gmpEndpoint.deliverMessage(
           MOVEMENT_CHAIN_ID,
           UNTRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
       ).to.be.revertedWithCustomError(gmpEndpoint, "E_UNTRUSTED_REMOTE");
     });
@@ -155,8 +149,7 @@ describe("IntentGmp", function () {
         gmpEndpoint.deliverMessage(
           unconfiguredChainId,
           TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
       ).to.be.revertedWithCustomError(gmpEndpoint, "E_NO_TRUSTED_REMOTE");
     });
@@ -174,25 +167,29 @@ describe("IntentGmp", function () {
   });
 
   describe("Message Delivery Continued", function () {
-    /// 23. Test: test_deliver_message_rejects_lower_nonce: Deliver Message Rejects Lower Nonce
-    /// Verifies nonce must be strictly increasing.
-    /// Why: Prevents replay and out-of-order processing.
-    it("should reject message with lower nonce", async function () {
+    /// 23. Test: test_deliver_different_msg_type_succeeds: Different Msg Type Succeeds
+    /// Verifies same intent_id with different msg_type is NOT a duplicate.
+    /// Why: Each (intent_id, msg_type) pair is independently deliverable.
+    it("should allow same intent_id with different msg_type", async function () {
+      // Deliver IntentRequirements (msg_type 0x01) - 145 bytes
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        VALID_PAYLOAD,
-        5
+        VALID_PAYLOAD
       );
 
-      await expect(
-        gmpEndpoint.deliverMessage(
-          MOVEMENT_CHAIN_ID,
-          TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          3
-        )
-      ).to.be.revertedWithCustomError(gmpEndpoint, "E_NONCE_ALREADY_USED");
+      // Deliver FulfillmentProof (msg_type 0x03) with same intent_id (32 zero bytes) - 81 bytes
+      const fulfillmentPayload = "0x03" + "00".repeat(80);
+      await gmpEndpoint.deliverMessage(
+        MOVEMENT_CHAIN_ID,
+        TRUSTED_REMOTE,
+        fulfillmentPayload
+      );
+
+      // Both should be marked as delivered
+      const intentId = ethers.ZeroHash;
+      expect(await gmpEndpoint.isMessageDelivered(intentId, 0x01)).to.equal(true);
+      expect(await gmpEndpoint.isMessageDelivered(intentId, 0x03)).to.equal(true);
     });
   });
 
@@ -365,8 +362,7 @@ describe("IntentGmp", function () {
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        fulfillmentPayload,
-        1
+        fulfillmentPayload
       );
 
       expect(await mockHandler.fulfillmentReceived()).to.equal(true);
@@ -383,41 +379,44 @@ describe("IntentGmp", function () {
         gmpEndpoint.deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          escrowConfirmPayload,
-          1
+          escrowConfirmPayload
         )
       ).to.be.reverted;
     });
 
     /// 43. Test: test_emit_message_delivered: Emit MessageDelivered Event
-    /// Verifies delivery emits correct event.
+    /// Verifies delivery emits correct event with intent_id.
     /// Why: Events are used for relay monitoring.
     it("should emit MessageDelivered event", async function () {
+      // VALID_PAYLOAD has intent_id = 32 zero bytes at positions 1-32
+      const intentId = ethers.ZeroHash;
+
       await expect(
         gmpEndpoint.deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          VALID_PAYLOAD,
-          1
+          VALID_PAYLOAD
         )
       ).to.emit(gmpEndpoint, "MessageDelivered")
-        .withArgs(MOVEMENT_CHAIN_ID, TRUSTED_REMOTE, VALID_PAYLOAD, 1);
+        .withArgs(MOVEMENT_CHAIN_ID, TRUSTED_REMOTE, VALID_PAYLOAD, intentId);
     });
 
-    /// 44. Test: test_update_inbound_nonce: Update Inbound Nonce
-    /// Verifies inbound nonce is updated after delivery.
-    /// Why: Nonce tracking is essential for replay protection.
-    it("should update inbound nonce after delivery", async function () {
-      expect(await gmpEndpoint.getInboundNonce(MOVEMENT_CHAIN_ID)).to.equal(0);
+    /// 44. Test: test_is_message_delivered: Is Message Delivered
+    /// Verifies isMessageDelivered tracks delivery status.
+    /// Why: View function for checking delivery status.
+    it("should mark message as delivered", async function () {
+      const intentId = ethers.ZeroHash; // 32 zero bytes from VALID_PAYLOAD
+      const msgType = 0x01; // IntentRequirements
+
+      expect(await gmpEndpoint.isMessageDelivered(intentId, msgType)).to.equal(false);
 
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        VALID_PAYLOAD,
-        5
+        VALID_PAYLOAD
       );
 
-      expect(await gmpEndpoint.getInboundNonce(MOVEMENT_CHAIN_ID)).to.equal(5);
+      expect(await gmpEndpoint.isMessageDelivered(intentId, msgType)).to.equal(true);
     });
   });
 
@@ -503,8 +502,7 @@ describe("IntentGmp", function () {
       await gmpEndpoint.deliverMessage(
         MOVEMENT_CHAIN_ID,
         TRUSTED_REMOTE,
-        VALID_PAYLOAD,
-        1
+        VALID_PAYLOAD
       );
 
       expect(await mockHandler.requirementsReceived()).to.equal(true);
@@ -524,8 +522,7 @@ describe("IntentGmp", function () {
         gmpEndpoint.deliverMessage(
           MOVEMENT_CHAIN_ID,
           TRUSTED_REMOTE,
-          fulfillmentPayload,
-          1
+          fulfillmentPayload
         )
       ).to.be.revertedWithCustomError(gmpEndpoint, "E_HANDLER_NOT_CONFIGURED");
     });

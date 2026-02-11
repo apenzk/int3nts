@@ -99,7 +99,7 @@ async function encodeFulfillmentProof(intentId, solverAddr, amount, timestamp) {
 }
 
 /// Helper to deliver IntentRequirements via GMP
-async function deliverRequirements(gmpEndpoint, intentId, requesterAddr, amount, tokenAddr, solverAddr, expiry, nonce = 1) {
+async function deliverRequirements(gmpEndpoint, intentId, requesterAddr, amount, tokenAddr, solverAddr, expiry) {
   const payload = await encodeIntentRequirements(
     intentId,
     requesterAddr,
@@ -108,18 +108,18 @@ async function deliverRequirements(gmpEndpoint, intentId, requesterAddr, amount,
     solverAddr,
     expiry
   );
-  await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, nonce);
+  await gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 }
 
 /// Helper to deliver FulfillmentProof via GMP
 /// Returns the transaction for event emission checking
-async function deliverFulfillmentProof(gmpEndpoint, intentId, solverAddr, amount = DEFAULT_AMOUNT, timestamp = null, nonce = 2) {
+async function deliverFulfillmentProof(gmpEndpoint, intentId, solverAddr, amount = DEFAULT_AMOUNT, timestamp = null) {
   if (timestamp === null) {
     const block = await ethers.provider.getBlock("latest");
     timestamp = BigInt(block.timestamp);
   }
   const payload = await encodeFulfillmentProof(intentId, solverAddr, amount, timestamp);
-  return gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload, nonce);
+  return gmpEndpoint.deliverMessage(HUB_CHAIN_ID, TRUSTED_HUB_ADDR, payload);
 }
 
 /// Get current block timestamp

@@ -88,20 +88,45 @@ echo ""
 
 cd "$PROJECT_ROOT/coordinator"
 
+# Parse flags
+USE_RELEASE=false
+USE_DEBUG_LOG=false
+for arg in "$@"; do
+    case "$arg" in
+        --release) USE_RELEASE=true ;;
+        --debug)   USE_DEBUG_LOG=true ;;
+    esac
+done
+
+# Set log level
+if $USE_DEBUG_LOG; then
+    LOG_LEVEL="debug"
+    echo "   Log level: debug"
+else
+    LOG_LEVEL="info"
+fi
+
+# Set up log file
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/coordinator-$(date +%Y%m%d-%H%M%S).log"
+
 # Check if --release flag is passed
-if [ "$1" = "--release" ]; then
+if $USE_RELEASE; then
     echo " Building release binary..."
     nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/coordinator' && cargo build --release"
     echo ""
     echo " Starting coordinator (release mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo ""
-    RUST_LOG=info ./target/release/coordinator --testnet
+    RUST_LOG=$LOG_LEVEL ./target/release/coordinator --testnet 2>&1 | tee "$LOG_FILE"
 else
     echo " Starting coordinator (debug mode)..."
+    echo "   Log file: $LOG_FILE"
     echo "   Press Ctrl+C to stop"
     echo "   (Use --release for faster performance)"
     echo ""
-    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/coordinator' && RUST_LOG=info cargo run --bin coordinator -- --testnet"
+    nix develop "$PROJECT_ROOT/nix" --command bash -c "cd '$PROJECT_ROOT/coordinator' && RUST_LOG=$LOG_LEVEL cargo run --bin coordinator -- --testnet" 2>&1 | tee "$LOG_FILE"
 fi
 

@@ -23,7 +23,7 @@
 //! - Admin controls relay authorization and trusted remote configuration
 //! - Only authorized relays can deliver messages
 //! - Messages from untrusted sources are rejected
-//! - Nonce tracking prevents replay attacks
+//! - (intent_id, msg_type) deduplication prevents replay attacks
 
 pub mod error;
 pub mod instruction;
@@ -39,5 +39,6 @@ pub use solana_program;
 pub use error::GmpError;
 pub use instruction::NativeGmpInstruction;
 pub use state::{
-    ConfigAccount, InboundNonceAccount, OutboundNonceAccount, RelayAccount, TrustedRemoteAccount,
+    ConfigAccount, DeliveredMessage, MessageAccount, OutboundNonceAccount, RelayAccount,
+    TrustedRemoteAccount,
 };

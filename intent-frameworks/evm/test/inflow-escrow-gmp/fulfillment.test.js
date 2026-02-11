@@ -81,23 +81,23 @@ describe("IntentInflowEscrow - Fulfillment", function () {
 
     // Note: This will fail at the escrow lookup since there's no escrow for this intent
     await expect(
-      deliverFulfillmentProof(gmpEndpoint, unknownIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp, 2)
+      deliverFulfillmentProof(gmpEndpoint, unknownIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp)
     ).to.be.revertedWithCustomError(escrow, "E_ESCROW_NOT_FOUND");
   });
 
   /// 3. Test: test_prevent_double_fulfillment: Prevent Double Fulfillment
-  /// Verifies that the same escrow cannot be fulfilled twice.
-  /// Why: Prevents double-spending - each escrow can only be released once.
+  /// Verifies that the same fulfillment proof cannot be delivered twice.
+  /// Why: GMP deduplication prevents double-spending at the endpoint layer.
   it("Should prevent double fulfillment", async function () {
     const timestamp = await getCurrentTimestamp();
 
     // First fulfillment succeeds
     await deliverFulfillmentProof(gmpEndpoint, intentId, solverAddr32, DEFAULT_AMOUNT, timestamp);
 
-    // Second fulfillment fails
+    // Second fulfillment fails - blocked by GMP (intent_id, msg_type) deduplication
     await expect(
-      deliverFulfillmentProof(gmpEndpoint, intentId, solverAddr32, DEFAULT_AMOUNT, timestamp, 3)
-    ).to.be.revertedWithCustomError(escrow, "E_ALREADY_RELEASED");
+      deliverFulfillmentProof(gmpEndpoint, intentId, solverAddr32, DEFAULT_AMOUNT, timestamp)
+    ).to.be.revertedWithCustomError(gmpEndpoint, "E_ALREADY_DELIVERED");
   });
 
   /// 4. Test: test_fulfillment_after_cancel: Fulfillment Already Released (via cancel)
@@ -115,8 +115,7 @@ describe("IntentInflowEscrow - Fulfillment", function () {
       DEFAULT_AMOUNT,
       tokenAddr32,
       solverAddr32,
-      shortExpiry,
-      2 // nonce
+      shortExpiry
     );
     await escrow.connect(requester).createEscrowWithValidation(
       shortExpiryIntentId,
@@ -129,10 +128,10 @@ describe("IntentInflowEscrow - Fulfillment", function () {
     await ethers.provider.send("evm_mine", []);
     await escrow.connect(requester).cancel(shortExpiryIntentId);
 
-    // Now try to fulfill - should fail
+    // Now try to fulfill - should fail because escrow was already released via cancel
     const timestamp = await getCurrentTimestamp();
     await expect(
-      deliverFulfillmentProof(gmpEndpoint, shortExpiryIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp, 3)
+      deliverFulfillmentProof(gmpEndpoint, shortExpiryIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp)
     ).to.be.revertedWithCustomError(escrow, "E_ALREADY_RELEASED");
   });
 
@@ -144,7 +143,7 @@ describe("IntentInflowEscrow - Fulfillment", function () {
     const timestamp = await getCurrentTimestamp();
 
     await expect(
-      deliverFulfillmentProof(gmpEndpoint, nonExistentIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp, 2)
+      deliverFulfillmentProof(gmpEndpoint, nonExistentIntentId, solverAddr32, DEFAULT_AMOUNT, timestamp)
     ).to.be.revertedWithCustomError(escrow, "E_ESCROW_NOT_FOUND");
   });
 });

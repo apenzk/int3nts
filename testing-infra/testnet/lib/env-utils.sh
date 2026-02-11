@@ -10,11 +10,13 @@ update_env_var() {
     local value="$3"
 
     if grep -q "^${key}=" "$file" 2>/dev/null; then
-        # macOS and GNU sed have different -i syntax
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
-        else
+        # Detect sed flavor (BSD vs GNU) — OSTYPE is unreliable inside nix shells
+        if sed --version >/dev/null 2>&1; then
+            # GNU sed
             sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+        else
+            # BSD sed (macOS)
+            sed -i '' "s|^${key}=.*|${key}=${value}|" "$file"
         fi
     else
         echo "${key}=${value}" >> "$file"
