@@ -66,7 +66,7 @@ async function main() {
     const rpcUrl = hre.network.config.url || "http://127.0.0.1:8545";
     const provider = new ethers.JsonRpcProvider(rpcUrl);
     const accounts = await provider.send("eth_accounts", []);
-    solver = new ethers.Wallet(accounts[2], provider);
+    solver = await provider.getSigner(accounts[2]);
   }
 
   console.log(`Solver address: ${solver.address}`);
