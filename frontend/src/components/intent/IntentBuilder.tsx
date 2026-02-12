@@ -13,13 +13,14 @@ import { fetchTokenBalance, type TokenBalance } from '@/lib/balances';
 import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
 import { PublicKey } from '@solana/web3.js';
 import { INTENT_MODULE_ADDR, hexToBytes, padEvmAddressToMove } from '@/lib/move-transactions';
-import { INTENT_ESCROW_ABI, ERC20_ABI, intentIdToEvmBytes32, getEscrowContractAddress, checkHasRequirements } from '@/lib/escrow';
+import { INTENT_ESCROW_ABI, ERC20_ABI, intentIdToEvmBytes32, getEscrowContractAddress, checkHasRequirements, checkIsFulfilled } from '@/lib/escrow';
 import {
   buildCreateEscrowInstruction,
   getSvmTokenAccount,
   svmHexToPubkey,
   svmPubkeyToHex,
   readGmpOutboundNonce,
+  checkIsFulfilledSvm,
 } from '@/lib/svm-escrow';
 import { fetchSolverSvmAddress, getSvmConnection, sendSvmTransaction } from '@/lib/svm-transactions';
 
@@ -731,7 +732,7 @@ export function IntentBuilder() {
   }, [savedDraftData?.intentId]);
 
   // Poll for fulfillment
-  // - Outflow: Check coordinator events for fulfillment (GMP delivers FulfillmentProof to hub)
+  // - Outflow: Check connected chain directly for solver fulfillment (isFulfilled on outflow validator)
   // - Inflow: Check hub chain fulfillment events (solver fulfilled intent on hub chain)
   useEffect(() => {
     if (!transactionHash || !savedDraftData || pollingFulfillmentRef.current) return;
@@ -743,13 +744,6 @@ export function IntentBuilder() {
       
       const maxAttempts = 120; // 120 attempts * 5 seconds = 10 minutes max
       let attempts = 0;
-      
-      // Store initial desired balance for inflow comparison
-      let initialDesiredBalance: number | null = null;
-      if (flowType === 'inflow' && desiredBalance) {
-        initialDesiredBalance = parseFloat(desiredBalance.formatted);
-      }
-      
       const poll = async () => {
         try {
           // Use ref to get latest intentId (may have been updated with on-chain ID)
@@ -767,22 +761,24 @@ export function IntentBuilder() {
           }
           
           if (flowType === 'outflow') {
-            // Outflow: Check coordinator events for fulfillment (GMP delivers FulfillmentProof to hub)
-            console.log('Checking coordinator events for outflow intent:', currentIntentId);
+            // Outflow: Check connected chain directly for solver fulfillment.
+            // The user's funds arrive when the solver fulfills on the connected chain,
+            // no need to wait for the GMP round-trip back to hub.
+            console.log('Checking connected chain fulfillment for outflow intent:', currentIntentId);
 
-            const eventsResponse = await coordinatorClient.getEvents();
+            const desiredChainKey = savedDraftData ? getChainKeyFromId(savedDraftData.desiredChainId) : null;
+            if (desiredChainKey) {
+              const chainType = getChainType(desiredChainKey);
+              let fulfilled = false;
 
-            if (eventsResponse.success && eventsResponse.data) {
-              const fulfillmentEvent = eventsResponse.data.fulfillment_events?.find(
-                (e: any) => {
-                  const normalizeId = (id: string) =>
-                    id?.replace(/^0x/i, '').toLowerCase().replace(/^0+/, '') || '0';
-                  return normalizeId(e.intent_id) === normalizeId(currentIntentId);
-                }
-              );
+              if (chainType === 'svm') {
+                fulfilled = await checkIsFulfilledSvm(desiredChainKey, currentIntentId);
+              } else if (chainType === 'evm') {
+                fulfilled = await checkIsFulfilled(desiredChainKey, currentIntentId);
+              }
 
-              if (fulfillmentEvent) {
-                console.log('Found fulfillment event for outflow intent!');
+              if (fulfilled) {
+                console.log('Outflow intent fulfilled on connected chain!');
                 setIntentStatus('fulfilled');
                 setPollingFulfillment(false);
                 pollingFulfillmentRef.current = false;
@@ -840,22 +836,6 @@ export function IntentBuilder() {
                 if (foundFulfillment) break;
               }
               
-              // Refresh desired balance to check for increase (backup method)
-              if (!foundFulfillment && desiredToken && mvmAddress) {
-                try {
-                  const refreshedBalance = await fetchTokenBalance(mvmAddress, desiredToken);
-                  if (refreshedBalance && initialDesiredBalance !== null) {
-                    const currentBalance = parseFloat(refreshedBalance.formatted);
-                    if (currentBalance > initialDesiredBalance) {
-                      console.log('Desired balance increased - intent fulfilled!');
-                      // Balance will be refreshed by the hook when intentStatus changes to 'fulfilled'
-                      foundFulfillment = true;
-                    }
-                  }
-                } catch (balanceError) {
-                  console.error('Error refreshing balance:', balanceError);
-                }
-              }
               
               if (foundFulfillment) {
                 console.log('Hub intent fulfilled!');
@@ -1727,7 +1707,7 @@ export function IntentBuilder() {
               {escrowRequiresSvm
                 ? creatingEscrow
                   ? 'Sending...'
-                  : 'Create Escrow on SVM'
+                  : 'Send'
                 : pollingRequirements
                   ? 'Waiting for GMP relay...'
                   : isApprovePending
@@ -1735,10 +1715,10 @@ export function IntentBuilder() {
                     : approvingToken || isApproving
                       ? 'Approving token...'
                       : isEscrowPending
-                        ? 'Confirm escrow in wallet...'
+                        ? 'Confirm in wallet...'
                         : creatingEscrow || isCreatingEscrow
                           ? 'Sending...'
-                          : 'Create Escrow on EVM'}
+                          : 'Send'}
             </button>
           )}
           {(!isHubChainId(savedDraftData?.offeredChainId)) && transactionHash && escrowHash && (

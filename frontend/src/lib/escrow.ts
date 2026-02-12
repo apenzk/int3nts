@@ -62,7 +62,7 @@ export function intentIdToEvmBytes32(intentId: string): `0x${string}` {
   return `0x${hex.padStart(64, '0')}` as `0x${string}`;
 }
 
-import { getEscrowContractAddress as getEscrowFromChains, getRpcUrl } from '@/config/chains';
+import { getEscrowContractAddress as getEscrowFromChains, getOutflowValidatorAddress, getRpcUrl } from '@/config/chains';
 
 /**
  * Get escrow contract address from chain configuration
@@ -110,6 +110,49 @@ export async function checkHasRequirements(
   const json = await response.json();
   if (json.error) {
     throw new Error(`eth_call hasRequirements failed: ${json.error.message}`);
+  }
+
+  // ABI bool: 32 bytes, last byte 0x01 = true
+  const result: string = json.result || '0x';
+  return result.endsWith('1');
+}
+
+/**
+ * Check if an outflow intent has been fulfilled on the connected EVM chain.
+ *
+ * Calls `isFulfilled(bytes32)` on IntentOutflowValidator.
+ * Returns true once the solver has fulfilled the intent (sent tokens to recipient).
+ *
+ * @param chainKey - Chain config key (e.g. 'base-sepolia')
+ * @param intentId - 32-byte hex intent ID (with 0x prefix)
+ */
+export async function checkIsFulfilled(
+  chainKey: string,
+  intentId: string,
+): Promise<boolean> {
+  const rpcUrl = getRpcUrl(chainKey);
+  const outflowAddr = getOutflowValidatorAddress(chainKey);
+
+  // keccak256("isFulfilled(bytes32)") first 4 bytes = 0xed75e1cc
+  const selector = 'ed75e1cc';
+  const intentHex = intentId.startsWith('0x') ? intentId.slice(2) : intentId;
+  const intentPadded = intentHex.padStart(64, '0');
+  const calldata = `0x${selector}${intentPadded}`;
+
+  const response = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'eth_call',
+      params: [{ to: outflowAddr, data: calldata }, 'latest'],
+      id: 1,
+    }),
+  });
+
+  const json = await response.json();
+  if (json.error) {
+    throw new Error(`eth_call isFulfilled failed: ${json.error.message}`);
   }
 
   // ABI bool: 32 bytes, last byte 0x01 = true

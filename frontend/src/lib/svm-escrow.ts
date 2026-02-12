@@ -11,7 +11,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from '@solana/spl-token';
-import { getSvmProgramId } from '@/config/chains';
+import { getSvmProgramId, getSvmOutflowProgramId, getRpcUrl } from '@/config/chains';
 import { Buffer } from 'buffer';
 
 // ============================================================================
@@ -188,6 +188,46 @@ export function parseEscrowAccount(data: Buffer): EscrowAccount {
     intentId,
     bump,
   };
+}
+
+/**
+ * Check if an outflow intent has been fulfilled on the SVM connected chain.
+ *
+ * Reads the outflow validator's requirements PDA and checks the `fulfilled` field.
+ * Returns true once the solver has fulfilled the intent (sent tokens to recipient).
+ *
+ * @param chainKey - Chain config key (e.g. 'svm-devnet')
+ * @param intentId - 32-byte hex intent ID (with 0x prefix)
+ */
+export async function checkIsFulfilledSvm(
+  chainKey: string,
+  intentId: string,
+): Promise<boolean> {
+  const outflowProgramId = new PublicKey(getSvmOutflowProgramId(chainKey));
+  const rpcUrl = getRpcUrl(chainKey);
+  const connection = new Connection(rpcUrl);
+
+  // Derive the requirements PDA for the outflow validator program
+  const [requirementsPda] = PublicKey.findProgramAddressSync(
+    [Buffer.from(REQUIREMENTS_SEED), Buffer.from(svmHexToBytes(intentId))],
+    outflowProgramId
+  );
+
+  const accountInfo = await connection.getAccountInfo(requirementsPda);
+  if (!accountInfo || !accountInfo.data) {
+    return false;
+  }
+
+  // IntentRequirementsAccount layout (147 bytes):
+  //   discriminator: 1, intent_id: 32, recipient_addr: 32, amount_required: 8,
+  //   token_mint: 32, authorized_solver: 32, expiry: 8, fulfilled: 1, bump: 1
+  // fulfilled is at byte offset 145
+  const FULFILLED_OFFSET = 145;
+  if (accountInfo.data.length < FULFILLED_OFFSET + 1) {
+    return false;
+  }
+
+  return accountInfo.data[FULFILLED_OFFSET] === 1;
 }
 
 // ============================================================================

@@ -13,7 +13,9 @@ export interface ChainConfig {
   isHub?: boolean; // True when this chain is the hub
   intentContractAddress?: string; // Intent contract address (for Movement hub chain)
   escrowContractAddress?: string; // Escrow contract address (for EVM chains)
+  outflowValidatorAddress?: string; // Outflow validator contract address (for EVM chains)
   svmProgramId?: string; // Escrow program ID (for SVM chains)
+  svmOutflowProgramId?: string; // Outflow validator program ID (for SVM chains)
   svmGmpEndpointId?: string; // GMP endpoint program ID (for SVM chains)
 }
 
@@ -39,6 +41,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     name: 'Solana Devnet',
     chainType: 'svm',
     svmProgramId: process.env.NEXT_PUBLIC_SVM_PROGRAM_ID,
+    svmOutflowProgramId: process.env.NEXT_PUBLIC_SVM_OUTFLOW_PROGRAM_ID,
     svmGmpEndpointId: process.env.NEXT_PUBLIC_SVM_GMP_ENDPOINT_ID,
   },
   'base-sepolia': {
@@ -48,6 +51,7 @@ export const CHAIN_CONFIGS: Record<string, ChainConfig> = {
     name: 'Base Sepolia',
     chainType: 'evm',
     escrowContractAddress: process.env.NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS,
+    outflowValidatorAddress: process.env.NEXT_PUBLIC_BASE_OUTFLOW_VALIDATOR_ADDRESS,
   },
   'ethereum-sepolia': {
     id: 'ethereum-sepolia',
@@ -121,6 +125,28 @@ export function getEscrowContractAddress(chainId: string): string {
     throw new Error(`Escrow contract address not configured for chain: ${chainId}`);
   }
   return chainConfig.escrowContractAddress;
+}
+
+/**
+ * Get the EVM outflow validator contract address for a chain.
+ */
+export function getOutflowValidatorAddress(chainId: string): string {
+  const chainConfig = CHAIN_CONFIGS[chainId];
+  if (!chainConfig?.outflowValidatorAddress) {
+    throw new Error(`Outflow validator address not configured for chain: ${chainId}`);
+  }
+  return chainConfig.outflowValidatorAddress;
+}
+
+/**
+ * Get the SVM outflow validator program ID for a Solana chain.
+ */
+export function getSvmOutflowProgramId(chainId: string): string {
+  const chainConfig = CHAIN_CONFIGS[chainId];
+  if (!chainConfig?.svmOutflowProgramId) {
+    throw new Error(`SVM outflow program ID not configured for chain: ${chainId}`);
+  }
+  return chainConfig.svmOutflowProgramId;
 }
 
 /**
