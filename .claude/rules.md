@@ -4,7 +4,7 @@
 
 After completing a subtask or task, create a commit with the changes.
 
-**If tests were run:**
+**If tests were run AND there is a test delta (tests added or removed):**
 
 ```bash
 git commit -m "<type of change>: <description>
@@ -27,7 +27,7 @@ Tests delta: <component> +<new> -<removed>, <component> +<new> -<removed>, ..."
   - `Solver +2 -1, MVM +5` (2 new solver tests with 1 removed, 5 new MVM tests)
 - Only list components with changes
 
-**If tests were NOT run (e.g., project setup, docs only, no test-affecting changes):**
+**If tests were run but there is NO test delta**, or **tests were NOT run (e.g., project setup, docs only, no test-affecting changes):**
 
 ```bash
 git commit -m "<type of change>: <description>
@@ -57,8 +57,8 @@ EOF
 - **Run tests before committing** ONLY if changes affect existing test code (e.g., adding new tests, modifying code that has tests)
 - **Do NOT run tests for:** project setup, documentation-only changes, configuration files, or other non-code changes
 - **If sandbox prevents test execution**, ask user for help or skip tests (don't include "Tests pass:" line)
-- **Only include test results** in commit message if tests were actually run, in the format: `Tests pass: Coordinator <number>, Integrated-GMP <number>, Solver <number>, MVM <amount>, EVM <amount>, SVM <number>, Frontend <number>` followed by `Tests delta: <component> +<new> -<removed>, ...`
-- **If tests were NOT run**, omit the "Tests pass:" line entirely from the commit message
+- **Only include test results** in commit message if tests were run AND there is a test delta (tests added or removed). Format: `Tests pass: Coordinator <number>, Integrated-GMP <number>, Solver <number>, MVM <amount>, EVM <amount>, SVM <number>, Frontend <number>` followed by `Tests delta: <component> +<new> -<removed>, ...`
+- **If there is no test delta**, omit the "Tests pass:" and "Tests delta:" lines entirely, even if tests were run to verify
 - **Display test summary table** after running tests using the commands in the next subsection, showing passed/total for each category (Coordinator, Integrated-GMP, Solver, MVM, EVM, SVM, Frontend)
 - Follow conventional commit format (e.g., `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`)
 - Keep commit messages brief and professional

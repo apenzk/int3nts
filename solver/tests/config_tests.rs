@@ -315,15 +315,15 @@ name = "Connected EVM Chain"
 rpc_url = "https://base-sepolia.g.alchemy.com/v2/test-key"
 chain_id = 84532
 escrow_contract_addr = "{}"
-private_key_env = "BASE_SOLVER_PRIVATE_KEY"
+private_key_env = "SOLVER_EVM_PRIVATE_KEY"
 "#, DUMMY_ESCROW_CONTRACT_ADDR_EVM);
 
     let config: EvmChainConfig = toml::from_str(&toml_str).unwrap();
-    
+
     assert_eq!(config.chain_id, 84532);
     assert_eq!(config.name, "Connected EVM Chain");
     assert_eq!(config.escrow_contract_addr, DUMMY_ESCROW_CONTRACT_ADDR_EVM);
-    assert_eq!(config.private_key_env, "BASE_SOLVER_PRIVATE_KEY");
+    assert_eq!(config.private_key_env, "SOLVER_EVM_PRIVATE_KEY");
 }
 
 /// What is tested: SvmChainConfig can deserialize from TOML

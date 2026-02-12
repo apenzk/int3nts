@@ -54,12 +54,12 @@ async function main() {
     // In-memory Hardhat network (unit tests) - getSigners() works fine here
     const signers = await hre.ethers.getSigners();
     solver = signers[2];
-  } else if (process.env.BASE_SOLVER_PRIVATE_KEY) {
+  } else if (process.env.SOLVER_EVM_PRIVATE_KEY) {
     // Testnet: Create wallet from private key using raw ethers
     const { ethers } = require("ethers");
     const rpcUrl = hre.network.config.url || "http://127.0.0.1:8545";
     const provider = new ethers.JsonRpcProvider(rpcUrl);
-    solver = new ethers.Wallet(process.env.BASE_SOLVER_PRIVATE_KEY, provider);
+    solver = new ethers.Wallet(process.env.SOLVER_EVM_PRIVATE_KEY, provider);
   } else {
     // External network (E2E tests): use raw ethers with node-managed accounts
     const { ethers } = require("ethers");

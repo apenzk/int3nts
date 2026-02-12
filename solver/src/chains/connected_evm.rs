@@ -104,6 +104,8 @@ pub struct ConnectedEvmClient {
     /// IntentGmp contract address (for GMP endpoint)
     #[allow(dead_code)]
     gmp_endpoint_addr: Option<String>,
+    /// Environment variable name containing the EVM private key for signing transactions
+    private_key_env: String,
 }
 
 impl ConnectedEvmClient {
@@ -132,6 +134,7 @@ impl ConnectedEvmClient {
             network_name: config.network_name.clone(),
             outflow_validator_addr: config.outflow_validator_addr.clone(),
             gmp_endpoint_addr: config.gmp_endpoint_addr.clone(),
+            private_key_env: config.private_key_env.clone(),
         })
     }
 
@@ -350,8 +353,8 @@ impl ConnectedEvmClient {
 
         // Call Hardhat script via nix develop
         // Pass BASE_SEPOLIA_RPC_URL so Hardhat can configure the baseSepolia network
-        // Pass BASE_SOLVER_PRIVATE_KEY for signing (signers[2] in the script)
-        let solver_private_key = std::env::var("BASE_SOLVER_PRIVATE_KEY").unwrap_or_default();
+        // Pass SOLVER_EVM_PRIVATE_KEY for signing (signers[2] in the script)
+        let solver_private_key = std::env::var(&self.private_key_env).unwrap_or_default();
         let nix_dir = project_root.join("nix");
         let output = Command::new("nix")
             .args(&[
@@ -361,7 +364,7 @@ impl ConnectedEvmClient {
                 "bash",
                 "-c",
                 &format!(
-                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' TOKEN_ADDR='{}' RECIPIENT='{}' AMOUNT='{}' INTENT_ID='{}' npx hardhat run scripts/transfer-with-intent-id.js --network {}",
+                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' SOLVER_EVM_PRIVATE_KEY='{}' TOKEN_ADDR='{}' RECIPIENT='{}' AMOUNT='{}' INTENT_ID='{}' npx hardhat run scripts/transfer-with-intent-id.js --network {}",
                     evm_framework_dir.display(),
                     self.base_url,
                     solver_private_key,
@@ -567,8 +570,8 @@ impl ConnectedEvmClient {
         }
 
         // Pass BASE_SEPOLIA_RPC_URL so Hardhat can configure the baseSepolia network
-        // Pass BASE_SOLVER_PRIVATE_KEY for signing on testnet
-        let solver_private_key = std::env::var("BASE_SOLVER_PRIVATE_KEY").unwrap_or_default();
+        // Pass SOLVER_EVM_PRIVATE_KEY for signing on testnet
+        let solver_private_key = std::env::var(&self.private_key_env).unwrap_or_default();
         let nix_dir = project_root.join("nix");
         let output = Command::new("nix")
             .args(&[
@@ -578,7 +581,7 @@ impl ConnectedEvmClient {
                 "bash",
                 "-c",
                 &format!(
-                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' BASE_SOLVER_PRIVATE_KEY='{}' OUTFLOW_VALIDATOR_ADDR='{}' TOKEN_ADDR='{}' INTENT_ID='{}' npx hardhat run scripts/fulfill-outflow-intent.js --network {}",
+                    "cd '{}' && BASE_SEPOLIA_RPC_URL='{}' SOLVER_EVM_PRIVATE_KEY='{}' OUTFLOW_VALIDATOR_ADDR='{}' TOKEN_ADDR='{}' INTENT_ID='{}' npx hardhat run scripts/fulfill-outflow-intent.js --network {}",
                     evm_framework_dir.display(),
                     self.base_url,
                     solver_private_key,

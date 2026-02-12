@@ -11,7 +11,7 @@
 #
 # Prerequisites:
 #   - solver/config/solver_testnet.toml configured with actual deployed addresses
-#   - .env.testnet with BASE_SOLVER_PRIVATE_KEY
+#   - .env.testnet with SOLVER_EVM_PRIVATE_KEY
 #   - Movement CLI profile configured for solver (uses MOVEMENT_SOLVER_PRIVATE_KEY from .env.testnet)
 #   - Coordinator and integrated-gmp running (locally or remotely)
 #   - Rust toolchain installed
@@ -30,7 +30,7 @@ echo " Running Solver Locally (Testnet Mode)"
 echo "========================================="
 echo ""
 
-# Load .env.testnet for BASE_SOLVER_PRIVATE_KEY
+# Load .env.testnet for SOLVER_EVM_PRIVATE_KEY
 TESTNET_KEYS_FILE="$SCRIPT_DIR/.env.testnet"
 
 if [ ! -f "$TESTNET_KEYS_FILE" ]; then
@@ -45,9 +45,9 @@ fi
 
 source "$TESTNET_KEYS_FILE"
 
-# Check BASE_SOLVER_PRIVATE_KEY (required for EVM transactions)
-if [ -z "$BASE_SOLVER_PRIVATE_KEY" ]; then
-    echo "⚠️  WARNING: BASE_SOLVER_PRIVATE_KEY not set in .env.testnet"
+# Check SOLVER_EVM_PRIVATE_KEY (required for EVM transactions)
+if [ -z "$SOLVER_EVM_PRIVATE_KEY" ]; then
+    echo "⚠️  WARNING: SOLVER_EVM_PRIVATE_KEY not set in .env.testnet"
     echo "   EVM transactions will fail if an EVM connected chain is configured."
     echo ""
 fi
@@ -236,7 +236,7 @@ echo ""
 cd "$PROJECT_ROOT"
 
 # Export environment variables for solver (needed for nix develop subprocess)
-export BASE_SOLVER_PRIVATE_KEY
+export SOLVER_EVM_PRIVATE_KEY
 export SOLANA_SOLVER_PRIVATE_KEY
 # Export solver addresses for auto-registration
 # The solver expects SOLVER_EVM_ADDR for registration - use BASE_SOLVER_ADDR if SOLVER_EVM_ADDR is not set
@@ -280,8 +280,8 @@ fi
 
 # Prepare environment variables for nix develop
 ENV_VARS="SOLVER_CONFIG_PATH='$SOLVER_CONFIG' RUST_LOG=$SOLVER_LOG_LEVEL HUB_RPC_URL='$HUB_RPC'"
-if [ -n "$BASE_SOLVER_PRIVATE_KEY" ]; then
-    ENV_VARS="$ENV_VARS BASE_SOLVER_PRIVATE_KEY='$BASE_SOLVER_PRIVATE_KEY'"
+if [ -n "$SOLVER_EVM_PRIVATE_KEY" ]; then
+    ENV_VARS="$ENV_VARS SOLVER_EVM_PRIVATE_KEY='$SOLVER_EVM_PRIVATE_KEY'"
 fi
 if [ -n "$BASE_SOLVER_ADDR" ]; then
     ENV_VARS="$ENV_VARS BASE_SOLVER_ADDR='$BASE_SOLVER_ADDR'"
