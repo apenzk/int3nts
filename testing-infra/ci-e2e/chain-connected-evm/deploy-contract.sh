@@ -98,7 +98,7 @@ log "   RPC URL: http://127.0.0.1:8545"
 # Deploy GMP contracts
 log ""
 log " Deploying GMP contracts..."
-DEPLOY_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/deploy-gmp.js --network localhost" "HUB_CHAIN_ID='1' MOVEMENT_INTENT_MODULE_ADDR='$HUB_MODULE_ADDR' RELAY_ADDRESS='$RELAY_ETH_ADDRESS'" 2>&1 | tee -a "$LOG_FILE")
+DEPLOY_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/deploy.js --network localhost" "HUB_CHAIN_ID='1' MOVEMENT_INTENT_MODULE_ADDR='$HUB_MODULE_ADDR' RELAY_ADDRESS='$RELAY_ETH_ADDRESS'" 2>&1 | tee -a "$LOG_FILE")
 
 # Extract contract addresses from output
 GMP_ENDPOINT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentGmp:" | awk '{print $NF}' | tr -d '\n')

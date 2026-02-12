@@ -120,14 +120,9 @@ log "     Solver address: $RETRIEVED_SOLVER"
 
 SOLVER_SIGNATURE_HEX="${RETRIEVED_SIGNATURE#0x}"
 
-# Load integrated-gmp public key (Ed25519, base64) and convert to hex for Move
-load_integrated_gmp_keys
-APPROVER_PUBKEY_HEX=$(echo "$E2E_INTEGRATED_GMP_PUBLIC_KEY" | base64 -d | xxd -p | tr -d '\n')
-log "     Approver public key (hex): $APPROVER_PUBKEY_HEX"
-
 aptos move run --profile requester-chain1 --assume-yes \
     --function-id "0x${HUB_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry" \
-    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_SVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_SVM_ADDR}" "hex:${APPROVER_PUBKEY_HEX}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_SVM_ADDR}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
+    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_SVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_SVM_ADDR}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_SVM_ADDR}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
     log "     ✅ Request-intent created on Hub!"

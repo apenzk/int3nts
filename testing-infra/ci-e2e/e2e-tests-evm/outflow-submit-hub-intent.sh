@@ -181,15 +181,13 @@ log "     Solver address: $RETRIEVED_SOLVER"
 log "     Requester address on connected chain: $REQUESTER_EVM_ADDR"
 
 SOLVER_SIGNATURE_HEX="${RETRIEVED_SIGNATURE#0x}"
-APPROVER_PUBKEY_HEX=$(echo "$E2E_INTEGRATED_GMP_PUBLIC_KEY" | base64 -d | xxd -p | tr -d '\n')
-log "     Approver public key (hex): $APPROVER_PUBKEY_HEX"
 
 # Zero-pad 20-byte EVM address to 32-byte Move address
 SOLVER_EVM_RAW="${SOLVER_EVM_ADDR#0x}"
 SOLVER_EVM_PADDED="0x000000000000000000000000${SOLVER_EVM_RAW}"
 aptos move run --profile requester-chain1 --assume-yes \
     --function-id "0x${HUB_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry" \
-    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_EVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_EVM_ADDR}" "hex:${APPROVER_PUBKEY_HEX}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_EVM_PADDED}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
+    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_EVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_EVM_ADDR}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_EVM_PADDED}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
 
 # ============================================================================
 # SECTION 6: VERIFY RESULTS
