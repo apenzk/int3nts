@@ -2,7 +2,7 @@
 
 > **⚠️ IMPORTANT: When adding a new framework, ensure maximal completeness by implementing all tests listed below.**
 
-This document tracks test alignment status for the integrated GMP service. For the complete overview and other frameworks, see the [Framework Extension Guide](../../docs/intent-frameworks/framework-extension-guide.md#test-alignment-reference).
+This document tracks test alignment status for the integrated GMP relay service. For the complete overview and other frameworks, see the [Framework Extension Guide](../../docs/intent-frameworks/framework-extension-guide.md#test-alignment-reference).
 
 All tests listed here are VM-specific; generic tests are intentionally excluded because they are not relevant when integrating a new VM.
 
@@ -12,66 +12,7 @@ All tests listed here are VM-specific; generic tests are intentionally excluded 
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Module entrypoints only (no direct tests) | ✅ | ✅ | ✅ |
-
-## tests/*vm/validator_tests.rs
-
-| # | Test | MVM | EVM | SVM |
-| --- | ------ | ----- | ----- | ----- |
-| 1 | test_successful_*vm*_solver_validation | ✅ | ✅ | ✅ |
-| 2 | test_rejection_when_solver_not_registered | ✅ | ✅ | ✅ |
-| 3 | test_rejection_when_*vm*_addresses_dont_match | ✅ | ✅ | ✅ |
-| 4 | test_*vm*_address_normalization | ✅ | ✅ | ✅ |
-| 5 | test_error_handling_for_registry_query_failures | ✅ | ✅ | ✅ |
-| 6 | test_rejection_when_intent_has_no_solver | ✅ | ✅ | ✅ |
-
-## tests/*vm/crypto_tests.rs
-
-| # | Test | MVM | EVM | SVM |
-| --- | ------ | ----- | ----- | ----- |
-| 1 | test_unique_key_generation | ✅ | N/A | ✅ |
-| 2 | test_signature_creation_and_verification | ✅ | N/A | N/A |
-| 3 | test_svm_signature_creation_and_verification | N/A | N/A | ✅ |
-| 4 | test_signature_verification_fails_for_wrong_message | ✅ | N/A | ✅ |
-| 5 | test_signatures_differ_for_different_intent_ids | ✅ | N/A | ✅ |
-| 6 | test_escrow_approval_signature | ✅ | N/A | N/A |
-| 7 | test_public_key_consistency | ✅ | N/A | ✅ |
-| 8 | test_signature_contains_timestamp | ✅ | N/A | ✅ |
-| 9 | test_mvm_signature_intent_id_validation | ✅ | N/A | N/A |
-| 10 | test_create_evm_approval_signature_success | N/A | ✅ | N/A |
-| 11 | test_create_evm_approval_signature_format_65_bytes | N/A | ✅ | N/A |
-| 12 | test_create_evm_approval_signature_verification | N/A | ✅ | N/A |
-| 13 | test_get_ethereum_address_derivation | N/A | ✅ | N/A |
-| 14 | test_evm_signature_recovery_id_calculation | N/A | ✅ | N/A |
-| 15 | test_evm_signature_keccak256_hashing | N/A | ✅ | N/A |
-| 16 | test_evm_signature_ethereum_message_prefix | N/A | ✅ | N/A |
-| 17 | test_evm_signature_intent_id_padding | N/A | ✅ | N/A |
-| 18 | test_evm_signature_invalid_intent_id | N/A | ✅ | N/A |
-| 19 | test_svm_signature_intent_id_validation | N/A | N/A | ✅ |
-
-## tests/*vm/cross_chain_tests.rs
-
-| # | Test | MVM | EVM | SVM |
-| --- | ------ | ----- | ----- | ----- |
-| 1 | test_escrow_solver_address_matching_success | ✅ | N/A | N/A |
-| 2 | test_escrow_solver_address_mismatch_rejection | ✅ | N/A | N/A |
-| 3 | test_escrow_solver_reservation_mismatch_rejection | ✅ | N/A | N/A |
-| 4 | test_evm_escrow_cross_chain_matching | N/A | ✅ | N/A |
-| 5 | test_intent_id_conversion_to_evm_format | N/A | ✅ | N/A |
-| 6 | test_evm_escrow_matching_with_hub_intent | N/A | ✅ | N/A |
-
-## tests/*vm/escrow_parsing_tests.rs
-
-| # | Test | MVM | EVM | SVM |
-| --- | ------ | ----- | ----- | ----- |
-| 1 | test_escrow_created_event_has_amount_and_expiry | N/A | ✅ | ⚠️ |
-| 2 | test_escrow_amount_is_not_hardcoded_zero | N/A | ✅ | ⚠️ |
-| 3 | test_amount_hex_parsing | N/A | ✅ | ⚠️ |
-| 4 | test_expiry_hex_parsing | N/A | ✅ | ⚠️ |
-| 5 | test_zero_amount_escrow_fails_validation | N/A | ✅ | ⚠️ |
-| 6 | test_correct_amount_escrow_passes_validation | N/A | ✅ | ⚠️ |
-| 7 | test_escrow_account_borsh_roundtrip | N/A | ⚠️ | ✅ |
-| 8 | test_escrow_account_invalid_base64 | N/A | ⚠️ | ✅ |
+| 1 | Module entrypoints only (no direct tests) | N/A | ✅ | N/A |
 
 ## tests/*vm/config_tests.rs
 
@@ -83,15 +24,12 @@ All tests listed here are VM-specific; generic tests are intentionally excluded 
 | 4 | test_evm_chain_config_with_all_fields | N/A | ✅ | N/A |
 | 5 | test_evm_config_loading | N/A | ✅ | N/A |
 
-## tests/*vm/monitor_tests.rs
+## tests/*vm/escrow_parsing_tests.rs
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | test_evm_escrow_detection_logic | N/A | ✅ | N/A |
-| 2 | test_evm_escrow_ecdsa_signature_creation | N/A | ✅ | N/A |
-| 3 | test_evm_vs_mvm_escrow_differentiation | N/A | ✅ | N/A |
-| 4 | test_evm_escrow_approval_flow | N/A | ✅ | N/A |
-| 5 | test_evm_escrow_with_invalid_intent_id | N/A | ✅ | N/A |
+| 1 | test_escrow_account_borsh_roundtrip | N/A | N/A | ✅ |
+| 2 | test_escrow_account_invalid_base64 | N/A | N/A | ✅ |
 
 ## tests/*vm_client_tests.rs
 

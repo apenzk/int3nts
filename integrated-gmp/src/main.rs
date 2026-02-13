@@ -14,20 +14,8 @@
 //! or replaced by LZ's endpoint.
 
 use anyhow::Result;
+use integrated_gmp::{Config, CryptoService, NativeGmpRelay, NativeGmpRelayConfig};
 use tracing::info;
-
-mod config;
-mod crypto;
-mod evm_client;
-mod monitor;
-mod mvm_client;
-mod integrated_gmp_relay;
-mod svm_client;
-mod validator;
-
-use config::Config;
-use crypto::CryptoService;
-use integrated_gmp_relay::{NativeGmpRelay, NativeGmpRelayConfig};
 
 // ============================================================================
 // MAIN APPLICATION ENTRY POINT

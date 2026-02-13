@@ -53,7 +53,7 @@ See execution phase documents for detailed implementation plan:
 - [Phase 1: Research & Design](gmp-plan-execution-phase1.md) ✅ **COMPLETE** - Interfaces, message schemas, wire format spec
 - [Phase 2: Complete GMP Implementation (MVM, SVM, EVM) & Architecture Alignment](gmp-plan-execution-phase2.md) ✅ **COMPLETE** - GMP for all three chains, native relay, package restructuring, naming alignment (19 commits)
 - [Phase 3: Coordinator Readiness Tracking](gmp-plan-execution-phase3.md) ✅ **COMPLETE** - Readiness tracking for outflow intents (commit f46eb3d)
-- [Phase 4: Integration & Documentation](gmp-plan-execution-phase4.md) 🔄 **IN PROGRESS** - Commit 1 done (stripped integrated-gmp API to relay-only). Remaining: frontend/solver cleanup, deployment, docs
+- [Phase 4: Integration & Documentation](gmp-plan-execution-phase4.md) 🔄 **IN PROGRESS** - Commits 1-4 done (stripped API, frontend/solver cleanup, testnet deploy). Remaining: update existing docs, final cleanup
 
 **Total Timeline:** ~1.5 weeks (testnet only)
 

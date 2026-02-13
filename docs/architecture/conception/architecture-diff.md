@@ -25,22 +25,34 @@ See [conception_inflow.md](conception_inflow.md) for the conceptual design.
 
 | Step | Function | Description |
 |------|----------|-------------|
-| Request-Intent Creation | `create_inflow_request_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, solver, solver_signature)` | Creates reserved intent on Hub |
-| Escrow (Move) | `create_escrow_from_fa(offered_metadata, offered_amount, offered_chain_id, approver_public_key, expiry_time, intent_id, reserved_solver, desired_chain_id)` | Creates escrow on Move connected chain |
-| Escrow (EVM) | `createEscrow(intentId, token, amount, reservedSolver)` | Creates escrow on EVM connected chain |
-| Fulfillment | `fulfill_inflow_request_intent(intent, payment_amount)` | Solver fulfills intent on Hub |
-| Escrow Release (Move) | `complete_escrow_from_fa(escrow_intent, payment_amount, approver_signature_bytes)` | Releases escrow on Move chain |
-| Escrow Release (EVM) | `claim(intentId, signature)` | Releases escrow on EVM chain |
+| Request-Intent Creation | `create_inflow_intent(offered_metadata_addr, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, solver, solver_addr_connected_chain, solver_signature, requester_addr_connected_chain)` | Creates reserved intent on Hub and sends IntentRequirements to connected chain via GMP |
+| GMP Requirements Delivery | `receive_intent_requirements(src_chain_id, remote_gmp_endpoint_addr, payload)` | Connected chain receives and stores IntentRequirements from hub via GMP |
+| Escrow (Move) | `create_escrow_with_validation(intent_id, token_metadata, amount)` | Creates escrow on Move connected chain; validates against GMP-delivered IntentRequirements (amount, token, requester, expiry) |
+| Escrow (EVM) | `createEscrowWithValidation(intentId, token, amount)` | Creates escrow on EVM connected chain; validates against stored IntentRequirements |
+| EscrowConfirmation | Sent automatically on escrow creation | Connected chain sends EscrowConfirmation back to hub via GMP after validated escrow creation |
+| Fulfillment | `fulfill_inflow_intent(intent, payment_amount)` | Solver fulfills intent on Hub (requires escrow confirmation); sends FulfillmentProof to connected chain via GMP |
+| Escrow Release | Auto-releases on FulfillmentProof receipt via GMP | Connected chain receives FulfillmentProof from hub and automatically transfers escrowed funds to solver (no signature needed) |
+
+**GMP Message Types (Inflow):**
+
+| Message | Direction | Purpose |
+|---------|-----------|---------|
+| `IntentRequirements` (0x01) | Hub -> Connected Chain | Delivers requirements (amount, token, solver, expiry) for escrow validation |
+| `EscrowConfirmation` (0x02) | Connected Chain -> Hub | Confirms escrow was created matching requirements; gates solver fulfillment on hub |
+| `FulfillmentProof` (0x03) | Hub -> Connected Chain | Proves solver fulfilled on hub; triggers automatic escrow release to solver |
 
 **Events:**
 
-- `LimitOrderEvent` - Emitted on request-intent creation
-- `OracleLimitOrderEvent` / `EscrowInitialized` - Emitted on escrow creation
-- `LimitOrderFulfillmentEvent` - Emitted on fulfillment
+- `LimitOrderEvent` - Emitted on request-intent creation (hub)
+- `IntentRequirementsReceived` - Emitted when connected chain receives requirements from hub
+- `EscrowCreated` / `EscrowConfirmationSent` - Emitted on escrow creation and confirmation (connected chain)
+- `EscrowConfirmationReceived` - Emitted when hub receives escrow confirmation
+- `LimitOrderFulfillmentEvent` - Emitted on fulfillment (hub)
+- `FulfillmentProofSent` / `FulfillmentProofReceived` - Emitted on fulfillment proof send/receive
+- `EscrowReleased` - Emitted when escrowed funds are transferred to solver (connected chain)
 
 **[UNIMPLEMENTED] Features:**
 
-- Multi-RPC quorum validation (≥2 matching receipts)
 - Protocol fee deduction
 - Solver collateral release
 - Collateral slashing (0.5-1%) on validation failure or expiry
@@ -53,17 +65,30 @@ See [conception_outflow.md](conception_outflow.md) for the conceptual design.
 
 | Step | Function | Description |
 |------|----------|-------------|
-| Request-Intent Creation | `create_outflow_request_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata, desired_amount, desired_chain_id, expiry_time, intent_id, requester_addr_connected_chain, approver_public_key, solver, solver_signature)` | Creates reserved intent with escrow on Hub |
-| Validation | `POST /validate-outflow-fulfillment(transaction_hash, chain_type, intent_id)` | Integrated-gmp validates solver transfer |
-| Fulfillment | `fulfill_outflow_request_intent(intent, approver_signature_bytes)` | Solver claims escrow on Hub with integrated-gmp signature |
+| Request-Intent Creation | `create_outflow_intent(offered_metadata, offered_amount, offered_chain_id, desired_metadata_addr, desired_amount, desired_chain_id, expiry_time, intent_id, requester_addr_connected_chain, solver, solver_addr_connected_chain, solver_signature)` | Creates reserved intent with escrow on Hub; sends IntentRequirements to connected chain via GMP |
+| GMP Requirements Delivery | `receive_intent_requirements(src_chain_id, remote_gmp_endpoint_addr, payload)` | Connected chain receives and stores IntentRequirements from hub via GMP |
+| Fulfillment (Move) | `fulfill_intent(solver, intent_id, token_metadata)` | Solver calls validation contract on Move connected chain; validates against requirements, transfers tokens to requester, sends FulfillmentProof to hub via GMP |
+| Fulfillment (EVM) | `fulfillIntent(intentId, token)` | Solver calls validation contract on EVM connected chain; validates against requirements, transfers tokens to requester, sends FulfillmentProof to hub via GMP |
+| Hub Escrow Release | `fulfill_outflow_intent(solver, intent)` | Solver claims locked tokens on hub after FulfillmentProof is received via GMP (no signature needed) |
+
+**GMP Message Types (Outflow):**
+
+| Message | Direction | Purpose |
+|---------|-----------|---------|
+| `IntentRequirements` (0x01) | Hub -> Connected Chain | Delivers requirements (amount, token, solver, expiry) for fulfillment validation |
+| `FulfillmentProof` (0x03) | Connected Chain -> Hub | Proves solver fulfilled on connected chain; enables solver to claim locked tokens on hub |
 
 **Events:**
 
-- `OracleLimitOrderEvent` - Emitted on request-intent creation
+- `OracleLimitOrderEvent` - Emitted on request-intent creation (hub)
+- `IntentRequirementsReceived` - Emitted when connected chain receives requirements from hub
+- `FulfillmentSucceeded` / `FulfillmentProofSent` - Emitted on validated fulfillment (connected chain)
+- `FulfillmentProofReceived` - Emitted when hub receives proof from connected chain
+- `LimitOrderFulfillmentEvent` - Emitted when solver claims locked tokens (hub)
 
 **[UNIMPLEMENTED] Features:**
 
-- Solver claims intent and locks collateral (lock_ratio ≈ 10-20%)
+- Solver claims intent and locks collateral (lock_ratio ~ 10-20%)
 - Protocol fee deduction
 - Collateral penalty (0.5-1%) on validation failure or expiry
 
@@ -75,10 +100,8 @@ See [conception_routerflow.md](conception_routerflow.md) for the conceptual desi
 
 ## Future Enhancements (All Flows)
 
-- **Multi-RPC Quorum**: Integrated-gmp uses multiple RPC endpoints with quorum validation (≥2 matching receipts) for enhanced security
 - **Protocol Fees**: Automatic fee deduction from escrow/hub transfers to solver
 - **Solver Collateral**: Solvers lock collateral that can be slashed (0.5-1%) if validation fails or intent expires
-- **Bypass/Integrated-gmp-gated Modes**: Alternative flow modes where integrated-gmp (or coordinator) commits transactions on behalf of users
 
 ---
 
@@ -90,9 +113,9 @@ This section contains the detailed implementation diagram for the Router Flow, w
 sequenceDiagram
     participant Requester
     participant Hub as Hub Chain<br/>(Move)
-    participant IntegratedGMP as Integrated-GMP<br/>(Rust)
-    participant Source as Source Connected Chain<br/>(Move/EVM)
-    participant Dest as Destination Connected Chain<br/>(Move/EVM)
+    participant GMP as GMP Layer
+    participant Source as Source Connected Chain<br/>(Move/EVM/SVM)
+    participant Dest as Destination Connected Chain<br/>(Move/EVM/SVM)
     participant Solver
 
     Note over Requester,Solver: Phase 1: Request-Intent Creation on Hub Chain
@@ -100,40 +123,47 @@ sequenceDiagram
     Requester->>Solver: Send draft
     Solver->>Solver: Solver signs<br/>(off-chain, returns Ed25519 signature)
     Solver->>Requester: Returns signature
-    Requester->>Hub: create_cross_chain_request_intent(<br/>offered_metadata, offered_amount, offered_chain_id (source),<br/>desired_metadata, desired_amount, desired_chain_id (dest),<br/>expiry_time, intent_id, requester_address_dest_chain,<br/>approver_public_key, solver, solver_signature)
-    Hub->>IntegratedGMP: CrossChainOrderEvent(intent_id, offered_amount,<br/>offered_chain_id (source), desired_amount,<br/>desired_chain_id (dest), expiry, revocable=false)
+    Requester->>Hub: create_cross_chain_request_intent(<br/>offered_metadata_addr, offered_amount, offered_chain_id (source),<br/>desired_metadata_addr, desired_amount, desired_chain_id (dest),<br/>expiry_time, intent_id, requester_addr_dest_chain,<br/>solver, solver_addr_connected_chain, solver_signature)
+    Hub->>GMP: IntentRequirements to source chain<br/>(intent_id, requester_addr, amount, token, solver, expiry)
+    Hub->>GMP: IntentRequirements to dest chain<br/>(intent_id, requester_addr, amount, token, solver, expiry)
 
     Note over Requester,Solver: Phase 2: Escrow Creation on Source Connected Chain
+    GMP->>Source: Deliver IntentRequirements
+    Source->>Source: Store requirements
     alt Move Chain
-        Requester->>Source: create_escrow_from_fa(<br/>offered_metadata, offered_amount, offered_chain_id,<br/>approver_public_key, expiry_time, intent_id,<br/>reserved_solver, desired_chain_id)
+        Requester->>Source: create_escrow_with_validation(<br/>intent_id, token_metadata, amount)
     else EVM Chain
-        Requester->>Source: createEscrow(intentId, token,<br/>amount, reservedSolver)
+        Requester->>Source: createEscrowWithValidation(<br/>intentId, token, amount)
     end
-    Source->>Source: Lock assets
-    Source->>IntegratedGMP: OracleLimitOrderEvent/EscrowInitialized(<br/>intent_id, reserved_solver, revocable=false)
+    Source->>Source: Validate against IntentRequirements<br/>(amount, token, requester, expiry)
+    Source->>Source: Lock assets in escrow
+    Source->>GMP: EscrowConfirmation<br/>(intent_id, escrow_id, amount, token, creator)
+    GMP->>Hub: Deliver EscrowConfirmation
+    Hub->>Hub: Mark escrow confirmed for intent
 
-    Note over Requester,Solver: Phase 3: Solver Transfers on Destination Connected Chain
-    Solver->>Dest: Transfer tokens to requester_address_dest_chain<br/>(standard token transfer, not escrow)
-    Dest->>Dest: Tokens received by requester
+    Note over Requester,Solver: Phase 3: Solver Fulfills on Destination Connected Chain
+    GMP->>Dest: Deliver IntentRequirements
+    Dest->>Dest: Store requirements
+    alt Move Chain
+        Solver->>Dest: fulfill_intent(intent_id, token_metadata)
+    else EVM Chain
+        Solver->>Dest: fulfillIntent(intentId, token)
+    end
+    Dest->>Dest: Validate against IntentRequirements<br/>(solver authorization, token, amount, expiry)
+    Dest->>Dest: Transfer tokens to requester
+    Dest->>GMP: FulfillmentProof<br/>(intent_id, solver_addr, amount, timestamp)
 
-    Note over Requester,Solver: Phase 4: Integrated-GMP Validation and Approval
-    Solver->>IntegratedGMP: POST /validate-cross-chain-fulfillment<br/>(source_escrow_intent_id, dest_tx_hash, chain_types, intent_id)
-    IntegratedGMP->>Source: Query escrow by intent_id<br/>(verify escrow exists and matches)
-    IntegratedGMP->>Dest: Query transaction by hash<br/>(verify transfer occurred)
-    IntegratedGMP->>IntegratedGMP: Validate fulfillment<br/>conditions met
-    IntegratedGMP->>Solver: Return approval signature
+    Note over Requester,Solver: Phase 4: Hub Records Fulfillment Proof
+    GMP->>Hub: Deliver FulfillmentProof
+    Hub->>Hub: Record fulfillment proof in GMP state
+    Note right of Hub: Solver can now claim locked tokens
 
     Note over Requester,Solver: Phase 5: Escrow Release on Source Connected Chain
-    IntegratedGMP->>Solver: Delivers approval signature<br/>(Ed25519 for Move, ECDSA for EVM)<br/>Signature itself is the approval
-    alt Move Chain
-        Note over Solver: Anyone can call<br/>(funds go to reserved_solver)
-        Solver->>Source: complete_escrow_from_fa(<br/>escrow_intent, payment_amount,<br/>approver_signature_bytes)
-    else EVM Chain
-        Note over Solver: Anyone can call<br/>(funds go to reservedSolver)
-        Solver->>Source: claim(intentId, signature)
-    end
-    Source->>Source: Verify signature
-    Source->>Source: Transfer to reserved_solver
+    Solver->>Hub: fulfill_inflow_intent(intent, payment_amount)<br/>(checks escrow confirmed, fulfills intent)
+    Hub->>GMP: FulfillmentProof<br/>(intent_id, solver_addr, amount, timestamp)
+    GMP->>Source: Deliver FulfillmentProof
+    Source->>Source: Auto-release escrowed funds to solver
+    Note right of Source: No signature needed — GMP proof is authorization
     Note right of Source: [UNIMPLEMENTED] Protocol fee deduction
     Note right of Source: [UNIMPLEMENTED] Solver collateral release
 
@@ -143,6 +173,7 @@ sequenceDiagram
 
 **Implementation Details**: This flow combines elements of both inflow and outflow:
 
-- **Hub request-intent**: Similar to both inflow and outflow, creates a cross-chain intent on the hub chain
-- **Source connected chain escrow-intent**: Like inflow, tokens are locked in escrow on the source connected chain
-- **Destination connected chain fulfill transaction**: Like outflow, solver transfers tokens directly on the destination connected chain
+- **Hub request-intent**: Creates a cross-chain intent on the hub chain and sends IntentRequirements to both source and destination connected chains via GMP
+- **Source connected chain escrow**: Like inflow, tokens are locked in escrow on the source connected chain after validating against GMP-delivered IntentRequirements; EscrowConfirmation is sent back to hub
+- **Destination connected chain fulfillment**: Like outflow, solver calls the on-chain validation contract on the destination connected chain, which validates, transfers tokens to the requester, and sends FulfillmentProof to hub
+- **Escrow release**: When the hub receives the FulfillmentProof from the destination chain, the solver can trigger fulfillment on the hub, which sends a FulfillmentProof to the source chain to auto-release escrowed funds

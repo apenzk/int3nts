@@ -129,8 +129,8 @@
 - [x] Update MVM deployment scripts to include GMP modules
 - [x] Update EVM deployment scripts to include GMP contracts (IntentGmp, IntentOutflowValidator, IntentInflowEscrow) and remote GMP endpoint configuration
 - [x] Add remote GMP endpoint configuration to all deployment scripts (SVM, MVM, EVM)
-- [ ] Deploy updated contracts/modules/programs to testnets
-- [ ] Verify cross-chain flow works on testnets (with integrated GMP relay)
+- [x] Deploy updated contracts/modules/programs to testnets
+- [x] Verify cross-chain flow works on testnets (with integrated GMP relay)
 
 **Test:**
 
@@ -145,21 +145,21 @@ solana program show <INTENT_OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
 
 ---
 
-### Commit 5: Document integrated GMP endpoint configuration and operational costs
+### Commit 5: Update existing docs with GMP endpoint configuration
 
 **Files:**
 
-- `docs/architecture/plan/gmp-endpoints.md`
-- `docs/architecture/plan/gmp-operational-costs.md`
+- `docs/architecture/architecture-component-mapping.md` (update component mapping for GMP modules)
+- `docs/architecture/domain-boundaries-and-interfaces.md` (update interfaces for GMP)
+- `docs/architecture/data-models.md` (add GMP message types)
+- `docs/architecture/conception/architecture-diff.md` (update implementation status)
 
 **Tasks:**
 
-- [ ] Document all integrated GMP endpoint addresses per chain (MVM, SVM, EVM) and per environment (local/CI, testnet, mainnet)
-- [ ] Document environment configuration (all environments use integrated GMP endpoints + relay)
-- [ ] Document integrated GMP relay configuration (chain RPCs, operator wallets, polling intervals)
-- [ ] Estimate on-chain validation gas costs per chain
-- [ ] Estimate relay operational costs (gas per `deliver_message()` call per chain)
-- [ ] Compare costs to previous system (off-chain signer)
+- [ ] Update architecture-component-mapping with GMP modules/contracts across all VMs
+- [ ] Update domain-boundaries-and-interfaces with GMP send/receive interfaces
+- [ ] Update data-models with GMP message types (IntentRequirements, EscrowConfirmation, FulfillmentProof)
+- [ ] Update architecture-diff with current implementation status post-GMP
 
 **Test:**
 
@@ -264,6 +264,6 @@ At the end of Phase 4, update:
 - [ ] Solver uses coordinator as single API (no direct integrated-gmp calls)
 - [ ] Programs/modules/contracts deployed to testnets for all chains: SVM, MVM, EVM (Commit 4)
 - [ ] Documentation complete
-- [ ] Integrated GMP endpoint configuration and operational cost analysis complete (deferred from Phase 1)
+- [ ] Existing architecture docs updated with GMP endpoint configuration
 - [ ] Architecture confirmed: coordinator + integrated-gmp only (no monolithic signer)
 - [ ] All conception documents reviewed and updated

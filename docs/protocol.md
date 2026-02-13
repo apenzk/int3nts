@@ -22,6 +22,38 @@ The cross-chain intent protocol enables secure asset transfers between chains us
 
 The protocol links these components using `intent_id` to correlate events and GMP messages across chains.
 
+```mermaid
+graph LR
+    Requester([Requester])
+    Solver([Solver])
+
+    subgraph On-Chain
+        Hub[Hub Chain<br/>MVM]
+        GMP[GMP Layer<br/>IntentGmp]
+        Connected[Connected Chain<br/>MVM / EVM / SVM]
+    end
+
+    Coordinator[Coordinator<br/>Service]
+
+    Requester -->|create intent| Hub
+    Requester -->|create escrow| Connected
+    Hub <-->|GMP messages| GMP
+    GMP <-->|GMP messages| Connected
+    Solver -->|fulfill intent| Hub
+    Solver -->|call validation contract| Connected
+    Requester -->|poll events / negotiate| Coordinator
+    Solver -->|poll events / negotiate| Coordinator
+    Coordinator -.->|monitors events| Hub
+    Coordinator -.->|monitors events| Connected
+
+    style Hub fill:#fff5c8,stroke:#cca300
+    style Connected fill:#ffcaca,stroke:#cc3333
+    style GMP fill:#e2dcff,stroke:#7755cc
+    style Coordinator fill:#dcffdc,stroke:#33aa33
+    style Requester fill:#f0f0f0,stroke:#888
+    style Solver fill:#f0f0f0,stroke:#888
+```
+
 ### Coordinator Readiness Tracking
 
 For outflow intents (GMP-based), the coordinator monitors `IntentRequirementsReceived` events on connected chains (MVM, EVM, SVM) and provides a `ready_on_connected_chain` flag. This enables frontends and solvers to query the coordinator API to know when intent requirements have been delivered via GMP, without needing to poll connected chains directly. See [Coordinator API](coordinator/README.md) for details.
@@ -34,11 +66,19 @@ The intent framework enables cross-chain escrow operations where intents are cre
 
 ```mermaid
 sequenceDiagram
-    participant Requester
+    box rgb(255, 245, 200) Hub
     participant Hub as Hub Chain<br/>(MVM)
+    end
+    box rgb(230, 220, 255) Messaging
     participant GMP as GMP Layer<br/>(IntentGmp)
-    participant Coordinator as Coordinator<br/>(Rust)
+    end
+    box rgb(255, 200, 200) Connected
     participant Connected as Connected Chain<br/>(MVM/EVM/SVM)
+    end
+    participant Requester
+    box rgb(220, 255, 220) Services
+    participant Coordinator as Coordinator<br/>(Rust)
+    end
     participant Solver
 
     Note over Requester,Solver: Phase 1: Intent Creation on Hub Chain
@@ -134,11 +174,19 @@ The outflow flow is the reverse of the inflow flow: tokens are locked on the hub
 
 ```mermaid
 sequenceDiagram
-    participant Requester
+    box rgb(255, 245, 200) Hub
     participant Hub as Hub Chain<br/>(MVM)
+    end
+    box rgb(230, 220, 255) Messaging
     participant GMP as GMP Layer<br/>(IntentGmp)
-    participant Coordinator as Coordinator<br/>(Rust)
+    end
+    box rgb(255, 200, 200) Connected
     participant Connected as Connected Chain<br/>(MVM/EVM/SVM)
+    end
+    participant Requester
+    box rgb(220, 255, 220) Services
+    participant Coordinator as Coordinator<br/>(Rust)
+    end
     participant Solver
 
     Note over Requester,Solver: Phase 1: Intent Creation on Hub Chain
