@@ -150,7 +150,7 @@ describe('instruction builders', () => {
 
     expect(instruction.programId.toBase58()).toBe(PROGRAM_ID.toBase58());
     expect(instruction.keys).toHaveLength(9);
-    expect(instruction.data[0]).toBe(3); // CreateEscrow variant index (Initialize=0, LzReceive=1, SetGmpConfig=2, CreateEscrow=3)
+    expect(instruction.data[0]).toBe(3); // CreateEscrow variant index (Initialize=0, GmpReceive=1, SetGmpConfig=2, CreateEscrow=3)
     expect(Buffer.from(instruction.data.subarray(1, 33))).toEqual(
       Buffer.from(svmHexToBytes(INTENT_ID))
     );

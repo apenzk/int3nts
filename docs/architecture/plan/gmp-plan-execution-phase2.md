@@ -80,7 +80,7 @@
 **Tasks:**
 
 - [x] Implement GMP receive handler for integrated GMP endpoint
-- [x] Implement `lz_receive` to receive intent requirements from hub
+- [x] Implement `gmp_receive` to receive intent requirements from hub
 - [x] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [x] **If requirements already exist → ignore duplicate message (idempotent)**
 - [x] **If requirements don't exist → store intent requirements** in PDA (intent_id/step => {requirements, authorizedSolver})
@@ -89,7 +89,7 @@
 - [x] Validate recipient, amount, token match stored requirements
 - [x] Validate solver matches authorized solver from stored requirements
 - [x] Forward tokens to user wallet
-- [x] Send GMP message to hub via `lz_send`
+- [x] Send GMP message to hub via `gmp_send`
 - [x] Emit `FulfillmentSucceeded` or `FulfillmentFailed` events
 - [x] Test all validation scenarios
 - [x] Update `intent-frameworks/extension-checklist.md` with SVM OutflowValidator test status
@@ -114,7 +114,7 @@
 **Tasks:**
 
 - [x] Implement GMP receive handler for integrated GMP endpoint
-- [x] Implement `lz_receive` to receive intent requirements from hub
+- [x] Implement `gmp_receive` to receive intent requirements from hub
 - [x] **Idempotency check**: Before storing, check if requirements already exist for intent_id + step number
 - [x] **If requirements already exist → ignore duplicate message (idempotent)**
 - [x] **If requirements don't exist → store intent requirements** (intent_id/step => {requirements, authorizedSolver})
@@ -123,7 +123,7 @@
 - [x] Validate recipient, amount, token match stored requirements
 - [x] Validate solver matches authorized solver from stored requirements
 - [x] Forward tokens to user wallet
-- [x] Send GMP message to hub via `lz_send`
+- [x] Send GMP message to hub via `gmp_send`
 - [x] Emit `FulfillmentSucceeded` or `FulfillmentFailed` events
 - [x] Test all validation scenarios
 - [x] Update `intent-frameworks/extension-checklist.md` with MVM OutflowValidator test status
@@ -147,8 +147,8 @@
 
 **Already done (from commit 4e6b251):**
 
-- [x] Implement `LzReceiveRequirements` - stores intent requirements from hub
-- [x] Implement `LzReceiveFulfillmentProof` - auto-releases escrow on proof receipt
+- [x] Implement `GmpReceiveRequirements` - stores intent requirements from hub
+- [x] Implement `GmpReceiveFulfillmentProof` - auto-releases escrow on proof receipt
 - [x] Implement `CreateEscrow` with optional requirements validation
 - [x] Add `StoredIntentRequirements` account structure
 
@@ -156,8 +156,8 @@
 
 - [x] Add `GmpConfig` account (hub_chain_id, hub_gmp_endpoint_addr, gmp_endpoint)
 - [x] Add `SetGmpConfig` instruction for admin configuration
-- [x] Add source chain/address validation to `LzReceiveRequirements` and `LzReceiveFulfillmentProof`
-- [x] Add idempotency to `LzReceiveRequirements` (emit duplicate event instead of error)
+- [x] Add source chain/address validation to `GmpReceiveRequirements` and `GmpReceiveFulfillmentProof`
+- [x] Add idempotency to `GmpReceiveRequirements` (emit duplicate event instead of error)
 - [x] Send `EscrowConfirmation` GMP message back to hub on escrow creation
 - [x] ~~Add events module for GMP events~~ (using msg! logs - sufficient for Solana)
 - [x] Update tests for GMP config and EscrowConfirmation flow (added `tests/gmp.rs` with 13 tests)
@@ -186,7 +186,7 @@
 - [x] Implement `receive_intent_requirements` - stores requirements from hub (with idempotency)
 - [x] Implement `create_escrow_with_validation` - validates requirements exist and match escrow details
 - [x] Implement `receive_fulfillment_proof` - marks escrow fulfilled (MVM uses manual release, not auto-release)
-- [x] Send `EscrowConfirmation` GMP message back to hub on escrow creation via `gmp_sender::lz_send`
+- [x] Send `EscrowConfirmation` GMP message back to hub on escrow creation via `gmp_sender::gmp_send`
 - [x] Add routing in `intent_gmp` for inflow escrow messages
 - [x] Implement MVM tests 8, 12, 13 in `inflow_escrow_tests.move`
 - [x] Update `intent-frameworks/extension-checklist.md` with MVM InflowEscrow test status
@@ -213,7 +213,7 @@
 
 - [x] Add GmpHubConfig with remote GMP endpoint mapping per chain ID
 - [x] Add initialize() and set_remote_gmp_endpoint_addr() for configuration management
-- [x] Integrate with `gmp_sender::lz_send()` for actual message sending (send functions now call lz_send and return nonce)
+- [x] Integrate with `gmp_sender::gmp_send()` for actual message sending (send functions now call gmp_send and return nonce)
 - [x] Add source validation in receive handlers (both receive functions validate source via registered remote GMP endpoint check)
 - [x] Test message encoding (payload size and discriminator bytes verified)
 - [x] Test source validation (added tests for rejecting unregistered sources)

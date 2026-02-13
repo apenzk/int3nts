@@ -99,7 +99,7 @@ module mvmt_intent::intent_outflow_validator_impl {
     struct OutflowValidatorConfig has key {
         /// Admin address (can update config)
         admin: address,
-        /// Hub chain ID (LayerZero endpoint ID)
+        /// Hub chain ID (GMP endpoint ID)
         hub_chain_id: u32,
         /// Hub GMP endpoint address (32 bytes)
         hub_gmp_endpoint_addr: vector<u8>,
@@ -327,9 +327,9 @@ module mvmt_intent::intent_outflow_validator_impl {
         );
         let payload = gmp_common::encode_fulfillment_proof(&fulfillment_proof);
 
-        // Send FulfillmentProof to hub via gmp_sender::lz_send
-        // (Following LZ pattern: separate sender module avoids circular dependency)
-        let nonce = gmp_sender::lz_send(
+        // Send FulfillmentProof to hub via gmp_sender::gmp_send
+        // (Separate sender module avoids circular dependency with receiver)
+        let nonce = gmp_sender::gmp_send(
             solver,
             config.hub_chain_id,
             config.hub_gmp_endpoint_addr,

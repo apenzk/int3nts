@@ -18,7 +18,7 @@ Tests mixed-chain intent framework: intents on Move VM Hub and escrows on EVM Ch
 
 1. **Coordinator-Based Negotiation**: Draft submission, solver polling, and signature retrieval
 2. **Intent Creation**: Creates intent on Move VM Hub with solver signature from coordinator
-3. **Escrow Creation**: Creates escrow on EVM Chain 3 with locked tokens
-4. **Intent Fulfillment**: Solver fulfills intent on Hub
-5. **Integrated-GMP Approval**: Integrated-gmp monitors and generates ECDSA approval signature
-6. **Escrow Release**: Escrow released on EVM Chain 3 with integrated-gmp signature
+3. **GMP Message Delivery**: IntentRequirements delivered to connected chain via GMP relay
+4. **Escrow Creation**: Creates escrow on EVM Chain 3 with locked tokens, validated against GMP requirements
+5. **Intent Fulfillment**: Solver fulfills intent on Hub, FulfillmentProof sent via GMP
+6. **Escrow Auto-Release**: Escrow auto-released on EVM Chain 3 upon FulfillmentProof receipt

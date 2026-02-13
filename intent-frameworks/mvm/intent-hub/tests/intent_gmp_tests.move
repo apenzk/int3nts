@@ -109,7 +109,7 @@ module mvmt_intent::intent_gmp_tests {
     // Verifies that the function sends a properly encoded IntentRequirements message via GMP.
     #[test(admin = @mvmt_intent)]
     fun test_send_intent_requirements_sends_message(admin: &signer) {
-        // Initialize timestamp for lz_send
+        // Initialize timestamp for gmp_send
         let framework = account::create_account_for_test(@aptos_framework);
         timestamp::set_time_has_started_for_testing(&framework);
 
@@ -198,7 +198,7 @@ module mvmt_intent::intent_gmp_tests {
     // Verifies that the function sends a properly encoded FulfillmentProof message via GMP.
     #[test(admin = @mvmt_intent)]
     fun test_send_fulfillment_proof_sends_message(admin: &signer) {
-        // Initialize timestamp for lz_send
+        // Initialize timestamp for gmp_send
         let framework = account::create_account_for_test(@aptos_framework);
         timestamp::set_time_has_started_for_testing(&framework);
 
@@ -569,7 +569,7 @@ module mvmt_intent::intent_gmp_tests {
     // Simulates the full flow: hub sends requirements via GMP, connected chain receives.
     #[test(admin = @mvmt_intent)]
     fun test_intent_requirements_full_flow(admin: &signer) {
-        // Initialize timestamp for lz_send
+        // Initialize timestamp for gmp_send
         let framework = account::create_account_for_test(@aptos_framework);
         timestamp::set_time_has_started_for_testing(&framework);
 
@@ -622,7 +622,7 @@ module mvmt_intent::intent_gmp_tests {
     // Simulates the full flow: hub sends proof via GMP, connected chain receives and decodes.
     #[test(admin = @mvmt_intent)]
     fun test_fulfillment_proof_full_flow(admin: &signer) {
-        // Initialize timestamp for lz_send
+        // Initialize timestamp for gmp_send
         let framework = account::create_account_for_test(@aptos_framework);
         timestamp::set_time_has_started_for_testing(&framework);
 

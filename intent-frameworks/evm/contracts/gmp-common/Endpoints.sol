@@ -2,16 +2,13 @@
 pragma solidity ^0.8.20;
 
 /// @title Endpoints
-/// @notice LayerZero V2 Endpoint IDs (EIDs) for cross-chain communication
+/// @notice GMP Endpoint IDs for cross-chain communication
 ///
 /// @dev EVM Architecture Note:
-///      Unlike SVM and MVM which hardcode endpoint addresses for their respective
-///      LayerZero integrations, EVM contracts receive the LayerZero endpoint address
-///      at deployment time via constructor parameters. This is because:
-///
-///      1. LayerZero V2 is native to EVM - the protocol was built for EVM first
-///      2. The LZ endpoint handles chain routing internally via ILayerZeroEndpointV2
-///      3. Endpoint addresses vary by network (mainnet, testnet, local)
+///      Unlike SVM and MVM which hardcode endpoint addresses,
+///      EVM contracts receive the GMP endpoint address at deployment time
+///      via constructor parameters. Endpoint addresses vary by network
+///      (mainnet, testnet, local).
 ///
 ///      This file provides EID constants for reference and remote GMP endpoint configuration,
 ///      mirroring the structure of:
@@ -19,7 +16,7 @@ pragma solidity ^0.8.20;
 ///      - MVM: gmp_common/endpoints.move
 library Endpoints {
     // ============================================================================
-    // LAYERZERO V2 ENDPOINT IDS
+    // GMP ENDPOINT IDS
     // ============================================================================
 
     // Solana

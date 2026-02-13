@@ -1,62 +1,8 @@
 # GMP Architecture Integration Design
 
-**Status:** Draft
+**Status:** Complete
 **Date:** 2026-01-28
-**Purpose:** Map out exactly how GMP messaging (via integrated GMP relay, with LZ v2-compatible interfaces) replaces integrated-gmp signatures in our existing architecture.
-
----
-
-## Current System Summary
-
-Today, cross-chain approval works like this:
-
-```text
-Integrated-GMP (off-chain) validates → Signs intent_id → Contract checks signature → Releases funds
-```
-
-The integrated-gmp service holds private keys (Ed25519 + ECDSA) and generates approval signatures. Contracts on each chain verify these signatures before releasing funds.
-
-**Key contracts:**
-
-- **MVM Hub**: `fa_intent_outflow.move`, `fa_intent_inflow.move`, `intent_escrow.move`
-- **SVM Connected**: `intent_escrow` program (escrow with Ed25519 signature verification)
-- **EVM Connected**: `IntentInflowEscrow.sol` (escrow with ECDSA signature verification)
-
-**Signature as approval:**
-
-- MVM: Ed25519 signature over BCS-encoded `intent_id`
-- SVM: Ed25519 signature over raw 32-byte `intent_id`
-- EVM: ECDSA signature over `keccak256(abi.encodePacked(intentId))`
-
----
-
-## GMP Replacement: What Changes
-
-With GMP, the approval mechanism changes from **"integrated-gmp signs intent_id"** to **"on-chain contract receives GMP message confirming the cross-chain action"**.
-
-```text
-Before: Integrated-GMP signs → Contract verifies signature
-After:  Source contract sends GMP message → Destination contract receives and acts
-```
-
-### What Moves On-Chain
-
-| Currently in Integrated-GMP | Moves to | How |
-|--------------------------|----------|-----|
-| Inflow: validate escrow matches intent | Connected chain escrow contract | Contract validates requirements received via GMP before allowing escrow creation |
-| Inflow: approve escrow release after hub fulfillment | Hub intent contract | Hub sends GMP message to connected chain on fulfillment → escrow auto-releases |
-| Outflow: validate connected chain transfer | Connected chain validation contract | New contract validates solver's transfer and sends GMP confirmation to hub |
-| Outflow: approve hub intent release | Hub intent contract | Hub receives GMP fulfillment proof → auto-releases locked tokens |
-| Signature generation (Ed25519/ECDSA) | Eliminated | GMP message authentication replaces signatures |
-
-### What Stays Off-Chain
-
-| Component | Stays because |
-|-----------|--------------|
-| Coordinator event monitoring (hub only) | UX only, not security-critical. Hub has full state via GMP messages. |
-| Coordinator negotiation API | Application logic, not security-critical |
-| Coordinator event caching | Convenience, not security-critical |
-| Integrated-GMP (local/CI only) | Relays GMP messages via integrated GMP endpoints |
+**Purpose:** Document how GMP messaging works across the system — message flows, contract integration points, relay design, and environment configuration.
 
 ---
 
@@ -64,30 +10,12 @@ After:  Source contract sends GMP message → Destination contract receives and 
 
 ### Outflow: Hub → Connected Chain
 
-**Current flow (integrated-gmp signs):**
-
 ```text
 1. Hub: Requester creates outflow intent (locks tokens)
-         → emits OracleLimitOrderEvent
-2. Solver: Sees intent via coordinator
-3. Connected: Solver does arbitrary transfer to requester
-              (ERC20 transfer / SPL transfer / FA transfer)
-              Includes intent_id in tx metadata
-4. Solver: Calls POST /validate-outflow-fulfillment on integrated-gmp
-5. Integrated-GMP: Queries tx, validates (recipient, amount, token, solver)
-6. Integrated-GMP: Signs intent_id → returns signature
-7. Hub: Solver calls fulfill_outflow_intent(signature)
-        → hub verifies signature, releases locked tokens to solver
-```
-
-**GMP flow (all environments):**
-
-```text
-1. Hub: Requester creates outflow intent (locks tokens)
-        → contract calls lzSend() with IntentRequirements message
+        → contract calls gmpSend() with IntentRequirements message
         → message contains: intent_id, recipient, amount, token, authorized_solver
 
-2. Connected: Validation contract receives IntentRequirements via lzReceive()
+2. Connected: Validation contract receives IntentRequirements via gmpReceive()
               → stores requirements in state (keyed by intent_id)
 
 3. Connected: Authorized solver calls validationContract.fulfillIntent(intent_id, token, amount)
@@ -99,48 +27,22 @@ After:  Source contract sends GMP message → Destination contract receives and 
                    using solver's signer authority
               b. Contract validates: amount, token, solver match stored requirements
               c. Contract forwards tokens to requester address
-              d. Contract calls lzSend() with FulfillmentProof message
+              d. Contract calls gmpSend() with FulfillmentProof message
 
-4. Hub: Intent contract receives FulfillmentProof via lzReceive()
+4. Hub: Intent contract receives FulfillmentProof via gmpReceive()
         → validates intent_id exists and is active
         → releases locked tokens to solver
         → deletes intent
 ```
 
-**Key differences:**
-
-- Solver no longer does arbitrary transfer; must call validation contract
-- Solver actively initiates the token transfer (EVM: approve exact amount + transferFrom; SVM: signer authority, no approval needed)
-- No off-chain signature needed; GMP message IS the proof
-- Hub release is automatic on GMP message receipt
-
 ### Inflow: Connected Chain → Hub
 
-**Current flow (integrated-gmp signs):**
-
 ```text
 1. Hub: Requester creates inflow intent
-        → emits LimitOrderEvent
-2. Connected: Requester creates escrow (locks tokens, reserved for solver)
-              → emits EscrowInitialized
-3. Hub: Solver calls fulfill_inflow_intent()
-        → provides desired tokens to requester on hub
-        → emits LimitOrderFulfillmentEvent
-4. Integrated-GMP: Monitors hub fulfillment event
-5. Integrated-GMP: Validates escrow matches intent (amount, token, solver, chain)
-6. Integrated-GMP: Signs intent_id → caches signature
-7. Connected: Solver calls escrow.claim(signature)
-              → escrow verifies signature, releases to reserved_solver
-```
-
-**GMP flow (all environments):**
-
-```text
-1. Hub: Requester creates inflow intent
-        → contract calls lzSend() with IntentRequirements message
+        → contract calls gmpSend() with IntentRequirements message
         → message contains: intent_id, required_amount, required_token, authorized_solver
 
-2. Connected: Escrow contract receives IntentRequirements via lzReceive()
+2. Connected: Escrow contract receives IntentRequirements via gmpReceive()
               → stores requirements in state (keyed by intent_id)
 
 3. Connected: Requester creates escrow
@@ -148,29 +50,22 @@ After:  Source contract sends GMP message → Destination contract receives and 
               → contract validates escrow params match requirements
               → reverts if no requirements or mismatch
               → escrow created, tokens locked
-              → contract calls lzSend() with EscrowConfirmation message
+              → contract calls gmpSend() with EscrowConfirmation message
 
-4. Hub: Intent contract receives EscrowConfirmation via lzReceive()
+4. Hub: Intent contract receives EscrowConfirmation via gmpReceive()
         → marks intent as escrow-confirmed (enables fulfillment)
 
 5. Hub: Solver calls fulfill_inflow_intent()
         → provides desired tokens to requester
-        → contract calls lzSend() with FulfillmentProof message
+        → contract calls gmpSend() with FulfillmentProof message
 
-6. Connected: Escrow contract receives FulfillmentProof via lzReceive()
+6. Connected: Escrow contract receives FulfillmentProof via gmpReceive()
               → automatically releases escrowed tokens to reserved_solver
 ```
 
-**Key differences:**
-
-- Escrow creation now validated on-chain (requirements received via GMP)
-- Hub fulfillment gated on escrow confirmation (prevents solver fulfilling without escrow)
-- Escrow release is automatic on GMP fulfillment proof receipt
-- No off-chain signature needed
-
 ### Message Handling
 
-These apply to all `lzReceive()` handlers in both flows:
+These apply to all `gmpReceive()` handlers in both flows:
 
 - **Idempotency**: Each message carries intent_id + step number. If state is already updated for that step, the duplicate is ignored.
 - **Ordering**: Step numbers enforce ordering — step N can only be processed if step N-1 is complete.
@@ -178,73 +73,55 @@ These apply to all `lzReceive()` handlers in both flows:
 
 ---
 
-## Integration Points: Existing Contracts
+## Integration Points: Contracts
 
 ### MVM Hub Contracts
 
-**`fa_intent_outflow.move`** - Needs GMP hooks:
+**`fa_intent_outflow.move`**:
 
-- `create_outflow_intent()`: After creating intent, call `lzSend()` with `IntentRequirements`
-- New: `receive_fulfillment_proof()`: Called by `lzReceive()`, releases locked tokens to solver
-- `fulfill_outflow_intent()`: Remove signature verification; release now handled by `receive_fulfillment_proof()`
-- `ApproverConfig`: Replace approver public key with GMP endpoint address
+- `create_outflow_intent()`: After creating intent, calls `gmpSend()` with `IntentRequirements`
+- `receive_fulfillment_proof()`: Called by `gmpReceive()`, releases locked tokens to solver
 
-**`fa_intent_inflow.move`** - Needs GMP hooks:
+**`fa_intent_inflow.move`**:
 
-- `create_inflow_intent()`: After creating intent, call `lzSend()` with `IntentRequirements`
-- New: `receive_escrow_confirmation()`: Called by `lzReceive()`, marks intent as escrow-confirmed
-- `fulfill_inflow_intent()`: Gate on escrow confirmation before allowing fulfillment; after fulfillment, call `lzSend()` with `FulfillmentProof`
+- `create_inflow_intent()`: After creating intent, calls `gmpSend()` with `IntentRequirements`
+- `receive_escrow_confirmation()`: Called by `gmpReceive()`, marks intent as escrow-confirmed
+- `fulfill_inflow_intent()`: Gated on escrow confirmation; after fulfillment, calls `gmpSend()` with `FulfillmentProof`
 
-**`intent_inflow_escrow.move`** (MVM as connected chain) - Needs GMP hooks:
+**`intent_inflow_escrow.move`** (MVM as connected chain):
 
-- New: `receive_intent_requirements()`: Called by `lzReceive()`, stores requirements
-- `create_escrow()`: Validate against stored requirements before allowing creation
-- New: `receive_fulfillment_proof()`: Called by `lzReceive()`, auto-releases escrow
-- `complete_escrow()`: Remove signature verification; release now handled by `receive_fulfillment_proof()`
+- `receive_intent_requirements()`: Called by `gmpReceive()`, stores requirements
+- `create_escrow()`: Validates against stored requirements before allowing creation
+- `receive_fulfillment_proof()`: Called by `gmpReceive()`, auto-releases escrow
 
-**New: `gmp/intent_gmp.move`** - GMP endpoint (LZ v2-compatible interface):
+**`gmp/intent_gmp.move`** - GMP endpoint:
 
-- `lz_send()`: Encode and send message via integrated GMP endpoint (LZ-compatible naming)
-- `lz_receive()`: Entry point called by relay via `deliver_message()`, dispatches to handlers
+- `gmp_send()`: Encode and send message via integrated GMP endpoint
+- `deliver_message()`: Entry point called by relay, dispatches to handlers
 - Remote GMP endpoint verification
-
-**Note:** The `intent_gmp.move` module listed above serves as both the LZ-compatible interface and the integrated GMP endpoint. `send()` emits `MessageSent` event, `deliver_message()` is called by the integrated GMP relay.
 
 ### SVM Connected Chain
 
-**`intent_escrow` program** - Modify to use GMP:
+**`intent_escrow` program**:
 
-- Add `lz_receive` instruction for requirements and fulfillment proof
-- Add on-chain validation in `create_escrow`
-- Remove signature verification in `claim`
+- `gmp_receive` instruction for requirements and fulfillment proof
+- On-chain validation in `create_escrow`
 
-**New: `outflow-validator` program** - For outflow validation:
+**`outflow-validator` program**:
 
-- `lz_receive`: Stores intent requirements from hub
+- `gmp_receive`: Stores intent requirements from hub
 - `fulfill_intent`: Solver calls this; validates, transfers, sends GMP proof
 
-**New: `integrated-gmp-endpoint` program** - Integrated GMP endpoint:
+**`integrated-gmp-endpoint` program**:
 
 - `send`: Emits `MessageSent` event
-- `deliver_message`: Integrated-GMP relays messages
+- `deliver_message`: Relay delivers messages
 
 ### EVM Connected Chain
 
-**`IntentInflowEscrow.sol`** - Modify to use GMP (same approach as SVM)
-
-**New: `OutflowValidator.sol`** - For outflow validation
-**New: `NativeGmpEndpoint.sol`** - Integrated GMP endpoint
-
-### Decision: New Contracts vs Modify Existing
-
-**Decision: Modify existing contracts to use GMP.** The signature-based approach is being fully replaced, not maintained alongside. There is no dual-mode support.
-
-Rationale:
-
-- Single code path — no mode flags or conditional logic
-- Existing signature verification code gets removed, not preserved
-- All environments (local/CI, testnet, mainnet) use the same GMP contract interface
-- Local/CI uses integrated GMP endpoints with integrated-gmp for message relay
+**`IntentInflowEscrow.sol`** - Inflow escrow with GMP validation
+**`OutflowValidator.sol`** - Outflow validation contract
+**`NativeGmpEndpoint.sol`** - Integrated GMP endpoint
 
 ---
 
@@ -255,56 +132,37 @@ The integrated GMP relay handles message delivery in all environments. It watche
 ### How It Works
 
 ```text
-                    Local/CI Environment
 ┌──────────┐     ┌──────────────────────┐     ┌──────────┐
-│  MVM Hub │     │   Integrated-GMP        │     │   SVM    │
-│  (local  │────>│   Relay Mode         │────>│  (local  │
-│   GMP    │     │                      │     │   GMP    │
-│ endpoint)│<────│  Watches MessageSent  │<────│ endpoint)│
+│  MVM Hub │     │   Integrated-GMP     │     │   SVM    │
+│  (GMP    │────>│   Relay              │────>│  (GMP    │
+│ endpoint)│     │                      │     │ endpoint)│
+│          │<────│  Watches MessageSent │<────│          │
 └──────────┘     │  Calls deliver_msg   │     └──────────┘
                  └──────────────────────┘
 ```
 
-1. Contracts call `lzSend()` on integrated GMP endpoint
-2. Integrated GMP endpoint emits `MessageSent` event (no real cross-chain)
+1. Contracts call `gmpSend()` on integrated GMP endpoint
+2. Integrated GMP endpoint emits `MessageSent` event
 3. Integrated-GMP polls for `MessageSent` events on all chains
 4. Integrated-GMP calls `deliver_message()` on destination chain's integrated GMP endpoint
-5. Integrated GMP endpoint calls `lzReceive()` on destination contract
+5. Integrated GMP endpoint calls `gmpReceive()` on destination contract
 6. Destination contract processes message normally
 
-### Integrated-GMP Relay Requirements
+### Relay Characteristics
 
 - **Watches**: `MessageSent` events on integrated GMP endpoints (MVM, SVM, EVM)
-- **Delivers**: Calls `deliver_message()` / `lzReceive()` on destination
+- **Delivers**: Calls `deliver_message()` / `gmpReceive()` on destination
 - **Needs**: Funded operator wallet per chain (pays gas for delivery)
 - **Config**: Chain RPCs, GMP endpoint addresses, operator keys
-- **Mode**: `--mode relay` flag on integrated-gmp binary
 - **Polling**: Configurable interval (default 500ms for fast CI)
-- **Fidelity**: Minimal. Local endpoints emit events and deliver messages only — no DVN simulation, no fee calculation
-
-### Relay Mode vs Current Integrated-GMP
-
-| Aspect | Current Integrated-GMP | Relay Mode |
-|--------|--------------------|----|
-| **Watches** | Intent/escrow events | `MessageSent` events on integrated GMP endpoints |
-| **Validates** | 15+ off-chain checks | None (contracts validate on-chain) |
-| **Action** | Signs intent_id | Calls `deliver_message()` |
-| **Keys needed** | Approver private key | Operator wallet (gas payment only) |
-| **Can forge** | Approval signatures | GMP messages (same risk level) |
+- **Validation**: None — contracts validate on-chain. Relay is a pure message transport.
 
 ### Contracts Stay Identical
 
-Contracts use the same GMP interface in all environments. Only the endpoint differs:
-
-- **All environments**: Integrated GMP endpoint → Integrated GMP relay watches and delivers
+Contracts use the same GMP interface in all environments:
 
 ```text
-// Same contract code in all environments (LZ v2-compatible naming):
-lz_send(endpoint, dst_chain_id, destination, payload);
-
-// GMP endpoint is the integrated GMP endpoint address:
-// All environments: <intent_gmp_address>
-// Future LZ: swap to LZ endpoint address (config change only)
+gmp_send(endpoint, dst_chain_id, destination, payload);
 ```
 
 ---
@@ -317,13 +175,13 @@ lz_send(endpoint, dst_chain_id, destination, payload);
 | **Testnet** | Integrated GMP endpoint | Integrated GMP endpoint | Integrated GMP endpoint | Integrated GMP relay |
 | **Mainnet** | Integrated GMP endpoint | Integrated GMP endpoint | Integrated GMP endpoint | Integrated GMP relay |
 
-> **Note:** All environments use integrated GMP. Contracts follow LZ v2 conventions so that future LZ integration is a configuration change (swap endpoint address).
+> **Note:** All environments use integrated GMP. Contracts follow GMP conventions so that future external GMP provider integration is a configuration change (swap endpoint address).
 
 ---
 
-## What Triggers lzSend()?
+## What Triggers gmpSend()?
 
-This is a critical design question. In our current system, integrated-gmp is an external service that signs. With GMP, the contracts themselves must call `lzSend()`.
+Contracts call `gmpSend()` as part of their normal execution. Every message is triggered by a user transaction (requester or solver).
 
 ### Who Triggers Each Message
 
@@ -334,11 +192,9 @@ This is a critical design question. In our current system, integrated-gmp is an 
 | `FulfillmentProof` (outflow) | Connected → Hub | Connected validation contract | On solver fulfillment (`fulfill_intent()`) |
 | `FulfillmentProof` (inflow) | Hub → Connected | Hub contract | On solver fulfillment (`fulfill_inflow_intent()`) |
 
-**Key insight:** Every `lzSend()` is triggered by a user transaction (requester or solver). No external service needs to initiate messages. The contract logic calls `lzSend()` as part of its normal execution.
-
 ### Gas Costs
 
-The caller of the transaction pays gas for `lzSend()`. This means:
+The caller of the transaction pays gas for `gmpSend()`. This means:
 
 - **Requester pays** for `IntentRequirements` (part of intent creation tx)
 - **Requester pays** for `EscrowConfirmation` (part of escrow creation tx)
@@ -348,7 +204,7 @@ With integrated GMP, there are no third-party GMP fees. The relay operator pays 
 
 ---
 
-## Summary: Architecture with GMP
+## Architecture Overview
 
 ```text
 ALL ENVIRONMENTS:
@@ -363,13 +219,7 @@ ALL ENVIRONMENTS:
         │ Event monitoring, UX
 ```
 
-**What's eliminated (with GMP):**
-
-- Off-chain approval signing (GMP messages replace signatures)
-- Off-chain validation logic (moved on-chain)
-- Approval key management (relay has gas wallets only, not approval authority)
-
-**What remains in all environments:**
+**Off-chain components:**
 
 - Coordinator (event monitoring, negotiation, UX, readiness tracking)
   - Monitors IntentRequirementsReceived events on connected chains

@@ -273,7 +273,7 @@ graph TB
 Two services work together in this domain:
 
 - **Coordinator** (`coordinator/src/`): Read-only event monitoring, event caching, negotiation routing. No private keys.
-- **Integrated GMP** (`integrated-gmp/src/`): Pure GMP message relay. Watches `MessageSent` events on source chains and delivers messages to destination chains via `deliver_message`. Has operator wallet keys for transaction submission. Does not validate or generate approval signatures -- all validation is on-chain via GMP message contents.
+- **Integrated GMP** (`integrated-gmp/src/`): Pure GMP message relay. Watches `MessageSent` events on source chains and delivers messages to destination chains via `deliver_message`. Has operator wallet keys for transaction submission. All validation is on-chain via GMP message contents.
 
 #### Event Monitoring (Coordinator)
 
@@ -300,7 +300,7 @@ Two services work together in this domain:
   - **Purpose**: Core relay logic -- watches `MessageSent` events on source chains and delivers messages to destination chains
   - **Key Structures**: `NativeGmpRelay`, `NativeGmpRelayConfig`
   - **Key Functions**: `run()` (main relay loop), polls MVM/SVM for `MessageSent` events, calls `deliver_message` on destination chains
-  - **Security**: **CRITICAL** - Has operator wallet keys for transaction submission. In production, can be replaced by LayerZero's endpoint.
+  - **Security**: **CRITICAL** - Has operator wallet keys for transaction submission. In production, can be replaced by an external GMP provider's endpoint.
   - **Responsibilities**: GMP message delivery between chains. The relay is transparent to clients -- it only moves messages. All validation happens on-chain via message contents (IntentRequirements, EscrowConfirmation, FulfillmentProof).
 
 #### Cryptographic Service (Integrated GMP)
@@ -439,7 +439,7 @@ This section documents comprehensive communication patterns between domains, inc
 **Settlement → Escrow** (Layer 2 → Layer 1):
 
 - **Completion Functions**: Settlement calls `complete_escrow()` (Move) or `claim()` (EVM) to release escrowed funds
-- **GMP-Based Release**: Escrow auto-releases upon FulfillmentProof delivery via GMP; no off-chain approval signatures needed
+- **GMP-Based Release**: Escrow auto-releases upon FulfillmentProof delivery via GMP
 - **Reserved Solver Enforcement**: Settlement ensures funds go to reserved solver regardless of transaction sender
 
 **Validation Domain → Intent Management** (Layer 2 → Foundation):

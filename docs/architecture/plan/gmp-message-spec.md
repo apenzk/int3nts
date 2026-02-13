@@ -170,7 +170,7 @@ Maps each spec field to the source variable in existing contracts. Use this when
 
 ### IntentRequirements (0x01) — Sender: Hub
 
-The hub populates this message differently per flow. Both flows call `lzSend()` as part of intent creation.
+The hub populates this message differently per flow. Both flows call `gmpSend()` as part of intent creation.
 
 **Outflow** — source: `fa_intent_outflow::create_outflow_intent()`
 

@@ -7,7 +7,7 @@
 //! ## Flow
 //!
 //! 1. Hub creates intent → sends IntentRequirements via GMP
-//! 2. This program receives requirements via `lz_receive` (stores in PDA)
+//! 2. This program receives requirements via `gmp_receive` (stores in PDA)
 //! 3. Authorized solver calls `fulfill_intent`:
 //!    - Tokens pulled from solver to recipient
 //!    - FulfillmentProof sent back to hub via GMP

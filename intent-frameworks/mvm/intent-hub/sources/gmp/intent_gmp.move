@@ -5,7 +5,7 @@
 ///
 /// ## Architecture
 ///
-/// - gmp_sender: Send functionality (lz_send)
+/// - gmp_sender: Send functionality (gmp_send)
 /// - intent_gmp: Receive/routing functionality (this module)
 ///
 /// ## Functions
@@ -13,7 +13,7 @@
 /// - `deliver_message`: Called by relay to deliver messages to destination
 /// - `set_remote_gmp_endpoint_addr`: Configure remote GMP endpoint addresses per chain
 ///
-/// For sending messages, use gmp_sender::lz_send instead.
+/// For sending messages, use gmp_sender::gmp_send instead.
 module mvmt_intent::intent_gmp {
     use std::vector;
     use std::signer;

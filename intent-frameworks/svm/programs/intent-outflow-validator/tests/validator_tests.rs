@@ -2,7 +2,7 @@
 //!
 //! These tests verify the full functionality of the outflow validator including:
 //! - Program initialization
-//! - Receiving intent requirements via GMP (lz_receive)
+//! - Receiving intent requirements via GMP (gmp_receive)
 //! - Fulfilling intents with token transfers
 //! - Sending fulfillment proofs via GMP
 
@@ -117,9 +117,9 @@ fn create_initialize_ix(
     }
 }
 
-/// Builds an LzReceive instruction simulating a GMP message delivery.
+/// Builds an GmpReceive instruction simulating a GMP message delivery.
 /// Derives both config and requirements PDAs from the intent_id.
-fn create_lz_receive_ix(
+fn create_gmp_receive_ix(
     program_id: Pubkey,
     payer: Pubkey,
     src_chain_id: u32,
@@ -133,7 +133,7 @@ fn create_lz_receive_ix(
         &program_id,
     );
 
-    let instruction = OutflowInstruction::LzReceive {
+    let instruction = OutflowInstruction::GmpReceive {
         src_chain_id,
         remote_gmp_endpoint_addr,
         payload,
@@ -346,7 +346,7 @@ fn create_fulfill_intent_ix(
     }
 }
 
-/// Helper to set up requirements via lz_receive.
+/// Helper to set up requirements via gmp_receive.
 async fn setup_requirements(
     context: &mut solana_program_test::ProgramTestContext,
     admin: &Keypair,
@@ -368,7 +368,7 @@ async fn setup_requirements(
     );
     send_tx(context, admin, &[init_ix], &[]).await.unwrap();
 
-    // Send lz_receive to store requirements
+    // Send gmp_receive to store requirements
     let requirements = IntentRequirements {
         intent_id,
         requester_addr: recipient.to_bytes(),
@@ -379,7 +379,7 @@ async fn setup_requirements(
     };
     let payload = requirements.encode().to_vec();
 
-    let lz_receive_ix = create_lz_receive_ix(
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,
@@ -387,7 +387,7 @@ async fn setup_requirements(
         payload,
         intent_id,
     );
-    send_tx(context, admin, &[lz_receive_ix], &[]).await.unwrap();
+    send_tx(context, admin, &[gmp_receive_ix], &[]).await.unwrap();
 }
 
 /// Creates a ProgramTest instance with outflow validator, SPL token, and integrated GMP endpoint.
@@ -627,8 +627,8 @@ async fn test_receive_stores_requirements() {
     };
     let payload = requirements.encode().to_vec();
 
-    // Send lz_receive
-    let lz_receive_ix = create_lz_receive_ix(
+    // Send gmp_receive
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,
@@ -636,7 +636,7 @@ async fn test_receive_stores_requirements() {
         payload,
         intent_id,
     );
-    send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await.unwrap();
+    send_tx(&mut context, &admin, &[gmp_receive_ix], &[]).await.unwrap();
 
     // Verify requirements were stored
     let (requirements_pda, _) = Pubkey::find_program_address(
@@ -683,7 +683,7 @@ async fn test_receive_idempotent() {
     let payload = requirements.encode().to_vec();
 
     // First receive succeeds
-    let lz_receive_ix = create_lz_receive_ix(
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,
@@ -691,10 +691,10 @@ async fn test_receive_idempotent() {
         payload.clone(),
         intent_id,
     );
-    send_tx(&mut context, &admin, &[lz_receive_ix.clone()], &[]).await.unwrap();
+    send_tx(&mut context, &admin, &[gmp_receive_ix.clone()], &[]).await.unwrap();
 
     // Second receive also succeeds (idempotent)
-    send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await.unwrap();
+    send_tx(&mut context, &admin, &[gmp_receive_ix], &[]).await.unwrap();
 }
 
 /// 5. Test: Receive rejects unknown remote GMP endpoint
@@ -730,7 +730,7 @@ async fn test_receive_rejects_unknown_remote_gmp_endpoint() {
     let payload = requirements.encode().to_vec();
 
     // Try with wrong chain ID
-    let lz_receive_ix = create_lz_receive_ix(
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         12345, // wrong chain ID
@@ -738,12 +738,12 @@ async fn test_receive_rejects_unknown_remote_gmp_endpoint() {
         payload.clone(),
         intent_id,
     );
-    let result = send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await;
+    let result = send_tx(&mut context, &admin, &[gmp_receive_ix], &[]).await;
     assert!(result.is_err(), "Wrong chain ID should be rejected");
 
     // Try with wrong source address
     let wrong_addr = [0xFFu8; 32];
-    let lz_receive_ix = create_lz_receive_ix(
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,
@@ -751,7 +751,7 @@ async fn test_receive_rejects_unknown_remote_gmp_endpoint() {
         payload,
         intent_id,
     );
-    let result = send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await;
+    let result = send_tx(&mut context, &admin, &[gmp_receive_ix], &[]).await;
     assert!(result.is_err(), "Wrong source address should be rejected");
 }
 
@@ -779,7 +779,7 @@ async fn test_receive_rejects_invalid_payload() {
     let invalid_payload = vec![0x01, 0x02, 0x03];
     let intent_id = test_intent_id();
 
-    let lz_receive_ix = create_lz_receive_ix(
+    let gmp_receive_ix = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,
@@ -787,7 +787,7 @@ async fn test_receive_rejects_invalid_payload() {
         invalid_payload,
         intent_id,
     );
-    let result = send_tx(&mut context, &admin, &[lz_receive_ix], &[]).await;
+    let result = send_tx(&mut context, &admin, &[gmp_receive_ix], &[]).await;
     assert!(result.is_err(), "Invalid payload should be rejected");
 }
 
@@ -1288,11 +1288,11 @@ async fn test_update_hub_config_rejects_non_admin() {
     assert_eq!(config.hub_gmp_endpoint_addr, hub_gmp_endpoint_addr());
 }
 
-/// 21. Test: UpdateHubConfig allows LzReceive with new hub GMP endpoint address
+/// 21. Test: UpdateHubConfig allows GmpReceive with new hub GMP endpoint address
 /// Verifies end-to-end: update config, then receive message from new hub address.
 /// Why: Ensures the updated config is used for GMP message validation.
 #[tokio::test]
-async fn test_update_hub_config_then_lz_receive() {
+async fn test_update_hub_config_then_gmp_receive() {
     let pt = program_test();
     let mut context = pt.start_with_context().await;
     let admin = context.payer.insecure_clone();
@@ -1322,7 +1322,7 @@ async fn test_update_hub_config_then_lz_receive() {
     );
     send_tx(&mut context, &admin, &[update_ix], &[]).await.unwrap();
 
-    // LzReceive with OLD hub address should now fail
+    // GmpReceive with OLD hub address should now fail
     let intent_id = test_intent_id();
     let requirements = IntentRequirements {
         intent_id,
@@ -1334,7 +1334,7 @@ async fn test_update_hub_config_then_lz_receive() {
     };
     let payload = requirements.encode().to_vec();
 
-    let lz_receive_old = create_lz_receive_ix(
+    let gmp_receive_old = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         HUB_CHAIN_ID,        // old chain ID
@@ -1342,11 +1342,11 @@ async fn test_update_hub_config_then_lz_receive() {
         payload.clone(),
         intent_id,
     );
-    let result = send_tx(&mut context, &admin, &[lz_receive_old], &[]).await;
+    let result = send_tx(&mut context, &admin, &[gmp_receive_old], &[]).await;
     assert!(result.is_err(), "Old hub address should be rejected after update");
 
-    // LzReceive with NEW hub address should succeed
-    let lz_receive_new = create_lz_receive_ix(
+    // GmpReceive with NEW hub address should succeed
+    let gmp_receive_new = create_gmp_receive_ix(
         program_id,
         admin.pubkey(),
         new_chain_id,    // new chain ID
@@ -1354,7 +1354,7 @@ async fn test_update_hub_config_then_lz_receive() {
         payload,
         intent_id,
     );
-    send_tx(&mut context, &admin, &[lz_receive_new], &[]).await.unwrap();
+    send_tx(&mut context, &admin, &[gmp_receive_new], &[]).await.unwrap();
 
     // Verify requirements were stored
     let (requirements_pda, _) = Pubkey::find_program_address(

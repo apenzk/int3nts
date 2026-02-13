@@ -253,7 +253,7 @@ function encodeCreateEscrowData(intentId: string, amount: bigint, expiryDuration
     expiryDuration === undefined ? Buffer.alloc(0) : encodeI64(expiryDuration);
 
   return Buffer.concat([
-    Buffer.from([3]), // EscrowInstruction::CreateEscrow (index 3: Initialize=0, LzReceive=1, SetGmpConfig=2, CreateEscrow=3)
+    Buffer.from([3]), // EscrowInstruction::CreateEscrow (index 3: Initialize=0, GmpReceive=1, SetGmpConfig=2, CreateEscrow=3)
     intentIdBytes,
     encodeU64(amount),
     Buffer.from([expiryTag]),

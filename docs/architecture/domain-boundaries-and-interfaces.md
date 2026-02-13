@@ -92,19 +92,19 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **Public Entry Functions** (Move):
 
 - `create_escrow_from_fa()` - Create escrow from fungible asset
-- `complete_escrow_from_fa()` - Complete escrow (legacy, auto-release via GMP FulfillmentProof is primary)
+- `complete_escrow_from_fa()` - Complete escrow
 
 **Public Functions** (Move):
 
 - `create_escrow()` - Create escrow with GMP requirements
 - `start_escrow_session()` - Start escrow session (solver takes escrowed assets)
-- `complete_escrow()` - Complete escrow (legacy, auto-release via GMP FulfillmentProof is primary)
+- `complete_escrow()` - Complete escrow
 
 **Public Functions** (Solidity):
 
 - `createEscrow(uint256 intentId, address token, uint256 amount, address reservedSolver)` - Create and deposit escrow
 - `deposit(uint256 intentId, address token, uint256 amount)` - Additional deposit to escrow
-- `claim(uint256 intentId, bytes signature)` - Claim escrow (legacy, auto-release via GMP FulfillmentProof is primary)
+- `claim(uint256 intentId, bytes signature)` - Claim escrow
 - `cancel(uint256 intentId)` - Cancel escrow after expiry
 
 **Events Emitted**:
@@ -163,16 +163,16 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **Public Entry Functions** (Move):
 
 - `fulfill_cross_chain_request_intent()` - Fulfill cross-chain intent (in fa_intent.move)
-- `complete_escrow_from_fa()` - Complete escrow (legacy, auto-release via GMP FulfillmentProof is primary) (in intent_escrow_entry.move)
+- `complete_escrow_from_fa()` - Complete escrow (in intent_escrow_entry.move)
 
 **Public Functions** (Move):
 
 - `finish_fa_intent_session()` - Complete FA intent session (in fa_intent.move)
-- `complete_escrow()` - Complete escrow (legacy, auto-release via GMP FulfillmentProof is primary) (in intent_escrow.move)
+- `complete_escrow()` - Complete escrow (in intent_escrow.move)
 
 **Public Functions** (Solidity):
 
-- `claim(uint256 intentId, bytes signature)` - Claim escrow (legacy, auto-release via GMP FulfillmentProof is primary) (in IntentInflowEscrow.sol)
+- `claim(uint256 intentId, bytes signature)` - Claim escrow (in IntentInflowEscrow.sol)
 - `cancel(uint256 intentId)` - Cancel escrow after expiry (in IntentInflowEscrow.sol)
 
 ### Settlement: Internal Components
@@ -276,7 +276,7 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 - Event monitoring and caching (belongs to Coordinator Domain)
 - Negotiation routing (belongs to Coordinator Domain)
 - Validation logic (now on-chain in GMP endpoint contracts/modules)
-- Approval signatures (replaced by GMP messages -- IntentRequirements and FulfillmentProof are delivered on-chain)
+- Approval signatures (GMP messages -- IntentRequirements and FulfillmentProof -- handle cross-chain authorization on-chain)
 
 ### Integrated GMP: External Interfaces
 

@@ -1299,7 +1299,7 @@ mod integration {
         payload.extend_from_slice(&0u64.to_be_bytes()); // timestamp
         assert_eq!(payload.len(), 81, "FulfillmentProof payload should be 81 bytes");
 
-        // Create mock remaining accounts (7 accounts for LzReceiveFulfillmentProof)
+        // Create mock remaining accounts (7 accounts for GmpReceiveFulfillmentProof)
         // In production: requirements, escrow, vault, solver_token, gmp_config, gmp_caller, token_program
         // For test: we just need 7 placeholder accounts with deterministic addresses
         let remaining_accounts = vec![
@@ -1340,7 +1340,7 @@ mod integration {
 
     /// 29. Test: FulfillmentProof fails with insufficient accounts
     /// Verifies that FulfillmentProof routing fails when fewer than 7 remaining accounts provided.
-    /// Why: LzReceiveFulfillmentProof requires 7 accounts for token transfer. The GMP endpoint
+    /// Why: GmpReceiveFulfillmentProof requires 7 accounts for token transfer. The GMP endpoint
     /// must validate account count before attempting CPI.
     #[tokio::test]
     async fn test_fulfillment_proof_fails_with_insufficient_accounts() {

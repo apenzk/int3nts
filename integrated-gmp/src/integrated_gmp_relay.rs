@@ -688,6 +688,7 @@ impl NativeGmpRelay {
                     || err_str.contains("E_ALREADY_DELIVERED")
                     || err_str.contains("AlreadyDelivered")
                     || err_str.contains("Already delivered")
+                    || err_str.contains("E_INTENT_NOT_FOUND")
                 {
                     warn!(
                         "Permanent delivery failure for MVM {} nonce={}, skipping: {}",
@@ -798,6 +799,7 @@ impl NativeGmpRelay {
                     // Permanent errors: skip and advance past the message
                     if err_str.contains("E_UNKNOWN_REMOTE_GMP_ENDPOINT")
                         || err_str.contains("E_ALREADY_DELIVERED")
+                        || err_str.contains("E_INTENT_NOT_FOUND")
                     {
                         warn!(
                             "Permanent delivery failure for SVM nonce={}, skipping: {}",
@@ -1524,7 +1526,7 @@ impl NativeGmpRelay {
     ///
     /// Builds and submits a DeliverMessage transaction to the SVM integrated-gmp-endpoint program.
     /// For IntentRequirements messages (0x01), also derives and passes the outflow-validator
-    /// accounts needed for LzReceive CPI.
+    /// accounts needed for GmpReceive CPI.
     async fn deliver_to_svm(&self, message: &GmpMessage) -> Result<()> {
         let Some(ref rpc_url) = self.config.svm_rpc_url else {
             return Err(anyhow::anyhow!("SVM not configured"));
@@ -1628,14 +1630,14 @@ impl NativeGmpRelay {
             AccountMeta::new_readonly(escrow_program, false), // destination program 2 (intent_escrow)
         ];
 
-        // For IntentRequirements (0x01), add accounts for both destination programs' LzReceive CPI.
+        // For IntentRequirements (0x01), add accounts for both destination programs' GmpReceive CPI.
         // The GMP endpoint routes to BOTH outflow_validator AND intent_escrow when routing is configured.
         //
         // Account layout for remaining_accounts (passed to GMP endpoint after base accounts):
-        // Indices 0-4: outflow_validator's LzReceive accounts
-        // Indices 5-9: intent_escrow's LzReceive accounts
+        // Indices 0-4: outflow_validator's GmpReceive accounts
+        // Indices 5-9: intent_escrow's GmpReceive accounts
         //
-        // Each program's LzReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
+        // Each program's GmpReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
         if !payload.is_empty() && payload[0] == 0x01 {
             // IntentRequirements format: [type(1)] [intent_id(32)] [...]
             if payload.len() >= 33 {
@@ -1663,20 +1665,20 @@ impl NativeGmpRelay {
                 );
 
                 debug!(
-                    "Adding accounts for multi-destination LzReceive CPI: outflow_req={}, outflow_cfg={}, escrow_req={}, escrow_cfg={}",
+                    "Adding accounts for multi-destination GmpReceive CPI: outflow_req={}, outflow_cfg={}, escrow_req={}, escrow_cfg={}",
                     outflow_requirements_pda, outflow_config_pda, escrow_requirements_pda, escrow_gmp_config_pda
                 );
 
-                // Accounts for outflow_validator's LzReceive (indices 0-4)
-                // LzReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
+                // Accounts for outflow_validator's GmpReceive (indices 0-4)
+                // GmpReceive expects: requirements(w), config(r), authority(s), payer(s,w), system_program
                 accounts.push(AccountMeta::new(outflow_requirements_pda, false));  // 0
                 accounts.push(AccountMeta::new_readonly(outflow_config_pda, false)); // 1
                 accounts.push(AccountMeta::new_readonly(relay_pubkey, true));  // 2: authority (signer)
                 accounts.push(AccountMeta::new(relay_pubkey, true));           // 3: payer (signer)
                 accounts.push(AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false)); // 4
 
-                // Accounts for intent_escrow's LzReceive (indices 5-9)
-                // LzReceive expects: requirements(w), gmp_config(r), authority(s), payer(s,w), system_program
+                // Accounts for intent_escrow's GmpReceive (indices 5-9)
+                // GmpReceive expects: requirements(w), gmp_config(r), authority(s), payer(s,w), system_program
                 accounts.push(AccountMeta::new(escrow_requirements_pda, false));  // 5
                 accounts.push(AccountMeta::new_readonly(escrow_gmp_config_pda, false)); // 6
                 accounts.push(AccountMeta::new_readonly(relay_pubkey, true));  // 7: authority (signer)
@@ -1757,7 +1759,7 @@ impl NativeGmpRelay {
                 // Store ATA creation info for use when building transaction
                 ata_create_info = Some((solver_ata, solver_pubkey, token_mint, token_program_id, associated_token_program_id));
 
-                // Accounts for intent_escrow's LzReceiveFulfillmentProof
+                // Accounts for intent_escrow's GmpReceiveFulfillmentProof
                 // Expected: requirements(w), escrow(w), vault(w), solver_token(w), gmp_config(r), gmp_caller(s), token_program
                 accounts.push(AccountMeta::new(escrow_requirements_pda, false));     // 0: requirements (writable)
                 accounts.push(AccountMeta::new(escrow_pda, false));                  // 1: escrow (writable)

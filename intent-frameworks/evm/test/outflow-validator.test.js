@@ -379,7 +379,7 @@ describe("IntentOutflowValidator", function () {
     /// TODO: Implement - EVM has updateHubConfig with onlyOwner modifier
     /// SVM: intent-frameworks/svm/programs/intent-outflow-validator/tests/validator_tests.rs
 
-    /// 21. Test: test_update_hub_config_then_lz_receive: UpdateHubConfig Then LzReceive
+    /// 21. Test: test_update_hub_config_then_gmp_receive: UpdateHubConfig Then GmpReceive
     /// Verifies end-to-end: update config, then receive message from new hub address.
     /// Why: Ensures the updated config is used for GMP message validation.
     /// TODO: Implement - EVM has updateHubConfig in IntentOutflowValidator

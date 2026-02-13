@@ -51,7 +51,7 @@ module mvmt_intent::intent_outflow_validator {
     /// The connected chain stores these requirements and validates escrow creation against them.
     ///
     /// # Arguments
-    /// - `src_chain_id`: LayerZero endpoint ID of source chain (hub)
+    /// - `src_chain_id`: GMP endpoint ID of source chain (hub)
     /// - `src_address`: 32-byte source address (hub's program)
     /// - `payload`: Raw GMP message payload
     ///

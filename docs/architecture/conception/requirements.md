@@ -52,10 +52,10 @@ The system must provide coordinator and integrated-gmp services with the followi
 
 - **Event Monitoring** (coordinator): Monitor blockchain events from hub and connected chains, cache and process events in real-time
 - **Draft/Negotiation API** (coordinator): Expose draft intent submission, pending draft queries, and signature retrieval for solver negotiation
-- **Cross-Chain Validation** (integrated-gmp): Validate escrow deposits match intent requirements, verify intent ID matching, validate metadata and amounts
-- **Approval/Rejection Service** (integrated-gmp): Generate Ed25519/ECDSA signatures for approval/rejection decisions, expose via REST API
-- **Security Validation** (integrated-gmp): Enforce non-revocable escrow requirement, validate cryptographic signatures
-- **REST API**: Coordinator provides health check and event/draft endpoints; integrated-gmp provides health check, approval signature creation, and public key retrieval endpoints
+- **Cross-Chain Validation** (on-chain): Contracts validate escrow deposits match intent requirements via GMP-delivered IntentRequirements
+- **GMP Message Relay** (integrated-gmp): Watches `MessageSent` events and delivers messages to destination chains
+- **Security Validation** (on-chain): Enforce non-revocable escrow requirement, validate GMP message source
+- **REST API**: Coordinator provides health check and event/draft endpoints; integrated-gmp provides health check endpoint only
 
 ## 3. Non-Functional Requirements
 

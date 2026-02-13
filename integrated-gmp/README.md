@@ -1,6 +1,6 @@
 # Integrated GMP Service
 
-Service that monitors chains and provides approval signatures (validation and signing).
+GMP message relay that watches for `MessageSent` events on source chains and delivers messages to destination chains.
 
 **Full documentation: [docs/integrated-gmp/](../docs/integrated-gmp/README.md)**
 

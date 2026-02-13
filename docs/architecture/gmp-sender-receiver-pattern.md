@@ -45,8 +45,8 @@ LZ V2 solves this by **separating send and receive into distinct components**:
 ```text
 ┌─────────────────────────┐     ┌─────────────────────────┐
 │   oapp_core             │     │   oapp_receive          │
-│   - lz_send()           │     │   - lz_receive()        │
-│   - lz_quote()          │     │   - routes to app       │
+│   - gmp_send()           │     │   - gmp_receive()        │
+│   - gmp_quote()          │     │   - routes to app       │
 │   (no app imports)      │     │   (imports app)         │
 └─────────────────────────┘     └─────────────────────────┘
          ↑                                │
@@ -55,7 +55,7 @@ LZ V2 solves this by **separating send and receive into distinct components**:
 ┌─────────────────────────────────────────────────────────┐
 │                    Your OApp                             │
 │   - imports oapp_core for sending                       │
-│   - exposes lz_receive_impl() for receiving             │
+│   - exposes gmp_receive_impl() for receiving             │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -73,7 +73,7 @@ LZ V2 solves this by **separating send and receive into distinct components**:
 ┌─────────────────────────────────────────────────────────┐
 │                    Your OApp Program                     │
 │   - CPIs to endpoint for sending                        │
-│   - exposes lz_receive instruction for receiving        │
+│   - exposes gmp_receive instruction for receiving        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -89,7 +89,7 @@ LZ V2 solves this by **separating send and receive into distinct components**:
 ┌─────────────────────────┐     ┌─────────────────────────┐
 │   gmp_sender.move       │     │  intent_gmp.move│
 │                         │     │  (receiver)             │
-│   - lz_send()           │     │  - deliver_message()    │
+│   - gmp_send()           │     │  - deliver_message()    │
 │   - MessageSent event   │     │  - route_message()      │
 │   - nonce tracking      │     │  - remote GMP endpoints      │
 │                         │     │  - replay protection    │
@@ -101,7 +101,7 @@ LZ V2 solves this by **separating send and receive into distinct components**:
 ┌────────┴────────────────────────────────┴─────────────────┐
 │              outflow_validator_impl.move                   │
 │                                                           │
-│   - imports gmp_sender::lz_send (to send FulfillmentProof)│
+│   - imports gmp_sender::gmp_send (to send FulfillmentProof)│
 │   - exposes receive_intent_requirements() (called by      │
 │     intent_gmp when routing)                     │
 └───────────────────────────────────────────────────────────┘
@@ -123,7 +123,7 @@ gmp_sender ← outflow_validator_impl
 │   (Program ID: ABC)     │     │   (Program ID: XYZ)     │
 │                         │     │                         │
 │   - Send instruction    │ ←── │  - CPI to Send          │
-│   - DeliverMsg instr    │ ──→ │  - LzReceive handler    │
+│   - DeliverMsg instr    │ ──→ │  - GmpReceive handler    │
 └─────────────────────────┘     └─────────────────────────┘
 ```
 
@@ -192,12 +192,12 @@ Each component can be tested independently:
 
 ### 1. Event-Based Relay (Original MVM Approach)
 
-Instead of calling `lz_send` directly, emit an event and let the relay handle sending.
+Instead of calling `gmp_send` directly, emit an event and let the relay handle sending.
 
 ```move
 // OLD: outflow_validator emits event
 event::emit(FulfillmentProofPayload { dst_chain_id, dst_addr, payload });
-// Relay picks up event and calls gmp_sender::lz_send externally
+// Relay picks up event and calls gmp_sender::gmp_send externally
 ```
 
 **Rejected because:**

@@ -25,11 +25,11 @@ RPG (Repository Planning Graph) is a methodology from Microsoft Research for cre
 **Application to Intent Framework**:
 
 - **Intent Management → Escrow**: Escrow uses intent reservation mechanisms (`intent_reservation`) and oracle-intent system (`fa_intent_with_oracle`)
-- **Escrow → Validation**: Escrow emits events monitored by coordinator and requires integrated-gmp public key for signature verification
+- **Escrow → Validation**: Escrow emits events monitored by coordinator; GMP messages deliver requirements and fulfillment proofs on-chain
 - **Settlement → Intent Management**: Settlement uses fulfillment functions from Intent Management modules
 - **Settlement → Escrow**: Settlement uses completion functions from Escrow modules
 - **Validation → Intent Management**: Coordinator monitors events from Intent Management
-- **Validation → Escrow**: Coordinator monitors events from Escrow; integrated-gmp validates escrow safety
+- **Validation → Escrow**: Coordinator monitors events from Escrow; GMP messages deliver validation on-chain
 
 **Dependency Graph**:
 
@@ -143,9 +143,9 @@ RPG methodology emphasizes clear boundaries between modules/domains. Each domain
 
 **Verification Domain**:
 
-- **Responsibility**: Event monitoring, cross-chain validation, approval signatures
-- **Dependencies**: Intent Management (monitors events), Escrow (monitors events, validates safety)
-- **Exports**: Event monitoring API, validation functions, approval signatures
+- **Responsibility**: Event monitoring, cross-chain GMP message relay
+- **Dependencies**: Intent Management (monitors events), Escrow (monitors events)
+- **Exports**: Event monitoring API, GMP message delivery
 
 ## Dependency Modeling
 

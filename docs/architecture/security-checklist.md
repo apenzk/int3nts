@@ -22,7 +22,7 @@ This checklist provides a comprehensive security review guide for the Intent Fra
 
 ## 1. Endpoint Abuse Prevention
 
-**Time: 1.5 days** | **Components: Coordinator/Integrated GMP API, Solver endpoints**
+**Time: 1.5 days** | **Components: Coordinator API, Solver endpoints**
 
 Assume every endpoint will be abused. Attackers don't follow happy paths.
 
@@ -47,16 +47,15 @@ Assume every endpoint will be abused. Attackers don't follow happy paths.
 
 | Component | File/Module | Checks |
 |-----------|-------------|--------|
-| Coordinator/Integrated GMP API | `coordinator/src/api/`, `integrated-gmp/src/api/` | Rate limits, input validation |
+| Coordinator API | `coordinator/src/api/` | Rate limits, input validation |
 | Draft Intent Endpoint | `POST /draftintent` | Idempotency, rate limiting |
 | Signature Endpoint | `POST /draftintent/:id/signature` | FCFS protection, replay prevention |
-| Validation Endpoint | `POST /validate-outflow-fulfillment` | Input sanitization |
 
 ---
 
 ## 2. Client Trust Elimination
 
-**Time: 1 day** | **Components: Integrated GMP, Move contracts**
+**Time: 1 day** | **Components: Contracts, Integrated GMP relay**
 
 Frontend checks are for UX, not security. All security checks must be server-side.
 
@@ -85,14 +84,14 @@ Frontend checks are for UX, not security. All security checks must be server-sid
 | Component | Checks |
 |-----------|--------|
 | Move Contracts | `signer` verification, ownership checks |
-| Integrated GMP Service | Authorization middleware, signature verification |
+| GMP Endpoint Contracts | Relay authorization, remote endpoint verification |
 | Solver | Transaction signing, permission checks |
 
 ---
 
 ## 3. Auth Hardening
 
-**Time: 1.5 days** | **Components: Integrated GMP auth, signature verification**
+**Time: 1.5 days** | **Components: GMP endpoint auth, relay authorization**
 
 Auth working once doesn't mean auth is safe. Test edge cases.
 
@@ -105,26 +104,26 @@ Auth working once doesn't mean auth is safe. Test edge cases.
 - [ ] **Multi-Tab Behavior**: Multiple browser tabs with different states
 - [ ] **Session Expiry**: Actions during session timeout
 
-### Signature Verification Hardening
+### GMP Message Authentication Hardening
 
-- [ ] Verify Ed25519 signatures match expected public keys
-- [ ] Check signature hasn't expired (if time-bound)
-- [ ] Prevent signature replay across different intents
-- [ ] Validate signature covers all relevant fields
+- [ ] Verify relay is authorized on GMP endpoint before delivering messages
+- [ ] Check remote GMP endpoint address matches expected source
+- [ ] Prevent message replay across different intents (idempotency)
+- [ ] Validate GMP message payload covers all relevant fields
 
 ### Components to Review
 
 | Component | File | Checks |
 |-----------|------|--------|
 | Solver Registry | `intent-frameworks/mvm/intent-hub/sources/solver_registry.move` | Public key management |
-| Signature Verification | `integrated-gmp/src/crypto/` | Ed25519/ECDSA validation |
+| GMP Endpoint | `intent-frameworks/mvm/intent-gmp/sources/gmp/intent_gmp.move` | Relay authorization, remote endpoint verification |
 | Intent Creation | `create_inflow_intent`, `create_outflow_intent` | Solver signature verification |
 
 ---
 
 ## 4. Logging Infrastructure
 
-**Time: 1.5 days** | **Components: Integrated GMP, Solver**
+**Time: 1.5 days** | **Components: Integrated GMP relay, Solver**
 
 No logs means no answers. Not for bugs, not for breaches, not for refunds.
 
@@ -147,8 +146,8 @@ No logs means no answers. Not for bugs, not for breaches, not for refunds.
 - [ ] **Sensitive Action Logging**: Log all critical operations
   - Intent creation/fulfillment
   - Escrow creation/claim/refund
-  - Signature generation
-  - Validation approvals/rejections
+  - GMP message delivery
+  - Validation results
   - Configuration changes
 
 - [ ] **Correlation IDs**: Track requests across services
@@ -199,7 +198,7 @@ Third-party services will fail. Design for it.
 |---------|--------------|------------|
 | Chain RPC | Timeout, rate limit | Multiple providers, caching |
 | GMP Provider | Message delay | Timeout handling, retry |
-| Integrated GMP | Unavailable | Queue pending validations |
+| Integrated GMP relay | Unavailable | Queue pending messages |
 
 ---
 
@@ -241,7 +240,7 @@ API keys in code will leak. Not maybe. Will.
 
 | Secret | Location | Rotation Frequency |
 |--------|----------|-------------------|
-| Integrated GMP signing key | `.env` | Quarterly |
+| Integrated GMP operator wallet key | `.env` | Quarterly |
 | Chain RPC API keys | `.env` | On compromise |
 | Solver private keys | Secure storage | As needed |
 

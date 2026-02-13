@@ -2,7 +2,7 @@
 
 ## Overview
 
-A framework for creating programmable intents. Supports single-chain intents (unreserved, reserved, oracle-guarded) and cross-chain intents (inflow with escrows, outflow with transfers). For cross-chain operations, a coordinator service monitors chains and a integrated-gmp service provides approval signatures.
+A framework for creating programmable intents. Supports single-chain intents (unreserved, reserved, oracle-guarded) and cross-chain intents (inflow with escrows, outflow with transfers). For cross-chain operations, a coordinator service monitors chains and an integrated-gmp relay delivers GMP messages between chains for on-chain validation.
 
 ## Getting Started
 
@@ -14,7 +14,7 @@ A framework for creating programmable intents. Supports single-chain intents (un
 
 - **[Intent Frameworks](intent-frameworks/README.md)** - Move, EVM, and SVM intent frameworks
 - **[Coordinator](coordinator/README.md)** - Read-only event monitoring and negotiation service
-- **[Integrated GMP](integrated-gmp/README.md)** - Cross-chain validation and signing service
-- **[Solver Tools](solver/README.md)** - Solver service and tools for automatic signature generation and transaction templates
+- **[Integrated GMP](integrated-gmp/README.md)** - GMP message relay for cross-chain communication
+- **[Solver Tools](solver/README.md)** - Automated solver service for intent fulfillment
 - **[Testing Infrastructure](testing-infra/README.md)** - Chain setup and testing infrastructure
 - **[Frontend](frontend/README.md)** - Next.js web interface for intent creation and tracking

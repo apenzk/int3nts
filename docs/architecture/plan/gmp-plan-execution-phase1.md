@@ -26,10 +26,10 @@
 - [x] **Integration points** - Identify which existing contracts need GMP hooks:
   - MVM: `intent_as_escrow.move`, `fa_intent_outflow.move`, `fa_intent_inflow.move`
   - SVM: `intent_escrow` program (modify existing to add GMP support)
-  - What triggers `lzSend()`? (contract logic on state change, not external caller)
+  - What triggers `gmpSend()`? (contract logic on state change, not external caller)
 - [x] **Integrated-GMP relay design** - How it works in local/CI:
   - Watches `MessageSent` events on integrated GMP endpoints
-  - Calls `deliver_message()` / `lzReceive()` on destination chain
+  - Calls `deliver_message()` / `gmpReceive()` on destination chain
   - Needs funded operator wallet per chain
 - [x] **Environment matrix** - All environments use integrated GMP:
   - Local/CI: Integrated GMP endpoints + Integrated GMP relay
@@ -202,7 +202,7 @@
 **Tasks:**
 
 - [x] Create Cargo.toml with dependencies on `gmp-common`, `solana-program`
-- [x] Define `lz_receive` instruction for receiving intent requirements
+- [x] Define `gmp_receive` instruction for receiving intent requirements
 - [x] Define `fulfill_intent` instruction for authorized solvers
 - [x] Define `FulfillmentSucceeded`, `FulfillmentFailed` events
 - [x] Add stub implementations that return `Ok(())`
@@ -225,9 +225,9 @@
 
 **Tasks:**
 
-- [x] Add `lz_receive` instruction for receiving intent requirements
+- [x] Add `gmp_receive` instruction for receiving intent requirements
 - [x] Add on-chain validation in `create_escrow` against stored requirements
-- [x] Add `lz_receive` instruction for receiving fulfillment proof (auto-release)
+- [x] Add `gmp_receive` instruction for receiving fulfillment proof (auto-release)
 - [x] Remove signature verification in `claim`
 - [x] Add dependency on `gmp-common`
 
@@ -288,7 +288,7 @@ Connected chain functions (MVM as connected chain):
 - [x] SVM: Define `send` instruction signature (emits event)
 - [x] SVM: Define `deliver_message` instruction for integrated-gmp relay
 - [x] SVM: Add stub implementations
-- [x] MVM: Define `lz_send()` function signature
+- [x] MVM: Define `gmp_send()` function signature
 - [x] MVM: Define `deliver_message()` entry function for integrated-gmp relay
 - [x] MVM: Add stub implementations
 

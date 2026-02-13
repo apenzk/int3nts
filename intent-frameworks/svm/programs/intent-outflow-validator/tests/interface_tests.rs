@@ -87,14 +87,14 @@ fn test_initialize_instruction_roundtrip() {
 }
 
 /// 2. Test: Receive instruction serialization roundtrip
-/// Verifies that LzReceive instruction can be serialized and deserialized.
+/// Verifies that GmpReceive instruction can be serialized and deserialized.
 #[test]
 fn test_receive_instruction_roundtrip() {
     let original_chain_id = DUMMY_HUB_CHAIN_ID;
     let original_addr = dummy_addr_2();
     let original_payload = dummy_payload();
 
-    let instruction = OutflowInstruction::LzReceive {
+    let instruction = OutflowInstruction::GmpReceive {
         src_chain_id: original_chain_id,
         remote_gmp_endpoint_addr: original_addr,
         payload: original_payload.clone(),
@@ -104,7 +104,7 @@ fn test_receive_instruction_roundtrip() {
     let deserialized = OutflowInstruction::try_from_slice(&serialized).unwrap();
 
     match deserialized {
-        OutflowInstruction::LzReceive {
+        OutflowInstruction::GmpReceive {
             src_chain_id: deser_chain_id,
             remote_gmp_endpoint_addr: deser_addr,
             payload: deser_payload,
@@ -113,7 +113,7 @@ fn test_receive_instruction_roundtrip() {
             assert_eq!(deser_addr, original_addr);
             assert_eq!(deser_payload, original_payload);
         }
-        _ => panic!("Expected LzReceive instruction"),
+        _ => panic!("Expected GmpReceive instruction"),
     }
 }
 

@@ -248,7 +248,7 @@ module mvmt_intent::intent_gmp_hub {
     ///
     /// # Arguments
     /// - `sender`: Signer sending the message (typically @mvmt_intent)
-    /// - `dst_chain_id`: LayerZero endpoint ID of destination chain
+    /// - `dst_chain_id`: GMP endpoint ID of destination chain
     /// - `intent_id`: 32-byte intent identifier
     /// - `requester_addr`: 32-byte requester address (on connected chain)
     /// - `amount_required`: Amount of tokens required in escrow
@@ -296,7 +296,7 @@ module mvmt_intent::intent_gmp_hub {
         });
 
         // Send via GMP sender (emits MessageSent event for relay)
-        gmp_sender::lz_send(sender, dst_chain_id, dst_addr, payload)
+        gmp_sender::gmp_send(sender, dst_chain_id, dst_addr, payload)
     }
 
     /// Send FulfillmentProof to a connected chain when fulfillment is recorded.
@@ -306,7 +306,7 @@ module mvmt_intent::intent_gmp_hub {
     ///
     /// # Arguments
     /// - `sender`: Signer sending the message (typically @mvmt_intent)
-    /// - `dst_chain_id`: LayerZero endpoint ID of destination chain
+    /// - `dst_chain_id`: GMP endpoint ID of destination chain
     /// - `intent_id`: 32-byte intent identifier
     /// - `solver_addr`: 32-byte solver address (on connected chain)
     /// - `amount_fulfilled`: Amount of tokens fulfilled
@@ -346,7 +346,7 @@ module mvmt_intent::intent_gmp_hub {
         });
 
         // Send via GMP sender (emits MessageSent event for relay)
-        gmp_sender::lz_send(sender, dst_chain_id, dst_addr, payload)
+        gmp_sender::gmp_send(sender, dst_chain_id, dst_addr, payload)
     }
 
     // ============================================================================
@@ -359,7 +359,7 @@ module mvmt_intent::intent_gmp_hub {
     /// The hub validates the confirmation comes from a known remote GMP endpoint.
     ///
     /// # Arguments
-    /// - `src_chain_id`: LayerZero endpoint ID of source chain
+    /// - `src_chain_id`: GMP endpoint ID of source chain
     /// - `src_address`: 32-byte source address (connected chain's program)
     /// - `payload`: Raw GMP message payload
     ///
@@ -407,7 +407,7 @@ module mvmt_intent::intent_gmp_hub {
     /// The hub validates the proof comes from a known remote GMP endpoint.
     ///
     /// # Arguments
-    /// - `src_chain_id`: LayerZero endpoint ID of source chain
+    /// - `src_chain_id`: GMP endpoint ID of source chain
     /// - `src_address`: 32-byte source address (connected chain's program)
     /// - `payload`: Raw GMP message payload
     ///

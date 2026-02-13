@@ -436,7 +436,7 @@ fn test_fulfillment_proof_field_offsets() {
 
 /// 18. Test: Peek IntentRequirements Type
 /// Verifies peek_message_type returns IntentRequirements for a 0x01 message.
-/// Why: The lzReceive handler calls peek first to decide which decode path to take.
+/// Why: The gmpReceive handler calls peek first to decide which decode path to take.
 /// A wrong peek result routes the message to the wrong handler.
 #[test]
 fn test_peek_intent_requirements() {

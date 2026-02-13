@@ -12,7 +12,7 @@
 mod common;
 
 use common::{
-    create_escrow_ix, create_lz_receive_fulfillment_proof_ix, create_lz_receive_requirements_ix,
+    create_escrow_ix, create_gmp_receive_fulfillment_proof_ix, create_gmp_receive_requirements_ix,
     create_set_gmp_config_ix, generate_intent_id, get_token_balance, program_test, read_escrow,
     read_requirements, setup_basic_env, send_tx, DUMMY_HUB_CHAIN_ID, DUMMY_HUB_GMP_ENDPOINT_ADDR,
 };
@@ -191,7 +191,7 @@ async fn test_receive_requirements_stores_requirements() {
     );
 
     let gmp_caller = context.payer.insecure_clone();
-    let lz_receive_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -204,7 +204,7 @@ async fn test_receive_requirements_stores_requirements() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix],
+        &[gmp_receive_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -255,7 +255,7 @@ async fn test_receive_requirements_idempotent() {
     let gmp_caller = context.payer.insecure_clone();
 
     // First call - should succeed
-    let lz_receive_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -268,7 +268,7 @@ async fn test_receive_requirements_idempotent() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix],
+        &[gmp_receive_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -279,7 +279,7 @@ async fn test_receive_requirements_idempotent() {
     context.warp_to_slot(100).unwrap();
 
     // Second call - should also succeed (idempotent)
-    let lz_receive_ix2 = create_lz_receive_requirements_ix(
+    let gmp_receive_ix2 = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -292,7 +292,7 @@ async fn test_receive_requirements_idempotent() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix2],
+        &[gmp_receive_ix2],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -330,7 +330,7 @@ async fn test_receive_requirements_rejects_unknown_remote_gmp_endpoint() {
 
     // Use wrong chain ID
     let wrong_chain_id = 99999u32;
-    let lz_receive_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -343,7 +343,7 @@ async fn test_receive_requirements_rejects_unknown_remote_gmp_endpoint() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix],
+        &[gmp_receive_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -357,7 +357,7 @@ async fn test_receive_requirements_rejects_unknown_remote_gmp_endpoint() {
 
     // Use wrong source address
     let wrong_remote_gmp_endpoint_addr = [99u8; 32];
-    let lz_receive_ix2 = create_lz_receive_requirements_ix(
+    let gmp_receive_ix2 = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -370,7 +370,7 @@ async fn test_receive_requirements_rejects_unknown_remote_gmp_endpoint() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix2],
+        &[gmp_receive_ix2],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -415,7 +415,7 @@ async fn test_receive_fulfillment_proof_releases_escrow() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -428,7 +428,7 @@ async fn test_receive_fulfillment_proof_releases_escrow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -465,7 +465,7 @@ async fn test_receive_fulfillment_proof_releases_escrow() {
         12345,
     );
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -480,7 +480,7 @@ async fn test_receive_fulfillment_proof_releases_escrow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -535,7 +535,7 @@ async fn test_receive_fulfillment_proof_rejects_unknown_remote_gmp_endpoint() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -548,7 +548,7 @@ async fn test_receive_fulfillment_proof_rejects_unknown_remote_gmp_endpoint() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -585,7 +585,7 @@ async fn test_receive_fulfillment_proof_rejects_unknown_remote_gmp_endpoint() {
     );
 
     let wrong_chain_id = 99999u32;
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -600,7 +600,7 @@ async fn test_receive_fulfillment_proof_rejects_unknown_remote_gmp_endpoint() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -641,7 +641,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -654,7 +654,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -690,7 +690,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
         12345,
     );
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -705,7 +705,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -716,7 +716,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
     context.warp_to_slot(100).unwrap();
 
     // Second fulfillment (should fail)
-    let lz_receive_proof_ix2 = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix2 = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -731,7 +731,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix2],
+        &[gmp_receive_proof_ix2],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -772,7 +772,7 @@ async fn test_create_escrow_validates_against_requirements() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -785,7 +785,7 @@ async fn test_create_escrow_validates_against_requirements() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -853,7 +853,7 @@ async fn test_create_escrow_rejects_amount_mismatch() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -866,7 +866,7 @@ async fn test_create_escrow_rejects_amount_mismatch() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -926,7 +926,7 @@ async fn test_create_escrow_rejects_token_mismatch() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -939,7 +939,7 @@ async fn test_create_escrow_rejects_token_mismatch() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1015,7 +1015,7 @@ async fn test_create_escrow_sends_escrow_confirmation() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1028,7 +1028,7 @@ async fn test_create_escrow_sends_escrow_confirmation() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1111,7 +1111,7 @@ async fn test_full_inflow_gmp_workflow() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1124,7 +1124,7 @@ async fn test_full_inflow_gmp_workflow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1190,7 +1190,7 @@ async fn test_full_inflow_gmp_workflow() {
         12345,
     );
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -1205,7 +1205,7 @@ async fn test_full_inflow_gmp_workflow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1267,7 +1267,7 @@ async fn test_full_inflow_gmp_workflow() {
 //
 // 18. test_release_escrow_rejects_unauthorized_solver - N/A
 //     Why: MVM tests solver authorization during manual release. SVM validates
-//     solver during LzReceiveFulfillmentProof and auto-releases to the correct
+//     solver during GmpReceiveFulfillmentProof and auto-releases to the correct
 //     solver immediately (covered in test 6).
 //
 // 19. test_release_escrow_rejects_double_release - N/A
@@ -1279,15 +1279,15 @@ async fn test_full_inflow_gmp_workflow() {
 // GENERIC LZRECEIVE ROUTING TESTS
 // ============================================================================
 //
-// These tests verify the generic LzReceive instruction (variant index 1) that
+// These tests verify the generic GmpReceive instruction (variant index 1) that
 // routes based on message type. This is used by the GMP endpoint's CPI which
 // always uses variant index 1 for destination programs.
 
-/// 20. Test: Generic LzReceive routes IntentRequirements correctly
+/// 20. Test: Generic GmpReceive routes IntentRequirements correctly
 /// Verifies that message type 0x01 routes to requirements handler.
-/// Why: GMP endpoint uses generic LzReceive for all CPIs - must route correctly.
+/// Why: GMP endpoint uses generic GmpReceive for all CPIs - must route correctly.
 #[tokio::test]
-async fn test_generic_lz_receive_routes_requirements() {
+async fn test_generic_gmp_receive_routes_requirements() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -1311,8 +1311,8 @@ async fn test_generic_lz_receive_routes_requirements() {
 
     let gmp_caller = context.payer.insecure_clone();
 
-    // Use the generic LzReceive instruction (variant index 1)
-    let lz_receive_ix = common::create_lz_receive_generic_requirements_ix(
+    // Use the generic GmpReceive instruction (variant index 1)
+    let gmp_receive_ix = common::create_gmp_receive_generic_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1325,7 +1325,7 @@ async fn test_generic_lz_receive_routes_requirements() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix],
+        &[gmp_receive_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1347,11 +1347,11 @@ async fn test_generic_lz_receive_routes_requirements() {
     assert!(!requirements.fulfilled);
 }
 
-/// 21. Test: Generic LzReceive routes FulfillmentProof correctly
+/// 21. Test: Generic GmpReceive routes FulfillmentProof correctly
 /// Verifies that message type 0x03 routes to fulfillment proof handler.
-/// Why: GMP endpoint uses generic LzReceive for all CPIs - must route correctly.
+/// Why: GMP endpoint uses generic GmpReceive for all CPIs - must route correctly.
 #[tokio::test]
-async fn test_generic_lz_receive_routes_fulfillment_proof() {
+async fn test_generic_gmp_receive_routes_fulfillment_proof() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -1378,7 +1378,7 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1391,7 +1391,7 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1420,7 +1420,7 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
     );
     context.banks_client.process_transaction(tx).await.unwrap();
 
-    // Step 3: Receive fulfillment proof using GENERIC LzReceive
+    // Step 3: Receive fulfillment proof using GENERIC GmpReceive
     let proof_payload = create_fulfillment_proof_payload(
         intent_id,
         &env.solver.pubkey(),
@@ -1428,7 +1428,7 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
         12345,
     );
 
-    let lz_receive_proof_ix = common::create_lz_receive_generic_fulfillment_ix(
+    let gmp_receive_proof_ix = common::create_gmp_receive_generic_fulfillment_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -1443,7 +1443,7 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1467,11 +1467,11 @@ async fn test_generic_lz_receive_routes_fulfillment_proof() {
     assert!(escrow.is_claimed);
 }
 
-/// 22. Test: Generic LzReceive rejects unknown message types
+/// 22. Test: Generic GmpReceive rejects unknown message types
 /// Verifies that invalid message types (not 0x01 or 0x03) are rejected.
 /// Why: Unknown message types should fail explicitly, not silently.
 #[tokio::test]
-async fn test_generic_lz_receive_rejects_unknown_message_type() {
+async fn test_generic_gmp_receive_rejects_unknown_message_type() {
     let program_test = program_test();
     let mut context = program_test.start_with_context().await;
     let env = setup_basic_env(&mut context).await;
@@ -1486,7 +1486,7 @@ async fn test_generic_lz_receive_rejects_unknown_message_type() {
     // Create payload with invalid message type (0x00)
     let invalid_payload = vec![0x00, 0x01, 0x02, 0x03]; // 0x00 is not a valid message type
 
-    let lz_receive_ix = common::create_lz_receive_generic_requirements_ix(
+    let gmp_receive_ix = common::create_gmp_receive_generic_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1499,7 +1499,7 @@ async fn test_generic_lz_receive_rejects_unknown_message_type() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix],
+        &[gmp_receive_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -1514,7 +1514,7 @@ async fn test_generic_lz_receive_rejects_unknown_message_type() {
     // Try another invalid type (0x02 - EscrowConfirmation is outbound only)
     let invalid_payload2 = vec![0x02, 0x01, 0x02, 0x03];
 
-    let lz_receive_ix2 = common::create_lz_receive_generic_requirements_ix(
+    let gmp_receive_ix2 = common::create_gmp_receive_generic_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda,
@@ -1527,7 +1527,7 @@ async fn test_generic_lz_receive_rejects_unknown_message_type() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_ix2],
+        &[gmp_receive_ix2],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,

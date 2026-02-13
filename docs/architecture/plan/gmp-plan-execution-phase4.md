@@ -156,10 +156,10 @@ solana program show <INTENT_OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
 
 **Tasks:**
 
-- [ ] Update architecture-component-mapping with GMP modules/contracts across all VMs
-- [ ] Update domain-boundaries-and-interfaces with GMP send/receive interfaces
-- [ ] Update data-models with GMP message types (IntentRequirements, EscrowConfirmation, FulfillmentProof)
-- [ ] Update architecture-diff with current implementation status post-GMP
+- [x] Update architecture-component-mapping with GMP modules/contracts across all VMs
+- [x] Update domain-boundaries-and-interfaces with GMP send/receive interfaces
+- [x] Update data-models with GMP message types (IntentRequirements, EscrowConfirmation, FulfillmentProof)
+- [x] Update architecture-diff with current implementation status post-GMP
 
 **Test:**
 
@@ -175,16 +175,18 @@ solana program show <INTENT_OUTFLOW_VALIDATOR_PROGRAM_ID> --url devnet
 
 **Files:**
 
-- `docs/gmp/architecture.md`
-- `docs/gmp/solver-guide.md`
-- `docs/gmp/troubleshooting.md`
+- `docs/integrated-gmp/README.md` (new - overview and quick start)
+- `docs/integrated-gmp/architecture.md` (new - relay architecture, message flows, configuration)
+- `docs/integrated-gmp/solver-guide.md` (new - solver interaction with GMP flows)
+- `docs/integrated-gmp/troubleshooting.md` (new - common issues and error patterns)
+- `docs/README.md` (update descriptions for GMP relay model)
 
 **Tasks:**
 
-- [ ] Document GMP architecture and message flows
-- [ ] Document solver integration guide
-- [ ] Document common issues and troubleshooting steps
-- [ ] Document testnet contract addresses
+- [x] Document GMP architecture and message flows
+- [x] Document solver integration guide
+- [x] Document common issues and troubleshooting steps
+- [x] Document testnet contract addresses
 
 **Test:**
 

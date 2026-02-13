@@ -51,7 +51,7 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/claim.rs`
 | 4 | Should revert if escrow already claimed | [ ] | [x] | [x] |
 | 5 | Should revert if escrow does not exist | [ ] | [x] | [x] |
 
-> **Note:** SVM uses GMP-based claim via `LzReceiveFulfillmentProof` instruction. EVM uses signature-based claim.
+> **Note:** SVM uses GMP-based claim via `GmpReceiveFulfillmentProof` instruction. EVM uses signature-based claim.
 
 ## cancel
 
@@ -128,7 +128,7 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/error_conditions
 | 10 | Should reject duplicate escrow creation | [ ] | [x] | [x] |
 | 11 | Should reject insufficient token balance | [ ] | [x] | [x] |
 
-> **Note:** EVM error-conditions file uses GMP-specific errors (requirements not found, amount/token/requester mismatch, expired intent) at positions 3-7 instead of legacy errors. Template tests 3-7 are legacy/native-currency specific and not applicable to GMP escrow.
+> **Note:** EVM error-conditions file uses GMP-specific errors (requirements not found, amount/token/requester mismatch, expired intent) at positions 3-7. Template tests 3-7 are not applicable to GMP escrow.
 
 ## integration
 
@@ -309,7 +309,7 @@ SVM: `intent-frameworks/svm/programs/intent-outflow-validator/tests/validator_te
 | 18 | test_complete_outflow_workflow | N/A | [x] | N/A |
 | 19 | test_update_hub_config_succeeds | [ ] | [ ] | [x] |
 | 20 | test_update_hub_config_rejects_non_admin | [ ] | [ ] | [x] |
-| 21 | test_update_hub_config_then_lz_receive | [ ] | [ ] | [x] |
+| 21 | test_update_hub_config_then_gmp_receive | [ ] | [ ] | [x] |
 
 ---
 
@@ -409,9 +409,9 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/gmp.rs`
 | 17 | test_release_escrow_rejects_without_fulfillment | N/A | N/A | N/A |
 | 18 | test_release_escrow_rejects_unauthorized_solver | N/A | N/A | N/A |
 | 19 | test_release_escrow_rejects_double_release | [x] | N/A | N/A |
-| 20 | test_generic_lz_receive_routes_requirements | N/A | N/A | [x] |
-| 21 | test_generic_lz_receive_routes_fulfillment_proof | N/A | N/A | [x] |
-| 22 | test_generic_lz_receive_rejects_unknown_message_type | N/A | N/A | [x] |
+| 20 | test_generic_gmp_receive_routes_requirements | N/A | N/A | [x] |
+| 21 | test_generic_gmp_receive_routes_fulfillment_proof | N/A | N/A | [x] |
+| 22 | test_generic_gmp_receive_rejects_unknown_message_type | N/A | N/A | [x] |
 | 23 | test_reject_direct_call | N/A | [x] | N/A |
 | 24 | test_create_escrow_rejects_requester_mismatch | N/A | [x] | N/A |
 | 25 | test_create_escrow_rejects_expired_intent | N/A | [x] | N/A |

@@ -12,7 +12,7 @@ The integrated-gmp service is infrastructure only:
 2. Picks up pending messages and delivers them to destination chain GMP endpoints
 3. Destination contracts process the delivered messages (e.g., release escrows, confirm fulfillments)
 
-In production, this relay can be replaced by LayerZero's endpoint infrastructure.
+In production, this relay can be replaced by an external GMP provider's endpoint infrastructure.
 
 ### Components
 
@@ -33,7 +33,7 @@ integrated-gmp/
 │   ├── svm_client.rs    # SVM chain client
 │   ├── config.rs        # Configuration loading
 │   ├── crypto/          # Cryptographic operations
-│   ├── validator/       # Cross-chain validation logic (legacy, unused by relay)
+│   ├── validator/       # Cross-chain validation logic
 │   └── bin/             # Utility binaries (generate_keys, get_approver_eth_address)
 └── Cargo.toml
 ```

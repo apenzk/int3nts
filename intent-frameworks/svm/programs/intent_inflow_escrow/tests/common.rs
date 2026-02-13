@@ -338,8 +338,8 @@ pub fn create_set_gmp_config_ix(
     }
 }
 
-/// Helper: Build an LzReceiveRequirements instruction
-pub fn create_lz_receive_requirements_ix(
+/// Helper: Build an GmpReceiveRequirements instruction
+pub fn create_gmp_receive_requirements_ix(
     program_id: Pubkey,
     requirements_pda: Pubkey,
     gmp_config_pda: Pubkey,
@@ -358,7 +358,7 @@ pub fn create_lz_receive_requirements_ix(
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         ],
-        data: EscrowInstruction::LzReceiveRequirements {
+        data: EscrowInstruction::GmpReceiveRequirements {
             src_chain_id,
             remote_gmp_endpoint_addr,
             payload,
@@ -368,8 +368,8 @@ pub fn create_lz_receive_requirements_ix(
     }
 }
 
-/// Helper: Build an LzReceiveFulfillmentProof instruction
-pub fn create_lz_receive_fulfillment_proof_ix(
+/// Helper: Build an GmpReceiveFulfillmentProof instruction
+pub fn create_gmp_receive_fulfillment_proof_ix(
     program_id: Pubkey,
     requirements_pda: Pubkey,
     escrow_pda: Pubkey,
@@ -392,7 +392,7 @@ pub fn create_lz_receive_fulfillment_proof_ix(
             AccountMeta::new_readonly(gmp_caller, true),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: EscrowInstruction::LzReceiveFulfillmentProof {
+        data: EscrowInstruction::GmpReceiveFulfillmentProof {
             src_chain_id,
             remote_gmp_endpoint_addr,
             payload,
@@ -402,9 +402,9 @@ pub fn create_lz_receive_fulfillment_proof_ix(
     }
 }
 
-/// Helper: Build a generic LzReceive instruction for requirements (message type 0x01)
-/// This uses the generic LzReceive variant which routes based on message type.
-pub fn create_lz_receive_generic_requirements_ix(
+/// Helper: Build a generic GmpReceive instruction for requirements (message type 0x01)
+/// This uses the generic GmpReceive variant which routes based on message type.
+pub fn create_gmp_receive_generic_requirements_ix(
     program_id: Pubkey,
     requirements_pda: Pubkey,
     gmp_config_pda: Pubkey,
@@ -423,7 +423,7 @@ pub fn create_lz_receive_generic_requirements_ix(
             AccountMeta::new(payer, true),
             AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         ],
-        data: EscrowInstruction::LzReceive {
+        data: EscrowInstruction::GmpReceive {
             src_chain_id,
             remote_gmp_endpoint_addr,
             payload,
@@ -433,9 +433,9 @@ pub fn create_lz_receive_generic_requirements_ix(
     }
 }
 
-/// Helper: Build a generic LzReceive instruction for fulfillment proof (message type 0x03)
-/// This uses the generic LzReceive variant which routes based on message type.
-pub fn create_lz_receive_generic_fulfillment_ix(
+/// Helper: Build a generic GmpReceive instruction for fulfillment proof (message type 0x03)
+/// This uses the generic GmpReceive variant which routes based on message type.
+pub fn create_gmp_receive_generic_fulfillment_ix(
     program_id: Pubkey,
     requirements_pda: Pubkey,
     escrow_pda: Pubkey,
@@ -458,7 +458,7 @@ pub fn create_lz_receive_generic_fulfillment_ix(
             AccountMeta::new_readonly(gmp_caller, true),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: EscrowInstruction::LzReceive {
+        data: EscrowInstruction::GmpReceive {
             src_chain_id,
             remote_gmp_endpoint_addr,
             payload,

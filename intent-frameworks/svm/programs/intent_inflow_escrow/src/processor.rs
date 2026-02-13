@@ -43,23 +43,23 @@ impl Processor {
                 msg!("Instruction: Initialize");
                 Self::process_initialize(program_id, accounts, approver)
             }
-            EscrowInstruction::LzReceive {
+            EscrowInstruction::GmpReceive {
                 src_chain_id,
                 remote_gmp_endpoint_addr,
                 payload,
             } => {
                 // Route based on message type (first byte of payload)
                 let message_type = payload.first().copied().unwrap_or(0);
-                msg!("Instruction: LzReceive (message_type=0x{:02x})", message_type);
+                msg!("Instruction: GmpReceive (message_type=0x{:02x})", message_type);
                 match message_type {
-                    0x01 => Self::process_lz_receive_requirements(
+                    0x01 => Self::process_gmp_receive_requirements(
                         program_id,
                         accounts,
                         src_chain_id,
                         remote_gmp_endpoint_addr,
                         payload,
                     ),
-                    0x03 => Self::process_lz_receive_fulfillment_proof(
+                    0x03 => Self::process_gmp_receive_fulfillment_proof(
                         program_id,
                         accounts,
                         src_chain_id,
@@ -102,13 +102,13 @@ impl Processor {
                 msg!("Instruction: Cancel");
                 Self::process_cancel(program_id, accounts, intent_id)
             }
-            EscrowInstruction::LzReceiveRequirements {
+            EscrowInstruction::GmpReceiveRequirements {
                 src_chain_id,
                 remote_gmp_endpoint_addr,
                 payload,
             } => {
-                msg!("Instruction: LzReceiveRequirements");
-                Self::process_lz_receive_requirements(
+                msg!("Instruction: GmpReceiveRequirements");
+                Self::process_gmp_receive_requirements(
                     program_id,
                     accounts,
                     src_chain_id,
@@ -116,13 +116,13 @@ impl Processor {
                     payload,
                 )
             }
-            EscrowInstruction::LzReceiveFulfillmentProof {
+            EscrowInstruction::GmpReceiveFulfillmentProof {
                 src_chain_id,
                 remote_gmp_endpoint_addr,
                 payload,
             } => {
-                msg!("Instruction: LzReceiveFulfillmentProof");
-                Self::process_lz_receive_fulfillment_proof(
+                msg!("Instruction: GmpReceiveFulfillmentProof");
+                Self::process_gmp_receive_fulfillment_proof(
                     program_id,
                     accounts,
                     src_chain_id,
@@ -674,10 +674,10 @@ impl Processor {
         Ok(())
     }
 
-    /// Process LzReceiveRequirements instruction.
+    /// Process GmpReceiveRequirements instruction.
     /// Stores intent requirements received via GMP from the hub.
     /// Implements idempotency: if requirements already exist, silently succeeds.
-    fn process_lz_receive_requirements(
+    fn process_gmp_receive_requirements(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
         src_chain_id: u32,
@@ -786,9 +786,9 @@ impl Processor {
         Ok(())
     }
 
-    /// Process LzReceiveFulfillmentProof instruction.
+    /// Process GmpReceiveFulfillmentProof instruction.
     /// Auto-releases escrow when fulfillment proof is received from hub.
-    fn process_lz_receive_fulfillment_proof(
+    fn process_gmp_receive_fulfillment_proof(
         program_id: &Pubkey,
         accounts: &[AccountInfo],
         src_chain_id: u32,

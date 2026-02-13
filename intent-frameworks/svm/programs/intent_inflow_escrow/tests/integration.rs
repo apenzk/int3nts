@@ -1,8 +1,8 @@
 mod common;
 
 use common::{
-    create_cancel_ix, create_escrow_ix, create_lz_receive_fulfillment_proof_ix,
-    create_lz_receive_requirements_ix, create_mint, create_token_account, generate_intent_id,
+    create_cancel_ix, create_escrow_ix, create_gmp_receive_fulfillment_proof_ix,
+    create_gmp_receive_requirements_ix, create_mint, create_token_account, generate_intent_id,
     get_token_balance, initialize_program, mint_to, program_test, read_escrow, send_tx,
     setup_basic_env, DUMMY_HUB_CHAIN_ID, DUMMY_HUB_GMP_ENDPOINT_ADDR,
 };
@@ -54,7 +54,7 @@ async fn test_complete_full_deposit_to_claim_workflow() {
     let requirements_payload = requirements.encode().to_vec();
 
     let gmp_caller = context.payer.insecure_clone();
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda, // PDA - must be derived, cannot be a DUMMY constant
@@ -67,7 +67,7 @@ async fn test_complete_full_deposit_to_claim_workflow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -109,7 +109,7 @@ async fn test_complete_full_deposit_to_claim_workflow() {
     };
     let proof_payload = proof.encode().to_vec();
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -124,7 +124,7 @@ async fn test_complete_full_deposit_to_claim_workflow() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let claim_tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,

@@ -691,14 +691,14 @@ fn process_deliver_message(
     // Collect remaining accounts for CPI
     let remaining_accounts: Vec<AccountInfo> = account_info_iter.cloned().collect();
 
-    // Build LzReceive instruction data
+    // Build GmpReceive instruction data
     // Format: [variant_index(1 byte)] + [src_chain_id(4)] + [remote_gmp_endpoint_addr(32)] + [payload_len(4)] + [payload]
-    let mut lz_receive_data = Vec::with_capacity(1 + 4 + 32 + 4 + payload.len());
-    lz_receive_data.push(1); // LzReceive variant index (assuming 0=Initialize, 1=LzReceive)
-    lz_receive_data.extend_from_slice(&src_chain_id.to_le_bytes());
-    lz_receive_data.extend_from_slice(&remote_gmp_endpoint_addr);
-    lz_receive_data.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    lz_receive_data.extend_from_slice(&payload);
+    let mut gmp_receive_data = Vec::with_capacity(1 + 4 + 32 + 4 + payload.len());
+    gmp_receive_data.push(1); // GmpReceive variant index (assuming 0=Initialize, 1=GmpReceive)
+    gmp_receive_data.extend_from_slice(&src_chain_id.to_le_bytes());
+    gmp_receive_data.extend_from_slice(&remote_gmp_endpoint_addr);
+    gmp_receive_data.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    gmp_receive_data.extend_from_slice(&payload);
 
     // Route based on message type and configuration
     match (message_type, &routing_config) {
@@ -733,8 +733,8 @@ fn process_deliver_message(
             );
 
             // Remaining accounts layout (set up by relay):
-            // Indices 0-4: outflow_validator's LzReceive accounts (requirements, config, authority, payer, system)
-            // Indices 5-9: intent_escrow's LzReceive accounts (requirements, gmp_config, authority, payer, system)
+            // Indices 0-4: outflow_validator's GmpReceive accounts (requirements, config, authority, payer, system)
+            // Indices 5-9: intent_escrow's GmpReceive accounts (requirements, gmp_config, authority, payer, system)
             if remaining_accounts.len() < 10 {
                 msg!("Insufficient remaining accounts for multi-destination routing: need 10, got {}", remaining_accounts.len());
                 return Err(GmpError::InvalidAccountCount.into());
@@ -743,12 +743,12 @@ fn process_deliver_message(
             // CPI to outflow_validator (destination_program_1) with its accounts (indices 0-4)
             let outflow_accounts = &remaining_accounts[0..5];
             msg!("Routing to outflow_validator: {} with {} accounts", destination_program_1.key, outflow_accounts.len());
-            invoke_lz_receive(destination_program_1.key, &lz_receive_data, outflow_accounts)?;
+            invoke_gmp_receive(destination_program_1.key, &gmp_receive_data, outflow_accounts)?;
 
             // CPI to intent_escrow (destination_program_2) with its accounts (indices 5-9)
             let escrow_accounts = &remaining_accounts[5..10];
             msg!("Routing to intent_escrow: {} with {} accounts", destination_program_2.key, escrow_accounts.len());
-            invoke_lz_receive(destination_program_2.key, &lz_receive_data, escrow_accounts)?;
+            invoke_gmp_receive(destination_program_2.key, &gmp_receive_data, escrow_accounts)?;
 
             msg!("Multi-destination routing succeeded");
         }
@@ -773,7 +773,7 @@ fn process_deliver_message(
                 destination_program_2.key
             );
 
-            // Remaining accounts are for intent_escrow's LzReceiveFulfillmentProof:
+            // Remaining accounts are for intent_escrow's GmpReceiveFulfillmentProof:
             // requirements(w), escrow(w), vault(w), solver_token(w), gmp_config(r), gmp_caller(s), token_program
             if remaining_accounts.len() < 7 {
                 msg!("Insufficient remaining accounts for FulfillmentProof routing: need 7, got {}", remaining_accounts.len());
@@ -782,7 +782,7 @@ fn process_deliver_message(
 
             // CPI to intent_escrow (destination_program_2) with all remaining accounts
             msg!("Routing FulfillmentProof to intent_escrow: {} with {} accounts", destination_program_2.key, remaining_accounts.len());
-            invoke_lz_receive(destination_program_2.key, &lz_receive_data, &remaining_accounts)?;
+            invoke_gmp_receive(destination_program_2.key, &gmp_receive_data, &remaining_accounts)?;
 
             msg!("FulfillmentProof routing to intent_escrow succeeded");
         }
@@ -798,7 +798,7 @@ fn process_deliver_message(
             );
 
             // Pass remaining_accounts directly - destination program is invoked, not passed as account
-            invoke_lz_receive(destination_program_1.key, &lz_receive_data, &remaining_accounts)?;
+            invoke_gmp_receive(destination_program_1.key, &gmp_receive_data, &remaining_accounts)?;
 
             msg!("CPI to destination program succeeded");
         }
@@ -807,10 +807,10 @@ fn process_deliver_message(
     Ok(())
 }
 
-/// Helper to invoke LzReceive on a destination program.
-fn invoke_lz_receive(
+/// Helper to invoke GmpReceive on a destination program.
+fn invoke_gmp_receive(
     program_id: &Pubkey,
-    lz_receive_data: &[u8],
+    gmp_receive_data: &[u8],
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     // Build account metas for CPI
@@ -826,7 +826,7 @@ fn invoke_lz_receive(
     let cpi_instruction = solana_program::instruction::Instruction {
         program_id: *program_id,
         accounts: account_metas,
-        data: lz_receive_data.to_vec(),
+        data: gmp_receive_data.to_vec(),
     };
 
     // Invoke the destination program

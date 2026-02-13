@@ -1,11 +1,10 @@
-/// GMP endpoint configuration for LayerZero V2 and local testing.
+/// GMP endpoint configuration for cross-chain communication.
 ///
-/// Addresses and EIDs sourced from LZ documentation and the project's
-/// layerzero-solana-integration.md / layerzero-movement-integration.md.
+/// Chain endpoint IDs (EIDs) for GMP message routing.
 module mvmt_intent::gmp_endpoints {
 
     // =========================================================================
-    // LayerZero V2 chain endpoint IDs (EIDs)
+    // GMP chain endpoint IDs (EIDs)
     // =========================================================================
 
     const SOLANA_MAINNET_EID: u32 = 30168;

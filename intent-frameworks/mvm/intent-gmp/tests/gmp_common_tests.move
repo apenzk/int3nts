@@ -419,7 +419,7 @@ module mvmt_intent::gmp_common_tests {
     // ============================================================================
 
     //18. Test: Peek IntentRequirements Type
-    //Why: The lzReceive handler calls peek first to decide which decode path to take.
+    //Why: The gmpReceive handler calls peek first to decide which decode path to take.
     //A wrong peek result routes the message to the wrong handler.
     #[test]
     fun test_peek_intent_requirements() {

@@ -41,13 +41,13 @@ pub fn process_instruction(
             msg!("Instruction: Initialize");
             process_initialize(program_id, accounts, gmp_endpoint, hub_chain_id, hub_gmp_endpoint_addr)
         }
-        OutflowInstruction::LzReceive {
+        OutflowInstruction::GmpReceive {
             src_chain_id,
             remote_gmp_endpoint_addr,
             payload,
         } => {
-            msg!("Instruction: LzReceive");
-            process_lz_receive(program_id, accounts, src_chain_id, remote_gmp_endpoint_addr, &payload)
+            msg!("Instruction: GmpReceive");
+            process_gmp_receive(program_id, accounts, src_chain_id, remote_gmp_endpoint_addr, &payload)
         }
         OutflowInstruction::FulfillIntent { intent_id } => {
             msg!("Instruction: FulfillIntent");
@@ -127,7 +127,7 @@ fn process_initialize(
 ///
 /// This is called by the GMP endpoint when a message is delivered from the hub.
 /// Implements idempotency: if requirements already exist, silently succeeds.
-fn process_lz_receive(
+fn process_gmp_receive(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     src_chain_id: u32,

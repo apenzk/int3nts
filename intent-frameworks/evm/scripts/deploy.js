@@ -86,23 +86,27 @@ async function main() {
 
   // Set escrow handler
   console.log("   Setting escrow handler...");
-  await gmpEndpoint.setEscrowHandler(escrowGmpAddress);
+  const escrowTx = await gmpEndpoint.setEscrowHandler(escrowGmpAddress);
+  await escrowTx.wait(1);
   console.log("   Escrow handler set to:", escrowGmpAddress);
 
   // Set outflow handler
   console.log("   Setting outflow handler...");
-  await gmpEndpoint.setOutflowHandler(outflowValidatorAddress);
+  const outflowTx = await gmpEndpoint.setOutflowHandler(outflowValidatorAddress);
+  await outflowTx.wait(1);
   console.log("   Outflow handler set to:", outflowValidatorAddress);
 
   // Set remote GMP endpoint address for hub chain
   console.log("   Setting remote GMP endpoint address for hub chain...");
-  await gmpEndpoint.setRemoteGmpEndpointAddr(hubChainId, movementModuleAddr);
+  const remoteTx = await gmpEndpoint.setRemoteGmpEndpointAddr(hubChainId, movementModuleAddr);
+  await remoteTx.wait(1);
   console.log("   Remote GMP endpoint address set for chain", hubChainId);
 
   // Add relay if different from deployer
   if (relayAddress.toLowerCase() !== deployer.address.toLowerCase()) {
     console.log("   Adding authorized relay...");
-    await gmpEndpoint.addRelay(relayAddress);
+    const relayTx = await gmpEndpoint.addRelay(relayAddress);
+    await relayTx.wait(1);
     console.log("   Relay added:", relayAddress);
   } else {
     console.log("   Deployer is already authorized as relay");

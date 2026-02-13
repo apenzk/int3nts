@@ -720,7 +720,7 @@ module mvmt_intent::intent_outflow_validator_tests {
     // TODO: Implement - MVM has update_hub_config in intent_outflow_validator_impl
     // SVM: intent-frameworks/svm/programs/intent-outflow-validator/tests/validator_tests.rs
 
-    // 21. Test: UpdateHubConfig allows LzReceive with new hub GMP endpoint address
+    // 21. Test: UpdateHubConfig allows GmpReceive with new hub GMP endpoint address
     // Verifies end-to-end: update config, then receive message from new hub address.
     // Why: Ensures the updated config is used for GMP message validation.
     // TODO: Implement - MVM has update_hub_config in intent_outflow_validator_impl

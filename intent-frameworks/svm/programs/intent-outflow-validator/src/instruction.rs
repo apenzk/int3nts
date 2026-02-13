@@ -17,7 +17,7 @@ pub enum OutflowInstruction {
         hub_gmp_endpoint_addr: [u8; 32],
     },
 
-    /// Receive intent requirements via GMP (lz_receive).
+    /// Receive intent requirements via GMP (gmp_receive).
     /// Called by the GMP endpoint to deliver a message from the hub.
     ///
     /// Idempotency: If requirements already exist for this intent_id, the
@@ -29,7 +29,7 @@ pub enum OutflowInstruction {
     /// 2. `[signer]` GMP endpoint or delivery authority
     /// 3. `[signer]` Payer for account creation
     /// 4. `[]` System program
-    LzReceive {
+    GmpReceive {
         /// Source chain ID (LZ endpoint ID)
         src_chain_id: u32,
         /// Remote GMP endpoint address (hub contract)

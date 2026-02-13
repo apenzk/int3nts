@@ -18,10 +18,10 @@ Tests Move VM-only cross-chain intent framework: intents on Hub and escrows on C
 
 1. **Coordinator-Based Negotiation**: Draft submission, solver polling, and signature retrieval
 2. **Intent Creation**: Creates intent on Hub with solver signature from coordinator
-3. **Escrow Creation**: Creates escrow on Chain 2 with locked tokens
-4. **Intent Fulfillment**: Solver fulfills intent on Hub
-5. **Integrated-GMP Approval**: Integrated-gmp monitors and generates Ed25519 approval signature
-6. **Escrow Release**: Escrow released on Chain 2 with integrated-gmp signature
+3. **GMP Message Delivery**: IntentRequirements delivered to connected chain via GMP relay
+4. **Escrow Creation**: Creates escrow on Chain 2 with locked tokens, validated against GMP requirements
+5. **Intent Fulfillment**: Solver fulfills intent on Hub, FulfillmentProof sent via GMP
+6. **Escrow Auto-Release**: Escrow auto-released on Chain 2 upon FulfillmentProof receipt
 
 ## Integration Tests
 

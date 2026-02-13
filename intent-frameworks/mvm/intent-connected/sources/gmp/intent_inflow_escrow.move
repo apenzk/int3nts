@@ -136,7 +136,7 @@ module mvmt_intent::intent_inflow_escrow {
     struct InflowEscrowConfig has key {
         /// Admin address (can update config)
         admin: address,
-        /// Hub chain ID (LayerZero endpoint ID)
+        /// Hub chain ID (GMP endpoint ID)
         hub_chain_id: u32,
         /// Hub GMP endpoint address (32 bytes)
         hub_gmp_endpoint_addr: vector<u8>,
@@ -443,7 +443,7 @@ module mvmt_intent::intent_inflow_escrow {
         );
         let payload = gmp_common::encode_escrow_confirmation(&confirmation);
 
-        let nonce = gmp_sender::lz_send(
+        let nonce = gmp_sender::gmp_send(
             creator,
             config.hub_chain_id,
             config.hub_gmp_endpoint_addr,

@@ -1,8 +1,8 @@
 /// GMP Sender Module
 ///
-/// Provides the `lz_send` function for sending cross-chain messages.
+/// Provides the `gmp_send` function for sending cross-chain messages.
 /// This module is intentionally kept separate from the receiver/routing
-/// logic to avoid circular dependencies (following LayerZero's pattern).
+/// logic to avoid circular dependencies (sender/receiver split pattern).
 ///
 /// ## Architecture
 ///
@@ -12,6 +12,10 @@
 ///
 /// This separation allows application modules to send GMP messages without
 /// creating import cycles with the receiver that routes messages to them.
+///
+/// ## Usage
+///
+/// Application modules call `gmp_sender::gmp_send(...)` to send messages.
 ///
 /// ## Outbox
 ///
@@ -123,7 +127,7 @@ module mvmt_intent::gmp_sender {
     ///
     /// # Returns
     /// - Nonce assigned to this message
-    public fun lz_send(
+    public fun gmp_send(
         sender: &signer,
         dst_chain_id: u32,
         dst_addr: vector<u8>,
@@ -158,14 +162,14 @@ module mvmt_intent::gmp_sender {
         nonce
     }
 
-    /// Entry function wrapper for lz_send.
-    public entry fun lz_send_entry(
+    /// Entry function wrapper for gmp_send.
+    public entry fun gmp_send_entry(
         sender: &signer,
         dst_chain_id: u32,
         dst_addr: vector<u8>,
         payload: vector<u8>,
     ) acquires SenderConfig {
-        lz_send(sender, dst_chain_id, dst_addr, payload);
+        gmp_send(sender, dst_chain_id, dst_addr, payload);
     }
 
     // ============================================================================

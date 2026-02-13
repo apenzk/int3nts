@@ -19,10 +19,10 @@ module mvmt_intent::intent_gmp_tests {
 
     fun setup_test(): signer {
         let admin = account::create_account_for_test(ADMIN_ADDR);
-        // Initialize timestamp (needed by lz_send for outbox message timestamps)
+        // Initialize timestamp (needed by gmp_send for outbox message timestamps)
         let framework = account::create_account_for_test(@aptos_framework);
         timestamp::set_time_has_started_for_testing(&framework);
-        // Initialize sender (for lz_send) and receiver (for deliver_message)
+        // Initialize sender (for gmp_send) and receiver (for deliver_message)
         gmp_sender::initialize(&admin);
         intent_gmp::initialize(&admin);
         // Initialize connected chain modules
@@ -74,7 +74,7 @@ module mvmt_intent::intent_gmp_tests {
     // ============================================================================
 
     // 15. Test: Send updates nonce state
-    // Verifies that gmp_sender::lz_send increments the outbound nonce correctly for each message.
+    // Verifies that gmp_sender::gmp_send increments the outbound nonce correctly for each message.
     // Why: Nonce tracking prevents message reordering and provides unique message IDs.
     #[test]
     fun test_send_updates_nonce_state() {
@@ -89,7 +89,7 @@ module mvmt_intent::intent_gmp_tests {
         let payload = vector[0x01, 0x02, 0x03];
 
         // Send first message
-        let nonce1 = gmp_sender::lz_send(
+        let nonce1 = gmp_sender::gmp_send(
             &admin,
             HUB_CHAIN_ID,
             copy dst_addr,
@@ -102,7 +102,7 @@ module mvmt_intent::intent_gmp_tests {
         assert!(after_first == 2, 3);
 
         // Send second message
-        let nonce2 = gmp_sender::lz_send(
+        let nonce2 = gmp_sender::gmp_send(
             &admin,
             HUB_CHAIN_ID,
             dst_addr,
@@ -116,7 +116,7 @@ module mvmt_intent::intent_gmp_tests {
     }
 
     // 16. Test: test_deliver_message_calls_receiver
-    // Verifies that deliver_message correctly calls the receiver module's lz_receive function.
+    // Verifies that deliver_message correctly calls the receiver module's gmp_receive function.
     // Why: The endpoint must route messages to the registered handler. Without this, GMP messages arrive but are never processed.
     // TODO: Implement - requires setting up a mock receiver module and verifying CPI
     // Placeholder: MVM delivery currently tested indirectly via test 24 (stores_in_both_handlers).

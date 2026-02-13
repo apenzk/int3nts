@@ -13,8 +13,8 @@ pub enum EscrowInstruction {
     /// 2. `[]` System program
     Initialize { approver: Pubkey },
 
-    /// Generic LzReceive for GMP message delivery (variant index 1).
-    /// Routes to LzReceiveRequirements or LzReceiveFulfillmentProof based on message type.
+    /// Generic GmpReceive for GMP message delivery (variant index 1).
+    /// Routes to GmpReceiveRequirements or GmpReceiveFulfillmentProof based on message type.
     ///
     /// This must be at index 1 to match the GMP endpoint's CPI format which uses
     /// variant index 1 for all destination programs.
@@ -34,7 +34,7 @@ pub enum EscrowInstruction {
     /// 4. `[]` GMP config account (PDA)
     /// 5. `[signer]` GMP endpoint or relay (trusted caller)
     /// 6. `[]` Token program
-    LzReceive {
+    GmpReceive {
         /// Source chain ID
         src_chain_id: u32,
         /// Source address (hub GMP endpoint address)
@@ -84,7 +84,7 @@ pub enum EscrowInstruction {
     /// Claim escrow funds (GMP mode - no signature required)
     ///
     /// In GMP mode, the fulfillment proof from the hub authorizes the release.
-    /// This instruction is called after LzReceiveFulfillmentProof marks the
+    /// This instruction is called after GmpReceiveFulfillmentProof marks the
     /// requirements as fulfilled.
     ///
     /// Accounts expected:
@@ -115,7 +115,7 @@ pub enum EscrowInstruction {
     /// 2. `[signer]` GMP endpoint or relay (trusted caller)
     /// 3. `[signer]` Payer
     /// 4. `[]` System program
-    LzReceiveRequirements {
+    GmpReceiveRequirements {
         /// Source chain ID
         src_chain_id: u32,
         /// Source address (hub GMP endpoint address)
@@ -134,7 +134,7 @@ pub enum EscrowInstruction {
     /// 4. `[]` GMP config account (PDA)
     /// 5. `[signer]` GMP endpoint or relay (trusted caller)
     /// 6. `[]` Token program
-    LzReceiveFulfillmentProof {
+    GmpReceiveFulfillmentProof {
         /// Source chain ID
         src_chain_id: u32,
         /// Source address (hub GMP endpoint address)

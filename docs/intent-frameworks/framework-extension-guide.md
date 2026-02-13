@@ -64,11 +64,11 @@ module mvmt_intent::intent_inflow_escrow_tests {
     // LZ RECEIVE REQUIREMENTS TESTS
     // ============================================================================
 
-    /// 3. Test: LzReceiveRequirements stores intent requirements
+    /// 3. Test: GmpReceiveRequirements stores intent requirements
     /// Verifies that requirements from hub are stored correctly.
     /// Why: Requirements must be stored before escrow can be created with validation.
     #[test(aptos_framework = @0x1, admin = @mvmt_intent)]
-    fun test_lz_receive_requirements_stores_requirements(aptos_framework: &signer, admin: &signer) {
+    fun test_gmp_receive_requirements_stores_requirements(aptos_framework: &signer, admin: &signer) {
         // TODO: Implement
         abort 999
     }
@@ -273,17 +273,17 @@ fun test_release_escrow_succeeds_after_fulfillment(...) {
 // 17. test_release_escrow_rejects_without_fulfillment - N/A
 //     Why: MVM tests that manual release requires fulfillment first. SVM doesn't
 //     have a separate release instruction - release happens automatically in
-//     test_lz_receive_fulfillment_proof_releases_escrow (test 6).
+//     test_gmp_receive_fulfillment_proof_releases_escrow (test 6).
 //
 // 18. test_release_escrow_rejects_unauthorized_solver - N/A
 //     Why: MVM tests solver authorization during manual release. SVM validates
-//     solver during LzReceiveFulfillmentProof and auto-releases to the correct
+//     solver during GmpReceiveFulfillmentProof and auto-releases to the correct
 //     solver immediately (covered in test 6).
 //
 // 19. test_release_escrow_rejects_double_release - N/A
 //     Why: MVM tests that manual release can't happen twice. SVM auto-releases
 //     once in test 6, and the escrow is marked claimed. Double fulfillment is
-//     rejected in test 8 (test_lz_receive_fulfillment_proof_rejects_already_fulfilled).
+//     rejected in test 8 (test_gmp_receive_fulfillment_proof_rejects_already_fulfilled).
 ```
 
 **Critical Rule:** When adding a new test to one framework, you **must**:

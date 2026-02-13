@@ -1,7 +1,7 @@
 mod common;
 
 use common::{
-    create_escrow_ix, create_lz_receive_fulfillment_proof_ix, create_lz_receive_requirements_ix,
+    create_escrow_ix, create_gmp_receive_fulfillment_proof_ix, create_gmp_receive_requirements_ix,
     generate_intent_id, get_token_balance, program_test, read_escrow, read_requirements,
     setup_basic_env, DUMMY_HUB_CHAIN_ID, DUMMY_HUB_GMP_ENDPOINT_ADDR,
 };
@@ -13,9 +13,9 @@ use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
 // GMP CLAIM TESTS
 // ============================================================================
 // These tests verify the GMP-based claim flow where:
-// 1. Requirements are received via LzReceiveRequirements
+// 1. Requirements are received via GmpReceiveRequirements
 // 2. Escrow is created (validates against requirements)
-// 3. Fulfillment proof is received via LzReceiveFulfillmentProof (auto-releases)
+// 3. Fulfillment proof is received via GmpReceiveFulfillmentProof (auto-releases)
 
 /// Helper: Create IntentRequirements payload
 fn create_requirements_payload(
@@ -53,7 +53,7 @@ fn create_fulfillment_proof_payload(
     proof.encode().to_vec()
 }
 
-/// 1. Test: Valid Claim via LzReceiveFulfillmentProof
+/// 1. Test: Valid Claim via GmpReceiveFulfillmentProof
 /// Verifies that escrow is auto-released when fulfillment proof is received via GMP.
 /// Why: In GMP mode, fulfillment proof from hub authorizes the release.
 #[tokio::test]
@@ -86,7 +86,7 @@ async fn test_claim_with_valid_fulfillment_proof() {
     );
 
     let gmp_caller = context.payer.insecure_clone();
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda, // PDA - must be derived, cannot be a DUMMY constant
@@ -99,7 +99,7 @@ async fn test_claim_with_valid_fulfillment_proof() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let lz_req_tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -162,7 +162,7 @@ async fn test_claim_with_valid_fulfillment_proof() {
     let proof_payload =
         create_fulfillment_proof_payload(intent_id, &env.solver.pubkey(), amount, 12345);
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -177,7 +177,7 @@ async fn test_claim_with_valid_fulfillment_proof() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let lz_proof_tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -216,7 +216,7 @@ async fn test_claim_with_valid_fulfillment_proof() {
 }
 
 /// 2. Test: Reject fulfillment proof without requirements
-/// Verifies that LzReceiveFulfillmentProof fails if requirements don't exist.
+/// Verifies that GmpReceiveFulfillmentProof fails if requirements don't exist.
 #[tokio::test]
 async fn test_revert_fulfillment_without_requirements() {
     let program_test = program_test();
@@ -266,7 +266,7 @@ async fn test_revert_fulfillment_without_requirements() {
         create_fulfillment_proof_payload(intent_id, &env.solver.pubkey(), amount, 12345);
 
     let gmp_caller = context.payer.insecure_clone();
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -281,7 +281,7 @@ async fn test_revert_fulfillment_without_requirements() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let lz_proof_tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -292,7 +292,7 @@ async fn test_revert_fulfillment_without_requirements() {
 }
 
 /// 3. Test: Prevent double fulfillment
-/// Verifies that LzReceiveFulfillmentProof fails if already fulfilled.
+/// Verifies that GmpReceiveFulfillmentProof fails if already fulfilled.
 #[tokio::test]
 async fn test_prevent_double_fulfillment() {
     let program_test = program_test();
@@ -323,7 +323,7 @@ async fn test_prevent_double_fulfillment() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda, // PDA - must be derived, cannot be a DUMMY constant
@@ -336,7 +336,7 @@ async fn test_prevent_double_fulfillment() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -369,7 +369,7 @@ async fn test_prevent_double_fulfillment() {
     let proof_payload =
         create_fulfillment_proof_payload(intent_id, &env.solver.pubkey(), amount, 12345);
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -384,7 +384,7 @@ async fn test_prevent_double_fulfillment() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -395,7 +395,7 @@ async fn test_prevent_double_fulfillment() {
     context.warp_to_slot(100).unwrap();
 
     // Step 4: Second fulfillment (should fail)
-    let lz_receive_proof_ix2 = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix2 = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -410,7 +410,7 @@ async fn test_prevent_double_fulfillment() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix2],
+        &[gmp_receive_proof_ix2],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -425,12 +425,12 @@ async fn test_prevent_double_fulfillment() {
 #[tokio::test]
 async fn test_revert_if_escrow_already_claimed() {
     // This is effectively the same as test_prevent_double_fulfillment
-    // because LzReceiveFulfillmentProof marks both requirements.fulfilled and escrow.is_claimed
+    // because GmpReceiveFulfillmentProof marks both requirements.fulfilled and escrow.is_claimed
     // The test above covers this case.
 }
 
 /// 5. Test: Non-existent escrow rejection
-/// Verifies that LzReceiveFulfillmentProof fails for non-existent escrow.
+/// Verifies that GmpReceiveFulfillmentProof fails for non-existent escrow.
 #[tokio::test]
 async fn test_revert_if_escrow_does_not_exist() {
     let program_test = program_test();
@@ -461,7 +461,7 @@ async fn test_revert_if_escrow_does_not_exist() {
         u64::MAX,
     );
 
-    let lz_receive_req_ix = create_lz_receive_requirements_ix(
+    let gmp_receive_req_ix = create_gmp_receive_requirements_ix(
         env.program_id,
         requirements_pda,
         env.gmp_config_pda, // PDA - must be derived, cannot be a DUMMY constant
@@ -474,7 +474,7 @@ async fn test_revert_if_escrow_does_not_exist() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_req_ix],
+        &[gmp_receive_req_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
@@ -485,7 +485,7 @@ async fn test_revert_if_escrow_does_not_exist() {
     let proof_payload =
         create_fulfillment_proof_payload(intent_id, &env.solver.pubkey(), amount, 12345);
 
-    let lz_receive_proof_ix = create_lz_receive_fulfillment_proof_ix(
+    let gmp_receive_proof_ix = create_gmp_receive_fulfillment_proof_ix(
         env.program_id,
         requirements_pda,
         escrow_pda,
@@ -500,7 +500,7 @@ async fn test_revert_if_escrow_does_not_exist() {
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx = Transaction::new_signed_with_payer(
-        &[lz_receive_proof_ix],
+        &[gmp_receive_proof_ix],
         Some(&gmp_caller.pubkey()),
         &[&gmp_caller],
         blockhash,
