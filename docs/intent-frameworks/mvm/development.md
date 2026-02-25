@@ -186,7 +186,7 @@ If you have multiple local chains running (e.g., port 8080 and 8082), you can cr
 # Chain 1 (port 8080)
 aptos init --profile local --network local
 
-# Chain 2 (port 8082) 
+# Chain 2 (port 8082)
 aptos init --profile local2 --network local --rest-url http://127.0.0.1:8082
 
 # Deploy to specific chain

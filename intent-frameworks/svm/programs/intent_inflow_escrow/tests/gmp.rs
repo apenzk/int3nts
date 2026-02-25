@@ -444,8 +444,7 @@ async fn test_receive_fulfillment_proof_releases_escrow() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -563,8 +562,7 @@ async fn test_receive_fulfillment_proof_rejects_unknown_remote_gmp_endpoint() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -669,8 +667,7 @@ async fn test_receive_fulfillment_proof_rejects_already_fulfilled() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -801,8 +798,7 @@ async fn test_create_escrow_validates_against_requirements() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -882,8 +878,7 @@ async fn test_create_escrow_rejects_amount_mismatch() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -968,8 +963,7 @@ async fn test_create_escrow_rejects_token_mismatch() {
         different_mint, // Wrong token
         requester_different_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -1046,8 +1040,7 @@ async fn test_create_escrow_sends_escrow_confirmation() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -1152,8 +1145,7 @@ async fn test_full_inflow_gmp_workflow() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -1407,8 +1399,7 @@ async fn test_generic_gmp_receive_routes_fulfillment_proof() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None,
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();

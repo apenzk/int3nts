@@ -22,6 +22,9 @@ module mvmt_intent::intent {
     /// Intent is not revocable by the owner.
     const E_NOT_REVOCABLE: u64 = 4;
 
+    /// Intent has not expired yet (cancel requires expiry).
+    const E_INTENT_NOT_EXPIRED: u64 = 5;
+
     /// Core intent structure that locks a resource until specific conditions are met.
     ///
     /// - `offered_resource`: The resource being offered for trade
@@ -175,6 +178,47 @@ module mvmt_intent::intent {
             type_info::type_of<Witness>() == witness_type,
             error::permission_denied(E_INVALID_WITNESS)
         );
+    }
+
+    /// Cancels an expired intent and returns the locked resource and arguments.
+    ///
+    /// Unlike `revoke_intent`, this function does not check ownership or the
+    /// `revocable` flag. Authorization is the caller's responsibility.
+    /// This is designed for expiry-based cancellation of non-revocable intents
+    /// (e.g., outflow intents).
+    ///
+    /// # Arguments
+    /// - `intent`: Object reference to the intent to cancel
+    ///
+    /// # Returns
+    /// - `Source`: The locked resource that was offered
+    /// - `Args`: The trading conditions and parameters
+    ///
+    /// # Aborts
+    /// - `E_INTENT_NOT_EXPIRED`: If the current time has not exceeded the intent's expiry time
+    public fun cancel_expired_intent<Source: store, Args: store + drop>(
+        intent: Object<Intent<Source, Args>>
+    ): (Source, Args) acquires Intent {
+        let intent_ref =
+            borrow_global<Intent<Source, Args>>(object::object_address(&intent));
+        assert!(
+            timestamp::now_seconds() > intent_ref.expiry_time,
+            error::permission_denied(E_INTENT_NOT_EXPIRED)
+        );
+
+        let Intent {
+            offered_resource,
+            argument,
+            expiry_time: _,
+            self_delete_ref,
+            witness_type: _,
+            reservation: _,
+            revocable: _
+        } = move_from<Intent<Source, Args>>(object::object_address(&intent));
+
+        object::delete(self_delete_ref);
+
+        (offered_resource, argument)
     }
 
     /// Revokes an intent and returns the locked resource to the original owner.

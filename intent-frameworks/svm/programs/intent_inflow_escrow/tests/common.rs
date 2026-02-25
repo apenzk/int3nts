@@ -14,6 +14,7 @@ use solana_sdk::{
     transaction::Transaction,
 };
 
+use gmp_common::messages::IntentRequirements;
 use intent_inflow_escrow::{
     instruction::EscrowInstruction,
     state::{seeds, Escrow, EscrowState, StoredIntentRequirements},
@@ -218,8 +219,8 @@ pub async fn initialize_program(
 }
 
 /// Helper: Build a CreateEscrow instruction
-/// - expiry_duration: Optional duration in seconds for escrow expiry
-/// - requirements_pda: Optional requirements account for GMP validation (added as account 9)
+/// Requirements PDA is mandatory - escrow creation always requires GMP requirements.
+/// Expiry comes from the hub-provided requirements, not from the instruction.
 pub fn create_escrow_ix(
     program_id: Pubkey,
     intent_id: [u8; 32],
@@ -228,15 +229,14 @@ pub fn create_escrow_ix(
     token_mint: Pubkey,
     requester_token: Pubkey,
     reserved_solver: Pubkey,
-    expiry_duration: Option<i64>,
-    requirements_pda: Option<Pubkey>,
+    requirements_pda: Pubkey,
 ) -> Instruction {
     let (escrow_pda, _escrow_bump) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id], &program_id);
     let (vault_pda, _vault_bump) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &program_id);
 
-    let mut accounts = vec![
+    let accounts = vec![
         AccountMeta::new(escrow_pda, false),
         AccountMeta::new(requester, true),
         AccountMeta::new_readonly(token_mint, false),
@@ -246,12 +246,8 @@ pub fn create_escrow_ix(
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
         AccountMeta::new_readonly(sysvar::rent::id(), false),
+        AccountMeta::new(requirements_pda, false),
     ];
-
-    // Add optional requirements account for GMP validation
-    if let Some(req_pda) = requirements_pda {
-        accounts.push(AccountMeta::new(req_pda, false));
-    }
 
     Instruction {
         program_id,
@@ -259,7 +255,6 @@ pub fn create_escrow_ix(
         data: EscrowInstruction::CreateEscrow {
             intent_id,
             amount,
-            expiry_duration,
         }
         .try_to_vec()
         .unwrap(),
@@ -288,23 +283,25 @@ pub fn create_claim_ix(
     }
 }
 
-/// Helper: Build a Cancel instruction
+/// Helper: Build a Cancel instruction (admin-only, requires gmp_config for auth)
 pub fn create_cancel_ix(
     program_id: Pubkey,
     intent_id: [u8; 32],
-    requester: Pubkey,
+    admin: Pubkey,
     requester_token: Pubkey,
     escrow_pda: Pubkey,
     vault_pda: Pubkey,
+    gmp_config_pda: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id,
         accounts: vec![
             AccountMeta::new(escrow_pda, false),
-            AccountMeta::new(requester, true),
+            AccountMeta::new(admin, true),
             AccountMeta::new(vault_pda, false),
             AccountMeta::new(requester_token, false),
             AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(gmp_config_pda, false),
         ],
         data: EscrowInstruction::Cancel { intent_id }
             .try_to_vec()
@@ -576,6 +573,109 @@ pub async fn setup_basic_env(context: &mut ProgramTestContext) -> TestEnv {
         hub_chain_id: DUMMY_HUB_CHAIN_ID,
         hub_gmp_endpoint_addr: DUMMY_HUB_GMP_ENDPOINT_ADDR,
     }
+}
+
+/// Helper: Set up GMP requirements for a given intent.
+/// Sends IntentRequirements via GMP and returns the requirements PDA.
+/// This is required before creating any escrow (there is no direct path).
+pub async fn setup_gmp_requirements(
+    context: &mut ProgramTestContext,
+    env: &TestEnv,
+    intent_id: [u8; 32],
+    amount: u64,
+    expiry: u64,
+) -> Pubkey {
+    let (requirements_pda, _) = Pubkey::find_program_address(
+        &[seeds::REQUIREMENTS_SEED, &intent_id],
+        &env.program_id,
+    );
+
+    let requirements = IntentRequirements {
+        intent_id,
+        requester_addr: env.requester.pubkey().to_bytes(),
+        amount_required: amount,
+        token_addr: env.mint.to_bytes(),
+        solver_addr: env.solver.pubkey().to_bytes(),
+        expiry,
+    };
+    let payload = requirements.encode().to_vec();
+
+    let gmp_caller = context.payer.insecure_clone();
+    let ix = create_gmp_receive_requirements_ix(
+        env.program_id,
+        requirements_pda,
+        env.gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        env.hub_chain_id,
+        env.hub_gmp_endpoint_addr,
+        payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    requirements_pda
+}
+
+/// Helper: Set up GMP requirements with custom parameters (for tests with non-standard environments).
+/// Allows specifying arbitrary requester, token, solver addresses.
+pub async fn setup_gmp_requirements_custom(
+    context: &mut ProgramTestContext,
+    program_id: Pubkey,
+    gmp_config_pda: Pubkey,
+    hub_chain_id: u32,
+    hub_gmp_endpoint_addr: [u8; 32],
+    intent_id: [u8; 32],
+    requester: Pubkey,
+    token_mint: Pubkey,
+    solver: Pubkey,
+    amount: u64,
+    expiry: u64,
+) -> Pubkey {
+    let (requirements_pda, _) = Pubkey::find_program_address(
+        &[seeds::REQUIREMENTS_SEED, &intent_id],
+        &program_id,
+    );
+
+    let requirements = IntentRequirements {
+        intent_id,
+        requester_addr: requester.to_bytes(),
+        amount_required: amount,
+        token_addr: token_mint.to_bytes(),
+        solver_addr: solver.to_bytes(),
+        expiry,
+    };
+    let payload = requirements.encode().to_vec();
+
+    let gmp_caller = context.payer.insecure_clone();
+    let ix = create_gmp_receive_requirements_ix(
+        program_id,
+        requirements_pda,
+        gmp_config_pda,
+        gmp_caller.pubkey(),
+        gmp_caller.pubkey(),
+        hub_chain_id,
+        hub_gmp_endpoint_addr,
+        payload,
+    );
+
+    let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
+    let tx = Transaction::new_signed_with_payer(
+        &[ix],
+        Some(&gmp_caller.pubkey()),
+        &[&gmp_caller],
+        blockhash,
+    );
+    context.banks_client.process_transaction(tx).await.unwrap();
+
+    requirements_pda
 }
 
 // ============================================================================

@@ -1,8 +1,10 @@
 mod common;
 
 use common::{
-    create_cancel_ix, create_escrow_ix, create_mint, create_token_account, generate_intent_id,
-    initialize_program, mint_to, program_test, read_escrow, send_tx, setup_basic_env,
+    create_cancel_ix, create_escrow_ix, create_mint, create_set_gmp_config_ix, create_token_account,
+    generate_intent_id, initialize_program, mint_to, program_test, read_escrow, send_tx,
+    setup_basic_env, setup_gmp_requirements, setup_gmp_requirements_custom, DUMMY_HUB_CHAIN_ID,
+    DUMMY_HUB_GMP_ENDPOINT_ADDR,
 };
 use intent_inflow_escrow::state::seeds;
 use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
@@ -17,18 +19,21 @@ async fn test_reject_zero_amount() {
     let env = setup_basic_env(&mut context).await;
 
     let intent_id = generate_intent_id();
-    let amount = 0u64;
+
+    // Set up GMP requirements with a valid amount. The processor checks amount==0
+    // BEFORE checking requirements, so this will fail with InvalidAmount regardless.
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, 1_000_000, u64::MAX).await;
 
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
-        amount,
+        0, // Zero amount - should be rejected immediately
         env.requester.pubkey(),
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -82,6 +87,20 @@ async fn test_handle_maximum_u64_value_in_create_escrow() {
     // Initialize program with fresh approver
     initialize_program(&mut context, &requester, program_id, approver.pubkey()).await;
 
+    // Set up GMP config for this custom program instance
+    let (gmp_config_pda, _) =
+        Pubkey::find_program_address(&[seeds::GMP_CONFIG_SEED], &program_id);
+    let gmp_endpoint = Pubkey::new_unique();
+    let set_gmp_config_ix = create_set_gmp_config_ix(
+        program_id,
+        gmp_config_pda,
+        requester.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        gmp_endpoint,
+    );
+    send_tx(&mut context, &payer, &[set_gmp_config_ix], &[&requester]).await;
+
     let intent_id = generate_intent_id();
     let max_amount = u64::MAX;
 
@@ -96,6 +115,22 @@ async fn test_handle_maximum_u64_value_in_create_escrow() {
     )
     .await;
 
+    // Set up GMP requirements with max_amount using custom parameters
+    let requirements_pda = setup_gmp_requirements_custom(
+        &mut context,
+        program_id,
+        gmp_config_pda,
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        intent_id,
+        requester.pubkey(),
+        mint,
+        solver.pubkey(),
+        max_amount,
+        u64::MAX,
+    )
+    .await;
+
     let (escrow_pda, _) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id], &program_id);
 
@@ -107,8 +142,7 @@ async fn test_handle_maximum_u64_value_in_create_escrow() {
         mint,
         requester_token,
         solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -186,6 +220,7 @@ async fn test_revert_cancel_on_non_existent_escrow() {
         env.requester_token,
         escrow_pda,
         vault_pda,
+        env.gmp_config_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -212,6 +247,12 @@ async fn test_reject_zero_solver_address() {
     let intent_id = generate_intent_id();
     let amount = 1_000_000u64;
 
+    // Set up GMP requirements with a valid solver. The processor checks
+    // reserved_solver == Pubkey::default() BEFORE loading requirements,
+    // so InvalidSolver is returned regardless of requirements content.
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -219,9 +260,8 @@ async fn test_reject_zero_solver_address() {
         env.requester.pubkey(),
         env.mint,
         env.requester_token,
-        Pubkey::default(), // Zero address
-        None, // Default expiry
-        None, // No requirements PDA
+        Pubkey::default(), // Zero address - should be rejected
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -248,6 +288,11 @@ async fn test_reject_duplicate_intent_id() {
     let intent_id = generate_intent_id();
     let amount = 1_000_000u64;
 
+    // Set up requirements once - the first escrow creation marks escrow_created=true,
+    // so the second attempt will fail with EscrowAlreadyCreated.
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     // Create first escrow
     let ix1 = create_escrow_ix(
         env.program_id,
@@ -257,8 +302,7 @@ async fn test_reject_duplicate_intent_id() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -273,7 +317,7 @@ async fn test_reject_duplicate_intent_id() {
     // Warp to next slot to ensure clean transaction processing
     context.warp_to_slot(100).unwrap();
 
-    // Try to create second escrow with same intent ID
+    // Try to create second escrow with same intent ID - should fail
     let ix2 = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -282,8 +326,7 @@ async fn test_reject_duplicate_intent_id() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -310,6 +353,10 @@ async fn test_reject_if_requester_has_insufficient_balance() {
     let intent_id = generate_intent_id();
     let amount = 1_000_000_000_000u64; // More than minted
 
+    // Set up GMP requirements with the large amount
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -318,8 +365,7 @@ async fn test_reject_if_requester_has_insufficient_balance() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();

@@ -23,6 +23,10 @@ module mvmt_intent::fa_intent_outflow {
     const E_INVALID_REQUESTER_ADDR: u64 = 3;
     /// Fulfillment proof not received for this intent.
     const E_FULFILLMENT_PROOF_NOT_RECEIVED: u64 = 7;
+    /// Caller is not the intent owner or admin.
+    const E_UNAUTHORIZED_CALLER: u64 = 8;
+    /// Fulfillment proof already received — cannot cancel.
+    const E_ALREADY_FULFILLED: u64 = 10;
 
     #[event]
     /// Event emitted when an outflow intent is fulfilled.
@@ -34,6 +38,14 @@ module mvmt_intent::fa_intent_outflow {
         provided_metadata: Object<Metadata>,
         provided_amount: u64,
         timestamp: u64,
+    }
+
+    #[event]
+    /// Event emitted when an outflow intent is cancelled after expiry.
+    struct OutflowIntentCancelled has store, drop {
+        intent_id: address,
+        requester: address,
+        amount: u64,
     }
 
     // ============================================================================
@@ -179,6 +191,61 @@ module mvmt_intent::fa_intent_outflow {
 
         // 9. Remove intent from GMP state tracking
         gmp_intent_state::remove_intent(intent_id_bytes);
+    }
+
+    /// Entry function to cancel an expired outflow intent and return funds to the requester.
+    ///
+    /// Can be called by the intent owner (requester) or the admin (@mvmt_intent).
+    /// Funds always go back to the original requester regardless of who calls cancel.
+    ///
+    /// # Arguments
+    /// - `caller`: Signer of the caller (must be intent owner or admin)
+    /// - `intent`: Object reference to the outflow intent to cancel
+    ///
+    /// # Aborts
+    /// - `E_UNAUTHORIZED_CALLER`: Caller is not the intent owner or admin
+    /// - `E_INTENT_NOT_EXPIRED` (from intent.move): Intent has not expired yet
+    /// - `E_ALREADY_FULFILLED`: Fulfillment proof already received for this intent
+    public entry fun cancel_outflow_intent(
+        caller: &signer,
+        intent: Object<Intent<fa_intent_with_oracle::FungibleStoreManager, fa_intent_with_oracle::OracleGuardedLimitOrder>>,
+    ) {
+        let caller_addr = signer::address_of(caller);
+        let intent_addr = object::object_address(&intent);
+
+        // 1. Auth: caller must be admin (only admin can cancel expired intents)
+        assert!(
+            caller_addr == @mvmt_intent,
+            error::permission_denied(E_UNAUTHORIZED_CALLER)
+        );
+
+        // 2. Cancel the expired intent (checks expiry internally, destructures intent)
+        let (fa, requester_addr, intent_id) =
+            fa_intent_with_oracle::cancel_expired_oracle_fa_intent(intent);
+
+        // 3. Guard: fulfillment proof must NOT have been received
+        let intent_id_bytes = bcs::to_bytes(&intent_id);
+        assert!(
+            !gmp_intent_state::is_fulfillment_proof_received(intent_id_bytes),
+            error::invalid_state(E_ALREADY_FULFILLED)
+        );
+
+        // 4. Capture amount before depositing
+        let amount = fungible_asset::amount(&fa);
+
+        // 5. Return funds to the original requester (not the caller)
+        primary_fungible_store::deposit(requester_addr, fa);
+
+        // 6. Cleanup: unregister from intent registry and GMP state
+        intent_registry::unregister_intent(intent_addr);
+        gmp_intent_state::remove_intent(intent_id_bytes);
+
+        // 7. Emit cancellation event
+        event::emit(OutflowIntentCancelled {
+            intent_id,
+            requester: requester_addr,
+            amount,
+        });
     }
 
     /// Entry function to create an outflow intent.

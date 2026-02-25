@@ -18,23 +18,23 @@ graph TB
     subgraph Foundation["Foundation Layer (No Dependencies)"]
         IM[Intent Management Domain<br/>intent.move, fa_intent.move<br/>fa_intent_with_oracle.move<br/>fa_intent_cross_chain.move<br/>intent_reservation.move]
     end
-    
+
     subgraph Layer1["Layer 1 (Depends on Foundation)"]
         EM[Escrow Domain<br/>intent_escrow.move<br/>intent_inflow_escrow.move<br/>IntentInflowEscrow.sol]
     end
-    
+
     subgraph Layer2["Layer 2 (Depends on Foundation + Layer 1)"]
         SM[Settlement Domain<br/>Fulfillment Functions<br/>Completion Functions<br/>Claim Functions]
         VM[Validation Domain<br/>coordinator: monitor/, api/<br/>integrated-gmp: integrated_gmp_relay]
     end
-    
+
     IM -->|Provides reservation &<br/>oracle-intent systems| EM
     IM -->|Provides fulfillment<br/>functions| SM
     IM -->|Emits events| VM
     EM -->|Provides completion<br/>functions| SM
     EM -->|Emits escrow events| VM
     VM -->|Delivers GMP messages<br/>via integrated-gmp| SM
-    
+
     style IM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px,color:#333
     style EM fill:#fff4e1,stroke:#cc6600,stroke-width:2px,color:#333
     style SM fill:#e8f5e9,stroke:#006600,stroke-width:2px,color:#333
@@ -59,19 +59,19 @@ graph TB
     subgraph "Intent Management Domain"
         IM[intent.move<br/>fa_intent.move<br/>fa_intent_with_oracle.move<br/>fa_intent_cross_chain.move<br/>intent_reservation.move]
     end
-    
+
     subgraph "Escrow Domain"
         EM[intent_escrow.move<br/>intent_inflow_escrow.move<br/>IntentInflowEscrow.sol]
     end
-    
+
     subgraph "Settlement Domain"
         SM[Fulfillment Functions<br/>Completion Functions<br/>Claim Functions]
     end
-    
+
     subgraph "Validation Domain (Coordinator + Integrated GMP)"
         VM[coordinator: monitor/, api/<br/>integrated-gmp: integrated_gmp_relay]
     end
-    
+
     IM -->|Creates intents<br/>Emits events| VM
     IM -->|Uses reservation| EM
     EM -->|Emits escrow events| VM
@@ -81,7 +81,7 @@ graph TB
     VM -->|Delivers GMP messages<br/>via integrated-gmp| SM
     VM -->|Monitors events<br/>via coordinator| IM
     VM -->|Monitors events<br/>via coordinator| EM
-    
+
     style IM fill:#e1f5ff,color:#333
     style EM fill:#fff4e1,color:#333
     style SM fill:#e8f5e9,color:#333

@@ -2,7 +2,7 @@ mod common;
 
 use common::{
     create_escrow_ix, generate_intent_id, get_token_balance, initialize_program, program_test,
-    read_escrow, read_state, setup_basic_env,
+    read_escrow, read_state, setup_basic_env, setup_gmp_requirements,
 };
 use intent_inflow_escrow::state::seeds;
 use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
@@ -60,6 +60,9 @@ async fn test_allow_requester_to_create_escrow() {
     let (vault_pda, _) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -68,8 +71,7 @@ async fn test_allow_requester_to_create_escrow() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -110,6 +112,9 @@ async fn test_revert_if_escrow_already_exists() {
     let intent_id = generate_intent_id();
     let amount = 1_000_000u64;
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     let ix1 = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -118,8 +123,7 @@ async fn test_revert_if_escrow_already_exists() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -143,8 +147,7 @@ async fn test_revert_if_escrow_already_exists() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -171,6 +174,9 @@ async fn test_revert_if_amount_is_zero() {
     let intent_id = generate_intent_id();
     let amount = 0u64;
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, 1_000_000u64, u64::MAX).await;
+
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -179,8 +185,7 @@ async fn test_revert_if_amount_is_zero() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();

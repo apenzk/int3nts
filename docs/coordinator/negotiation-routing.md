@@ -225,26 +225,26 @@ movement move run --function-id "..." --args "address:$SOLVER" "hex:$SIGNATURE" 
 # 1. Poll for drafts
 while true; do
   DRAFTS=$(curl -s http://127.0.0.1:3333/draftintents/pending | jq -r '.data[]')
-  
+
   for DRAFT in $DRAFTS; do
     DRAFT_ID=$(echo "$DRAFT" | jq -r '.draft_id')
     DRAFT_DATA=$(echo "$DRAFT" | jq -r '.draft_data')
-    
+
     # 2. Sign draft
     SIGNATURE=$(sign_draft "$DRAFT_DATA" "$SOLVER_ADDR" "$PRIVATE_KEY")
-    
+
     # 3. Submit signature
     RESPONSE=$(curl -s -X POST http://127.0.0.1:3333/draftintent/$DRAFT_ID/signature \
       -H "Content-Type: application/json" \
       -d "{\"solver_hub_addr\": \"$SOLVER_ADDR\", \"signature\": \"$SIGNATURE\", \"public_key\": \"$PUBLIC_KEY\"}")
-    
+
     if echo "$RESPONSE" | jq -e '.success == true' > /dev/null; then
       echo "Successfully signed draft $DRAFT_ID"
     elif echo "$RESPONSE" | jq -e '.error | contains("already signed")' > /dev/null; then
       echo "Draft $DRAFT_ID already taken"
     fi
   done
-  
+
   sleep 10
 done
 ```

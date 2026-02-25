@@ -195,9 +195,10 @@ describe("IntentInflowEscrow - Integration Tests", function () {
   });
 
   /// 4. Test: test_complete_cancellation_workflow: Complete Cancellation Workflow
-  /// Verifies the full workflow from escrow creation through cancellation after expiry.
+  /// Verifies the full workflow from escrow creation through admin cancellation after expiry.
   /// Why: Integration test ensures the cancellation flow works end-to-end after expiry.
   it("Should complete full cancellation workflow", async function () {
+    const [admin] = await ethers.getSigners();
     const tokenAddr32 = addressToBytes32(token.target);
     const requesterAddr32 = addressToBytes32(requester.address);
     const solverAddr32 = addressToBytes32(solver.address);
@@ -236,8 +237,8 @@ describe("IntentInflowEscrow - Integration Tests", function () {
     // Step 4: Advance time past expiry (1 hour = 3600 seconds)
     await advanceTime(3601);
 
-    // Step 5: Cancel escrow and verify EscrowCancelled event
-    await expect(escrow.connect(requester).cancel(intentId))
+    // Step 5: Admin cancels escrow, funds return to requester
+    await expect(escrow.connect(admin).cancel(intentId))
       .to.emit(escrow, "EscrowCancelled")
       .withArgs(intentId, requester.address, DEFAULT_AMOUNT);
 
@@ -310,10 +311,11 @@ describe("IntentInflowEscrow - Integration Tests", function () {
     expect(escrow1.amount).to.equal(amount1);
     expect(escrow2.amount).to.equal(amount2);
 
-    // Fulfill one, cancel the other
+    // Fulfill one, admin cancels the other
+    const [admin] = await ethers.getSigners();
     await deliverFulfillmentProof(gmpEndpoint, intentId1, solverAddr32, DEFAULT_AMOUNT, null, 3);
     await advanceTime(3601);
-    await escrow.connect(other2).cancel(intentId2);
+    await escrow.connect(admin).cancel(intentId2);
 
     // Verify final states
     expect(await escrow.isReleased(intentId1)).to.equal(true);

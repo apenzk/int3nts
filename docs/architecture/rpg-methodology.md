@@ -39,14 +39,14 @@ graph TD
     EM[Escrow]
     SM[Settlement]
     VM[Verification]
-    
+
     IM -->|Provides reservation & oracle-intent| EM
     IM -->|Provides fulfillment functions| SM
     EM -->|Provides completion functions| SM
     IM -->|Emits events| VM
     EM -->|Emits events| VM
     VM -->|Validates & approves| SM
-    
+
     style IM fill:#e1f5ff
     style EM fill:#fff4e1
     style SM fill:#e8f5e9
@@ -64,23 +64,23 @@ graph TB
     subgraph Foundation["Foundation Layer (No Dependencies)"]
         IM[Intent Management Domain]
     end
-    
+
     subgraph Layer1["Layer 1 (Depends on Foundation)"]
         EM[Escrow Domain]
     end
-    
+
     subgraph Layer2["Layer 2 (Depends on Foundation + Layer 1)"]
         SM[Settlement Domain]
         VM[Verification Domain]
     end
-    
+
     IM -->|Provides reservation & oracle-intent| EM
     IM -->|Provides fulfillment functions| SM
     IM -->|Emits events| VM
     EM -->|Provides completion functions| SM
     EM -->|Emits escrow events| VM
     VM -->|Validates & approves| SM
-    
+
     style IM fill:#e1f5ff,stroke:#0066cc,stroke-width:3px
     style EM fill:#fff4e1,stroke:#cc6600,stroke-width:2px
     style SM fill:#e8f5e9,stroke:#006600,stroke-width:2px

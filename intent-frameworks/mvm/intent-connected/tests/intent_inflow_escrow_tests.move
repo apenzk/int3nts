@@ -1178,4 +1178,5 @@ module mvmt_intent::intent_inflow_escrow_tests {
         assert!(gmp_common::escrow_confirmation_amount_escrowed(&confirmation) == amount, 2);
         assert!(vector::length(gmp_common::escrow_confirmation_escrow_id(&confirmation)) == 32, 3);
     }
+
 }

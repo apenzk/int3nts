@@ -429,6 +429,30 @@ module mvmt_intent::fa_intent_with_oracle {
         );
     }
 
+    /// Cancels an expired oracle-guarded intent and returns the locked fungible asset,
+    /// the requester address, and the intent_id.
+    ///
+    /// Does not check ownership — authorization is the caller's responsibility.
+    /// Checks expiry internally via `intent::cancel_expired_intent`.
+    ///
+    /// # Arguments
+    /// - `intent`: Object reference to the oracle-guarded intent to cancel
+    ///
+    /// # Returns
+    /// - `FungibleAsset`: The locked tokens
+    /// - `address`: The requester address (from the intent argument)
+    /// - `address`: The intent_id (from the intent argument)
+    ///
+    /// # Aborts
+    /// - `E_INTENT_NOT_EXPIRED` (from intent.move): If the intent has not expired
+    public fun cancel_expired_oracle_fa_intent(
+        intent: Object<Intent<FungibleStoreManager, OracleGuardedLimitOrder>>
+    ): (FungibleAsset, address, address) {
+        let (store_manager, argument) = intent::cancel_expired_intent(intent);
+        let fa = destroy_store_manager(store_manager);
+        (fa, argument.requester_addr, argument.intent_id)
+    }
+
     /// Destroys the on-chain store manager and returns the locked fungible asset.
     ///
     /// Entry function to revoke an oracle-guarded fungible asset intent and return the locked assets.

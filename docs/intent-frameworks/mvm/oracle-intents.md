@@ -17,7 +17,7 @@ graph TD
     E --> F{Verification<br/>successful?}
     F -->|Yes| G[Intent executes successfully]
     F -->|No| H[Transaction aborts with error]
-    
+
     style A fill:#e3f2fd
     style B fill:#ffffff
     style C fill:#fff3e0

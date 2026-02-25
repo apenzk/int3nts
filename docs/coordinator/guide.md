@@ -46,13 +46,13 @@ flowchart TD
         H2 --> H3
         H3 --> H4
     end
-    
+
     subgraph ConnectedMVM["Connected MVM"]
         M1[Read cached hub intents<br/>Extract requester_addr_connected_chain]
         M2[Poll those addresses for escrow events]
         M1 --> M2
     end
-    
+
     H4 -.->|Provides addresses| M1
 ```
 

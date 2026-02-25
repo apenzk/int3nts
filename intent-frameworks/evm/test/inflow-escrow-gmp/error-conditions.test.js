@@ -207,8 +207,9 @@ describe("IntentInflowEscrow - Error Conditions", function () {
   it("Should revert cancel on non-existent escrow", async function () {
     const nonExistentIntentId = "0xcc000000000000000000000000000000000000000000000000000000000000dd";
 
+    const [admin] = await ethers.getSigners();
     await expect(
-      escrow.connect(requester).cancel(nonExistentIntentId)
+      escrow.connect(admin).cancel(nonExistentIntentId)
     ).to.be.revertedWithCustomError(escrow, "E_ESCROW_NOT_FOUND");
   });
 

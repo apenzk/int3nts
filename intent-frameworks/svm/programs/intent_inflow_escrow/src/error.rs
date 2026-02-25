@@ -14,8 +14,8 @@ pub enum EscrowError {
     #[error("No deposit")]
     NoDeposit,
 
-    #[error("Unauthorized requester")]
-    UnauthorizedRequester,
+    #[error("Unauthorized caller")]
+    UnauthorizedCaller,
 
     #[error("Invalid signature")]
     InvalidSignature,
@@ -74,6 +74,9 @@ pub enum EscrowError {
 
     #[error("Unauthorized GMP source")]
     UnauthorizedGmpSource,
+
+    #[error("Intent has expired")]
+    IntentExpired,
 }
 
 impl From<EscrowError> for ProgramError {

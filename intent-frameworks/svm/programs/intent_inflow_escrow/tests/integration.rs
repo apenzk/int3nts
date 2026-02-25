@@ -2,9 +2,10 @@ mod common;
 
 use common::{
     create_cancel_ix, create_escrow_ix, create_gmp_receive_fulfillment_proof_ix,
-    create_gmp_receive_requirements_ix, create_mint, create_token_account, generate_intent_id,
-    get_token_balance, initialize_program, mint_to, program_test, read_escrow, send_tx,
-    setup_basic_env, DUMMY_HUB_CHAIN_ID, DUMMY_HUB_GMP_ENDPOINT_ADDR,
+    create_gmp_receive_requirements_ix, create_set_gmp_config_ix, create_mint,
+    create_token_account, generate_intent_id, get_token_balance, initialize_program, mint_to,
+    program_test, read_escrow, send_tx, setup_basic_env, setup_gmp_requirements,
+    setup_gmp_requirements_custom, DUMMY_HUB_CHAIN_ID, DUMMY_HUB_GMP_ENDPOINT_ADDR,
 };
 use gmp_common::messages::{FulfillmentProof, IntentRequirements};
 use intent_inflow_escrow::state::seeds;
@@ -83,8 +84,7 @@ async fn test_complete_full_deposit_to_claim_workflow() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        Some(requirements_pda),
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -175,6 +175,20 @@ async fn test_handle_multiple_different_spl_tokens() {
     // Initialize program
     initialize_program(&mut context, &requester, program_id, approver.pubkey()).await;
 
+    // Set up GMP config (required for GmpReceiveRequirements)
+    let (gmp_config_pda, _) =
+        Pubkey::find_program_address(&[seeds::GMP_CONFIG_SEED], &program_id);
+    let gmp_endpoint = Pubkey::new_unique();
+    let set_gmp_config_ix = create_set_gmp_config_ix(
+        program_id,
+        gmp_config_pda,
+        requester.pubkey(),
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        gmp_endpoint,
+    );
+    send_tx(&mut context, &payer, &[set_gmp_config_ix], &[&requester]).await;
+
     // Create 3 different token mints with different decimals
     let mint1 = create_mint(&mut context, &payer, &mint_authority, 6).await;
     let mint2 = create_mint(&mut context, &payer, &mint_authority, 9).await;
@@ -203,6 +217,21 @@ async fn test_handle_multiple_different_spl_tokens() {
     let (escrow_pda1, _) = Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id1], &program_id);
     let (vault_pda1, _) = Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id1], &program_id);
 
+    let requirements_pda1 = setup_gmp_requirements_custom(
+        &mut context,
+        program_id,
+        gmp_config_pda,
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        intent_id1,
+        requester.pubkey(),
+        mint1,
+        solver.pubkey(),
+        amount1,
+        u64::MAX,
+    )
+    .await;
+
     let ix1 = create_escrow_ix(
         program_id,
         intent_id1,
@@ -211,8 +240,7 @@ async fn test_handle_multiple_different_spl_tokens() {
         mint1,
         requester_token1,
         solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda1,
     );
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx1 = Transaction::new_signed_with_payer(&[ix1], Some(&requester.pubkey()), &[&requester], blockhash);
@@ -222,6 +250,21 @@ async fn test_handle_multiple_different_spl_tokens() {
     let (escrow_pda2, _) = Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id2], &program_id);
     let (vault_pda2, _) = Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id2], &program_id);
 
+    let requirements_pda2 = setup_gmp_requirements_custom(
+        &mut context,
+        program_id,
+        gmp_config_pda,
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        intent_id2,
+        requester.pubkey(),
+        mint2,
+        solver.pubkey(),
+        amount2,
+        u64::MAX,
+    )
+    .await;
+
     let ix2 = create_escrow_ix(
         program_id,
         intent_id2,
@@ -230,8 +273,7 @@ async fn test_handle_multiple_different_spl_tokens() {
         mint2,
         requester_token2,
         solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda2,
     );
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx2 = Transaction::new_signed_with_payer(&[ix2], Some(&requester.pubkey()), &[&requester], blockhash);
@@ -241,6 +283,21 @@ async fn test_handle_multiple_different_spl_tokens() {
     let (escrow_pda3, _) = Pubkey::find_program_address(&[seeds::ESCROW_SEED, &intent_id3], &program_id);
     let (vault_pda3, _) = Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id3], &program_id);
 
+    let requirements_pda3 = setup_gmp_requirements_custom(
+        &mut context,
+        program_id,
+        gmp_config_pda,
+        DUMMY_HUB_CHAIN_ID,
+        DUMMY_HUB_GMP_ENDPOINT_ADDR,
+        intent_id3,
+        requester.pubkey(),
+        mint3,
+        solver.pubkey(),
+        amount3,
+        u64::MAX,
+    )
+    .await;
+
     let ix3 = create_escrow_ix(
         program_id,
         intent_id3,
@@ -249,8 +306,7 @@ async fn test_handle_multiple_different_spl_tokens() {
         mint3,
         requester_token3,
         solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda3,
     );
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
     let tx3 = Transaction::new_signed_with_payer(&[ix3], Some(&requester.pubkey()), &[&requester], blockhash);
@@ -308,7 +364,28 @@ async fn test_complete_full_cancellation_workflow() {
 
     let initial_requester_balance = get_token_balance(&mut context, env.requester_token).await;
 
-    // Step 1: Create escrow with short expiry
+    // Get current clock time to set a short absolute expiry
+    let clock_account = context
+        .banks_client
+        .get_account(sysvar::clock::id())
+        .await
+        .unwrap()
+        .unwrap();
+    let clock: Clock = deserialize(&clock_account.data).unwrap();
+    let clock_time = clock.unix_timestamp;
+
+    // Step 1: Set up GMP requirements with a short absolute expiry (current time + 1 second)
+    let expiry = (clock_time as u64) + 1;
+    let requirements_pda = setup_gmp_requirements(
+        &mut context,
+        &env,
+        intent_id,
+        amount,
+        expiry,
+    )
+    .await;
+
+    // Step 2: Create escrow
     let create_ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -317,8 +394,7 @@ async fn test_complete_full_cancellation_workflow() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        Some(1), // 1 second expiry
-        None,    // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -330,7 +406,7 @@ async fn test_complete_full_cancellation_workflow() {
     );
     context.banks_client.process_transaction(create_tx).await.unwrap();
 
-    // Step 2: Advance time past expiry
+    // Step 3: Advance time past expiry
     let escrow_account = context
         .banks_client
         .get_account(escrow_pda)
@@ -348,7 +424,7 @@ async fn test_complete_full_cancellation_workflow() {
     clock.unix_timestamp = escrow.expiry + 1;
     context.set_sysvar(&clock);
 
-    // Step 3: Cancel and reclaim
+    // Step 4: Admin cancels and funds return to requester
     let cancel_ix = create_cancel_ix(
         env.program_id,
         intent_id,
@@ -356,6 +432,7 @@ async fn test_complete_full_cancellation_workflow() {
         env.requester_token,
         escrow_pda,
         vault_pda,
+        env.gmp_config_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -367,7 +444,7 @@ async fn test_complete_full_cancellation_workflow() {
     );
     context.banks_client.process_transaction(cancel_tx).await.unwrap();
 
-    // Step 4: Verify final state
+    // Step 5: Verify final state
     let final_requester_balance = get_token_balance(&mut context, env.requester_token).await;
     assert_eq!(final_requester_balance, initial_requester_balance);
 

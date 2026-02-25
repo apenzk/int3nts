@@ -10,17 +10,17 @@ The intent framework supports two flows for creating trade intents:
 ```mermaid
 graph TD
     A[Offerer composes intent data] --> B{Reserved or<br/>Unreserved?}
-    
+
     B -->|Unreserved| C[Offerer submits complete intent transaction]
     C --> D[Contract creates Intent on-chain]
-    
+
     B -->|Reserved| E[Offerer creates Draftintent]
     E --> F[Solver creates IntentToSign from draft]
     F --> G[Solver signs IntentToSign]
     G --> H[Offerer submits complete intent transaction with solver's signature]
     H --> I[Contract verifies Ed25519 signature against solver's auth key]
     I --> J[Contract creates Intent with IntentReserved on-chain]
-    
+
     D --> K[Contract emits LimitOrderEvent]
     J --> K
     K --> L[Solver executes intent]

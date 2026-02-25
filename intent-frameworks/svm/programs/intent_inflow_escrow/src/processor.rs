@@ -24,7 +24,6 @@ use crate::{
     error::EscrowError,
     instruction::EscrowInstruction,
     state::{seeds, Escrow, EscrowState, GmpConfig, StoredIntentRequirements},
-    DEFAULT_EXPIRY_DURATION,
 };
 
 pub struct Processor;
@@ -89,10 +88,9 @@ impl Processor {
             EscrowInstruction::CreateEscrow {
                 intent_id,
                 amount,
-                expiry_duration,
             } => {
                 msg!("Instruction: CreateEscrow");
-                Self::process_create_escrow(program_id, accounts, intent_id, amount, expiry_duration)
+                Self::process_create_escrow(program_id, accounts, intent_id, amount)
             }
             EscrowInstruction::Claim { intent_id } => {
                 msg!("Instruction: Claim - intent_id={:?}", &intent_id[..8]);
@@ -268,7 +266,6 @@ impl Processor {
         accounts: &[AccountInfo],
         intent_id: [u8; 32],
         amount: u64,
-        expiry_duration: Option<i64>,
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_account = next_account_info(account_info_iter)?;
@@ -280,8 +277,8 @@ impl Processor {
         let token_program = next_account_info(account_info_iter)?;
         let system_program = next_account_info(account_info_iter)?;
         let _rent_sysvar = next_account_info(account_info_iter)?;
-        // Optional: requirements account for GMP validation
-        let requirements_account = next_account_info(account_info_iter).ok();
+        // Requirements account (mandatory) - validates against stored GMP requirements
+        let requirements_account = next_account_info(account_info_iter)?;
 
         // Validate inputs
         if amount == 0 {
@@ -294,33 +291,29 @@ impl Processor {
             return Err(ProgramError::MissingRequiredSignature);
         }
 
-        // If requirements account is provided, validate against stored GMP requirements
-        let mut stored_requirements: Option<StoredIntentRequirements> = None;
-        if let Some(req_account) = requirements_account {
-            // Verify it's the correct PDA
-            let (req_pda, _) = Pubkey::find_program_address(
-                &[seeds::REQUIREMENTS_SEED, &intent_id],
-                program_id,
-            );
-            if req_pda == *req_account.key && req_account.data_len() > 0 {
-                let requirements = StoredIntentRequirements::try_from_slice(&req_account.data.borrow())
-                    .map_err(|_| EscrowError::RequirementsNotFound)?;
+        // Validate requirements account PDA
+        let (req_pda, _) = Pubkey::find_program_address(
+            &[seeds::REQUIREMENTS_SEED, &intent_id],
+            program_id,
+        );
+        if req_pda != *requirements_account.key {
+            return Err(EscrowError::InvalidPda.into());
+        }
 
-                // Validate escrow matches requirements
-                if requirements.escrow_created {
-                    return Err(EscrowError::EscrowAlreadyCreated.into());
-                }
-                if amount < requirements.amount_required {
-                    return Err(EscrowError::AmountMismatch.into());
-                }
-                // Validate token - convert Pubkey to 32-byte array for comparison
-                let token_bytes = token_mint.key.to_bytes();
-                if token_bytes != requirements.token_addr {
-                    return Err(EscrowError::TokenMismatch.into());
-                }
+        // Load and validate stored GMP requirements
+        let requirements = StoredIntentRequirements::try_from_slice(&requirements_account.data.borrow())
+            .map_err(|_| EscrowError::RequirementsNotFound)?;
 
-                stored_requirements = Some(requirements);
-            }
+        if requirements.escrow_created {
+            return Err(EscrowError::EscrowAlreadyCreated.into());
+        }
+        if amount < requirements.amount_required {
+            return Err(EscrowError::AmountMismatch.into());
+        }
+        // Validate token - convert Pubkey to 32-byte array for comparison
+        let token_bytes = token_mint.key.to_bytes();
+        if token_bytes != requirements.token_addr {
+            return Err(EscrowError::TokenMismatch.into());
         }
 
         // Derive escrow PDA
@@ -348,11 +341,18 @@ impl Processor {
             }
         }
 
-        // Calculate expiry
+        // Use the hub-provided expiry directly (absolute timestamp).
+        // This matches EVM and MVM behavior where the hub is the source of truth.
+        // Cap at i64::MAX to avoid overflow when storing in Escrow (which uses i64 for Solana Clock compatibility).
         let clock = Clock::get()?;
-        let duration = expiry_duration.unwrap_or(DEFAULT_EXPIRY_DURATION);
-        let duration = if duration <= 0 { DEFAULT_EXPIRY_DURATION } else { duration };
-        let expiry = clock.unix_timestamp + duration;
+        let expiry = if requirements.expiry > i64::MAX as u64 {
+            i64::MAX
+        } else {
+            requirements.expiry as i64
+        };
+        if clock.unix_timestamp > expiry {
+            return Err(EscrowError::IntentExpired.into());
+        }
 
         // Create escrow account
         let rent = Rent::get()?;
@@ -429,10 +429,11 @@ impl Processor {
         );
         escrow.serialize(&mut &mut escrow_account.data.borrow_mut()[..])?;
 
-        // If requirements exist, mark escrow as created and send EscrowConfirmation
-        if let (Some(mut requirements), Some(req_account)) = (stored_requirements, requirements_account) {
+        // Mark requirements as having escrow created and send EscrowConfirmation
+        {
+            let mut requirements = requirements;
             requirements.escrow_created = true;
-            requirements.serialize(&mut &mut req_account.data.borrow_mut()[..])?;
+            requirements.serialize(&mut &mut requirements_account.data.borrow_mut()[..])?;
 
             // Try to send EscrowConfirmation GMP message if GMP config is available
             let gmp_config_account = next_account_info(account_info_iter).ok();
@@ -607,16 +608,17 @@ impl Processor {
     }
 
     fn process_cancel(
-        _program_id: &Pubkey,
+        program_id: &Pubkey,
         accounts: &[AccountInfo],
         intent_id: [u8; 32],
     ) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_account = next_account_info(account_info_iter)?;
-        let requester = next_account_info(account_info_iter)?;
+        let caller = next_account_info(account_info_iter)?;
         let escrow_vault = next_account_info(account_info_iter)?;
         let requester_token_account = next_account_info(account_info_iter)?;
         let token_program = next_account_info(account_info_iter)?;
+        let gmp_config_account = next_account_info(account_info_iter)?;
 
         // Deserialize escrow
         let mut escrow = Escrow::try_from_slice(&escrow_account.data.borrow())?;
@@ -631,11 +633,20 @@ impl Processor {
         if escrow.amount == 0 {
             return Err(EscrowError::NoDeposit.into());
         }
-        if escrow.requester != *requester.key {
-            return Err(EscrowError::UnauthorizedRequester.into());
-        }
-        if !requester.is_signer {
+        if !caller.is_signer {
             return Err(ProgramError::MissingRequiredSignature);
+        }
+
+        // Verify caller is admin (only admin can cancel expired escrows)
+        let (config_pda, _) =
+            Pubkey::find_program_address(&[seeds::GMP_CONFIG_SEED], program_id);
+        if config_pda != *gmp_config_account.key {
+            return Err(EscrowError::InvalidPda.into());
+        }
+        let config = GmpConfig::try_from_slice(&gmp_config_account.data.borrow())
+            .map_err(|_| EscrowError::AccountNotInitialized)?;
+        if config.admin != *caller.key {
+            return Err(EscrowError::UnauthorizedCaller.into());
         }
 
         let clock = Clock::get()?;

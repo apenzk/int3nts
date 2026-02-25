@@ -59,7 +59,8 @@ pub enum EscrowInstruction {
     },
 
     /// Create a new escrow and deposit funds atomically.
-    /// If requirements exist, validates escrow matches and sends EscrowConfirmation to hub.
+    /// Validates escrow against stored GMP requirements and sends EscrowConfirmation to hub.
+    /// Expiry is always taken from the hub-provided requirements (no local default).
     ///
     /// Accounts expected:
     /// 0. `[writable]` Escrow account (PDA)
@@ -71,14 +72,13 @@ pub enum EscrowInstruction {
     /// 6. `[]` Token program
     /// 7. `[]` System program
     /// 8. `[]` Rent sysvar
-    /// 9. `[writable, optional]` Requirements account (PDA) - if present, validates against GMP requirements
+    /// 9. `[writable]` Requirements account (PDA) - validates against GMP requirements
     /// 10. `[optional]` GMP config account (PDA) - required if sending EscrowConfirmation
     /// 11. `[optional]` GMP endpoint program - required if sending EscrowConfirmation
     /// 12+ `[optional]` Additional accounts for GMP endpoint CPI
     CreateEscrow {
         intent_id: [u8; 32],
         amount: u64,
-        expiry_duration: Option<i64>,
     },
 
     /// Claim escrow funds (GMP mode - no signature required)
@@ -97,12 +97,15 @@ pub enum EscrowInstruction {
 
     /// Cancel escrow and return funds to requester (only after expiry)
     ///
+    /// Only the admin can cancel. Funds always return to the original requester.
+    ///
     /// Accounts expected:
     /// 0. `[writable]` Escrow account (PDA)
-    /// 1. `[writable, signer]` Requester
+    /// 1. `[writable, signer]` Admin
     /// 2. `[writable]` Escrow vault (PDA)
     /// 3. `[writable]` Requester token account
     /// 4. `[]` Token program
+    /// 5. `[]` GMP config account (PDA)
     Cancel { intent_id: [u8; 32] },
 
     /// Receive intent requirements from hub via GMP

@@ -2,7 +2,7 @@ mod common;
 
 use common::{
     create_escrow_ix, generate_intent_id, get_token_balance, hex_to_bytes32, program_test,
-    read_escrow, setup_basic_env,
+    read_escrow, setup_basic_env, setup_gmp_requirements,
 };
 use intent_inflow_escrow::state::seeds;
 use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
@@ -31,6 +31,9 @@ async fn test_handle_hex_intent_id_conversion() {
     let (vault_pda, _) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -39,8 +42,7 @@ async fn test_handle_hex_intent_id_conversion() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -95,6 +97,9 @@ async fn test_handle_intent_id_boundary_values() {
     let (max_escrow_pda, _) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &max_intent_id], &env.program_id);
 
+    let max_requirements_pda =
+        setup_gmp_requirements(&mut context, &env, max_intent_id, amount, u64::MAX).await;
+
     let max_ix = create_escrow_ix(
         env.program_id,
         max_intent_id,
@@ -103,8 +108,7 @@ async fn test_handle_intent_id_boundary_values() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        max_requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -133,6 +137,9 @@ async fn test_handle_intent_id_boundary_values() {
     let (zero_escrow_pda, _) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &zero_intent_id], &env.program_id);
 
+    let zero_requirements_pda =
+        setup_gmp_requirements(&mut context, &env, zero_intent_id, amount, u64::MAX).await;
+
     let zero_ix = create_escrow_ix(
         env.program_id,
         zero_intent_id,
@@ -141,8 +148,7 @@ async fn test_handle_intent_id_boundary_values() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        zero_requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -174,6 +180,9 @@ async fn test_handle_intent_id_boundary_values() {
     let (edge_escrow_pda, _) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &edge_intent_id], &env.program_id);
 
+    let edge_requirements_pda =
+        setup_gmp_requirements(&mut context, &env, edge_intent_id, amount, u64::MAX).await;
+
     let edge_ix = create_escrow_ix(
         env.program_id,
         edge_intent_id,
@@ -182,8 +191,7 @@ async fn test_handle_intent_id_boundary_values() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        edge_requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -236,6 +244,9 @@ async fn test_handle_intent_id_zero_padding_correctly() {
         let (_vault_pda, _) =
             Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+        let requirements_pda =
+            setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
+
         let ix = create_escrow_ix(
             env.program_id,
             intent_id,
@@ -244,8 +255,7 @@ async fn test_handle_intent_id_zero_padding_correctly() {
             env.mint,
             env.requester_token,
             env.solver.pubkey(),
-            None, // Default expiry
-            None, // No requirements PDA
+            requirements_pda,
         );
 
         let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -300,6 +310,9 @@ async fn test_handle_multiple_intent_ids_from_different_formats() {
         let (escrow_pda, _) =
             Pubkey::find_program_address(&[seeds::ESCROW_SEED, intent_id], &env.program_id);
 
+        let requirements_pda =
+            setup_gmp_requirements(&mut context, &env, *intent_id, amount, u64::MAX).await;
+
         let ix = create_escrow_ix(
             env.program_id,
             *intent_id,
@@ -308,8 +321,7 @@ async fn test_handle_multiple_intent_ids_from_different_formats() {
             env.mint,
             env.requester_token,
             env.solver.pubkey(),
-            None, // Default expiry
-            None, // No requirements PDA
+            requirements_pda,
         );
 
         let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();

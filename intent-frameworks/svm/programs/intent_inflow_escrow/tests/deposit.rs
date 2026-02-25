@@ -2,7 +2,7 @@ mod common;
 
 use common::{
     create_escrow_ix, generate_intent_id, get_token_balance, program_test, read_escrow,
-    setup_basic_env,
+    setup_basic_env, setup_gmp_requirements,
 };
 use intent_inflow_escrow::state::seeds;
 use solana_sdk::{clock::Clock, pubkey::Pubkey, signature::Signer, sysvar, transaction::Transaction};
@@ -26,6 +26,7 @@ async fn test_create_escrow_with_tokens() {
 
     let initial_balance = get_token_balance(&mut context, env.requester_token).await;
 
+    let requirements_pda = setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -34,8 +35,7 @@ async fn test_create_escrow_with_tokens() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -85,6 +85,7 @@ async fn test_revert_if_escrow_already_claimed() {
     let intent_id = generate_intent_id();
     let amount = 1_000_000u64;
 
+    let requirements_pda = setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
     let ix1 = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -93,8 +94,7 @@ async fn test_revert_if_escrow_already_claimed() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -118,8 +118,7 @@ async fn test_revert_if_escrow_already_claimed() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -154,6 +153,7 @@ async fn test_support_multiple_escrows_with_different_intent_ids() {
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id2], &env.program_id);
 
     // Create first escrow
+    let requirements_pda1 = setup_gmp_requirements(&mut context, &env, intent_id1, amount1, u64::MAX).await;
     let ix1 = create_escrow_ix(
         env.program_id,
         intent_id1,
@@ -162,8 +162,7 @@ async fn test_support_multiple_escrows_with_different_intent_ids() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda1,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -176,6 +175,7 @@ async fn test_support_multiple_escrows_with_different_intent_ids() {
     context.banks_client.process_transaction(tx1).await.unwrap();
 
     // Create second escrow
+    let requirements_pda2 = setup_gmp_requirements(&mut context, &env, intent_id2, amount2, u64::MAX).await;
     let ix2 = create_escrow_ix(
         env.program_id,
         intent_id2,
@@ -184,8 +184,7 @@ async fn test_support_multiple_escrows_with_different_intent_ids() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda2,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -205,7 +204,7 @@ async fn test_support_multiple_escrows_with_different_intent_ids() {
 }
 
 /// 4. Test: Escrow Expiry Timestamp
-/// Verifies that escrow expiry is set correctly (current time + EXPIRY_DURATION).
+/// Verifies that escrow expiry is set correctly from GMP requirements.
 /// Why: Expiry must be correct for time-based cancel functionality.
 #[tokio::test]
 async fn test_set_correct_expiry_timestamp() {
@@ -229,6 +228,10 @@ async fn test_set_correct_expiry_timestamp() {
     let clock: Clock = deserialize(&clock_account.data).unwrap();
     let block_time = clock.unix_timestamp;
 
+    // Set expiry to block_time + 120 seconds in GMP requirements
+    let expiry = (block_time as u64) + 120;
+
+    let requirements_pda = setup_gmp_requirements(&mut context, &env, intent_id, amount, expiry).await;
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -237,8 +240,7 @@ async fn test_set_correct_expiry_timestamp() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -259,13 +261,12 @@ async fn test_set_correct_expiry_timestamp() {
         .unwrap();
     let escrow = read_escrow(&escrow_account);
 
-    // DEFAULT_EXPIRY_DURATION is 120 seconds (2 minutes)
-    const DEFAULT_EXPIRY_DURATION: i64 = 120;
-    let expected_expiry = block_time + DEFAULT_EXPIRY_DURATION;
+    // Expiry comes from GMP requirements; values up to i64::MAX are preserved exactly
+    let expected_expiry = expiry as i64;
 
-    assert!(
-        (escrow.expiry - expected_expiry).abs() < 10,
-        "Expiry should be approximately block_time + DEFAULT_EXPIRY_DURATION (10 second tolerance)"
+    assert_eq!(
+        escrow.expiry, expected_expiry,
+        "Escrow expiry should match the expiry set in GMP requirements"
     );
     assert_eq!(escrow.requester, env.requester.pubkey());
     assert_eq!(escrow.token_mint, env.mint);

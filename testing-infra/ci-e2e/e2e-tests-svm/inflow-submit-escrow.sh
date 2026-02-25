@@ -27,6 +27,37 @@ fi
 SVM_AMOUNT="1000000"
 SVM_EXPIRY="$(date -d "+10 minutes" +%s)"
 
+# ============================================================================
+# WAIT FOR GMP DELIVERY OF INTENT REQUIREMENTS
+# ============================================================================
+log ""
+log "   Waiting for GMP relay to deliver IntentRequirements to SVM chain..."
+log "   (Hub intent creation sends requirements via GMP - relay must deliver them first)"
+
+CLI_BIN="$PROJECT_ROOT/intent-frameworks/svm/target/debug/intent_escrow_cli"
+SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}"
+
+GMP_DELIVERED=0
+for attempt in $(seq 1 30); do
+    HAS_REQ=$("$CLI_BIN" check-requirements \
+        --program-id "$SVM_PROGRAM_ID" --intent-id "$INTENT_ID" --rpc "$SVM_RPC_URL" 2>/dev/null \
+        | grep -Eo 'HasRequirements: (true|false)' | awk '{print $2}' | tail -1 | tr -d '\n')
+    if [ "$HAS_REQ" = "true" ]; then
+        log "   ✅ IntentRequirements delivered via GMP (attempt $attempt)"
+        GMP_DELIVERED=1
+        break
+    fi
+    log "   Attempt $attempt/30: requirements not yet delivered, waiting..."
+    sleep 2
+done
+
+if [ "$GMP_DELIVERED" -ne 1 ]; then
+    log_and_echo "❌ PANIC: IntentRequirements NOT delivered via GMP after 60 seconds"
+    log_and_echo "   The GMP relay failed to deliver requirements from hub to SVM chain."
+    display_service_logs "GMP delivery timeout"
+    exit 1
+fi
+
 log "Creating SVM escrow..."
 log "   Intent ID: $INTENT_ID"
 log "   Token mint: $USD_SVM_MINT_ADDR"

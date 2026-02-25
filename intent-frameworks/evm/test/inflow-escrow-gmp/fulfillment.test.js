@@ -123,10 +123,11 @@ describe("IntentInflowEscrow - Fulfillment", function () {
       DEFAULT_AMOUNT
     );
 
-    // Wait for expiry and cancel
+    // Wait for expiry and admin cancels
+    const [admin] = await ethers.getSigners();
     await ethers.provider.send("evm_increaseTime", [61]);
     await ethers.provider.send("evm_mine", []);
-    await escrow.connect(requester).cancel(shortExpiryIntentId);
+    await escrow.connect(admin).cancel(shortExpiryIntentId);
 
     // Now try to fulfill - should fail because escrow was already released via cancel
     const timestamp = await getCurrentTimestamp();

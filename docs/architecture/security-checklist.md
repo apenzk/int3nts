@@ -32,12 +32,12 @@ Assume every endpoint will be abused. Attackers don't follow happy paths.
   - Per-IP rate limiting
   - Per-user rate limiting (authenticated endpoints)
   - Burst limits for sudden traffic spikes
-  
+
 - [ ] **Idempotency for Writes**: All write operations must be idempotent
   - Use idempotency keys for intent creation
   - Prevent duplicate escrow creation
   - Handle replay of fulfillment requests
-  
+
 - [ ] **Server-Side Validation Only**: Never trust client-side validation
   - Validate all inputs on server
   - Check parameter bounds and types
@@ -65,7 +65,7 @@ Frontend checks are for UX, not security. All security checks must be server-sid
   - Verify solver authorization before processing
   - Check intent ownership for cancellation
   - Validate escrow ownership for claims
-  
+
 - [ ] **Server-Side Ownership Validation**: Never trust client claims
   - Verify signer matches expected address
   - Check on-chain state for ownership

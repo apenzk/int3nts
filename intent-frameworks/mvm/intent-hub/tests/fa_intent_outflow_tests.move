@@ -496,5 +496,200 @@ module mvmt_intent::fa_intent_outflow_tests {
         );
     }
 
+    // ============================================================================
+    // CANCEL TESTS
+    // ============================================================================
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        requester_signer = @0xcafe,
+        solver_signer = @0xdead
+    )]
+    #[expected_failure(abort_code = 0x50005, location = mvmt_intent::intent)] // error::permission_denied(E_INTENT_NOT_EXPIRED = 5)
+    /// What is tested: cancel_outflow_intent rejects cancellation before expiry
+    /// Why: Funds must remain locked until expiry to give solvers time to fulfill
+    fun test_cancel_outflow_rejects_before_expiry(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        requester_signer: &signer,
+        solver_signer: &signer,
+    ) {
+        let (intent_obj, _offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
+            aptos_framework,
+            mvmt_intent,
+            requester_signer,
+            solver_signer,
+        );
+
+        // Admin tries to cancel before expiry — should abort
+        fa_intent_outflow::cancel_outflow_intent(mvmt_intent, intent_obj);
+    }
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        requester_signer = @0xcafe,
+        solver_signer = @0xdead
+    )]
+    /// What is tested: cancel_outflow_intent returns funds to requester after expiry
+    /// Why: Admin needs a way to return funds if fulfillment doesn't occur before expiry
+    fun test_cancel_outflow_after_expiry_returns_funds(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        requester_signer: &signer,
+        solver_signer: &signer,
+    ) {
+        let (intent_obj, offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
+            aptos_framework,
+            mvmt_intent,
+            requester_signer,
+            solver_signer,
+        );
+
+        let intent_addr = object::object_address(&intent_obj);
+        let requester_addr = signer::address_of(requester_signer);
+
+        // Verify tokens were locked (100 - 50 = 50 remaining)
+        assert!(primary_fungible_store::balance(requester_addr, offered_metadata) == 50);
+        assert!(intent_registry::is_intent_registered(intent_addr));
+
+        // Advance time past expiry (expiry = now + 3600, so 3601 is past)
+        timestamp::update_global_time_for_test_secs(3601);
+
+        // Admin cancels — funds should return to requester
+        fa_intent_outflow::cancel_outflow_intent(mvmt_intent, intent_obj);
+
+        // Verify funds returned (50 + 50 = 100)
+        assert!(primary_fungible_store::balance(requester_addr, offered_metadata) == 100);
+
+        // Verify intent was unregistered
+        assert!(!intent_registry::is_intent_registered(intent_addr));
+
+        // Verify OutflowIntentCancelled event was emitted
+        let cancel_events = event::emitted_events<fa_intent_outflow::OutflowIntentCancelled>();
+        assert!(vector::length(&cancel_events) == 1);
+    }
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        requester_signer = @0xcafe,
+        solver_signer = @0xdead
+    )]
+    #[expected_failure(abort_code = 0x50008, location = mvmt_intent::fa_intent_outflow)] // error::permission_denied(E_UNAUTHORIZED_CALLER = 8)
+    /// What is tested: cancel_outflow_intent rejects non-admin callers (including requester)
+    /// Why: Only admin should be able to cancel expired intents
+    fun test_cancel_outflow_rejects_unauthorized_caller(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        requester_signer: &signer,
+        solver_signer: &signer,
+    ) {
+        let (intent_obj, _offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
+            aptos_framework,
+            mvmt_intent,
+            requester_signer,
+            solver_signer,
+        );
+
+        // Advance time past expiry
+        timestamp::update_global_time_for_test_secs(3601);
+
+        // Requester (not admin) tries to cancel — should abort
+        fa_intent_outflow::cancel_outflow_intent(requester_signer, intent_obj);
+    }
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        requester_signer = @0xcafe,
+        solver_signer = @0xdead
+    )]
+    #[expected_failure(abort_code = 0x3000a, location = mvmt_intent::fa_intent_outflow)] // error::invalid_state(E_ALREADY_FULFILLED = 10)
+    /// What is tested: cancel_outflow_intent rejects cancellation after fulfillment proof received
+    /// Why: Once solver has fulfilled on the connected chain, funds must go to solver, not back to requester
+    fun test_cancel_outflow_rejects_after_fulfillment_proof(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        requester_signer: &signer,
+        solver_signer: &signer,
+    ) {
+        use mvmt_intent::gmp_common;
+
+        let (intent_obj, _offered_metadata, _desired_metadata, intent_id) = setup_outflow_intent(
+            aptos_framework,
+            mvmt_intent,
+            requester_signer,
+            solver_signer,
+        );
+
+        // Deliver fulfillment proof via GMP
+        let intent_id_bytes = bcs::to_bytes(&intent_id);
+        let solver_addr_bytes = bcs::to_bytes(&signer::address_of(solver_signer));
+        let fulfillment_proof = gmp_common::new_fulfillment_proof(
+            intent_id_bytes,
+            solver_addr_bytes,
+            50,
+            timestamp::now_seconds(),
+        );
+        let payload = gmp_common::encode_fulfillment_proof(&fulfillment_proof);
+
+        let known_src_addr = vector::empty<u8>();
+        let i = 0;
+        while (i < 32) {
+            vector::push_back(&mut known_src_addr, 0xAB);
+            i = i + 1;
+        };
+
+        fa_intent_outflow::receive_fulfillment_proof(2, known_src_addr, payload);
+
+        // Advance time past expiry
+        timestamp::update_global_time_for_test_secs(3601);
+
+        // Admin tries to cancel after fulfillment proof — should abort
+        fa_intent_outflow::cancel_outflow_intent(mvmt_intent, intent_obj);
+    }
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        requester_signer = @0xcafe,
+        solver_signer = @0xdead
+    )]
+    /// What is tested: admin (@mvmt_intent) can cancel expired outflow intent, funds go to requester
+    /// Why: Admin acts as a helper to unstick expired intents; funds always go to the original requester
+    fun test_admin_cancel_outflow_after_expiry(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        requester_signer: &signer,
+        solver_signer: &signer,
+    ) {
+        let (intent_obj, offered_metadata, _desired_metadata, _intent_id) = setup_outflow_intent(
+            aptos_framework,
+            mvmt_intent,
+            requester_signer,
+            solver_signer,
+        );
+
+        let requester_addr = signer::address_of(requester_signer);
+
+        // Verify tokens were locked
+        assert!(primary_fungible_store::balance(requester_addr, offered_metadata) == 50);
+
+        // Advance time past expiry
+        timestamp::update_global_time_for_test_secs(3601);
+
+        // Admin (mvmt_intent) cancels — funds should go to requester, not admin
+        fa_intent_outflow::cancel_outflow_intent(mvmt_intent, intent_obj);
+
+        // Verify funds returned to requester (not admin)
+        assert!(primary_fungible_store::balance(requester_addr, offered_metadata) == 100);
+
+        // Verify OutflowIntentCancelled event was emitted
+        let cancel_events = event::emitted_events<fa_intent_outflow::OutflowIntentCancelled>();
+        assert!(vector::length(&cancel_events) == 1);
+    }
+
 }
 

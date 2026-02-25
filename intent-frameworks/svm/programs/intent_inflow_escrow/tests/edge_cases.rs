@@ -2,7 +2,7 @@ mod common;
 
 use common::{
     create_escrow_ix, generate_intent_id, get_token_balance, program_test, read_escrow,
-    setup_basic_env,
+    setup_basic_env, setup_gmp_requirements,
 };
 use intent_inflow_escrow::state::seeds;
 use solana_sdk::{pubkey::Pubkey, signature::Signer, transaction::Transaction};
@@ -28,6 +28,8 @@ async fn test_handle_maximum_values_for_amounts_and_intent_ids() {
     let (escrow_pda, _) =
         Pubkey::find_program_address(&[seeds::ESCROW_SEED, &max_intent_id], &env.program_id);
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, max_intent_id, amount, u64::MAX).await;
     let ix = create_escrow_ix(
         env.program_id,
         max_intent_id,
@@ -36,8 +38,7 @@ async fn test_handle_maximum_values_for_amounts_and_intent_ids() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -78,6 +79,8 @@ async fn test_handle_minimum_deposit_amount() {
     let (vault_pda, _) =
         Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+    let requirements_pda =
+        setup_gmp_requirements(&mut context, &env, intent_id, min_amount, u64::MAX).await;
     let ix = create_escrow_ix(
         env.program_id,
         intent_id,
@@ -86,8 +89,7 @@ async fn test_handle_minimum_deposit_amount() {
         env.mint,
         env.requester_token,
         env.solver.pubkey(),
-        None, // Default expiry
-        None, // No requirements PDA
+        requirements_pda,
     );
 
     let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -136,6 +138,8 @@ async fn test_allow_requester_to_create_multiple_escrows() {
         let (_vault_pda, _) =
             Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+        let requirements_pda =
+            setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
         let ix = create_escrow_ix(
             env.program_id,
             intent_id,
@@ -144,8 +148,7 @@ async fn test_allow_requester_to_create_multiple_escrows() {
             env.mint,
             env.requester_token,
             env.solver.pubkey(),
-            None, // Default expiry
-            None, // No requirements PDA
+            requirements_pda,
         );
 
         let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -197,6 +200,8 @@ async fn test_handle_gas_consumption_for_large_operations() {
         let (vault_pda, _) =
             Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+        let requirements_pda =
+            setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
         let ix = create_escrow_ix(
             env.program_id,
             intent_id,
@@ -205,8 +210,7 @@ async fn test_handle_gas_consumption_for_large_operations() {
             env.mint,
             env.requester_token,
             env.solver.pubkey(),
-            None, // Default expiry
-            None, // No requirements PDA
+            requirements_pda,
         );
 
         let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();
@@ -252,6 +256,8 @@ async fn test_handle_concurrent_escrow_operations() {
         let (vault_pda, _) =
             Pubkey::find_program_address(&[seeds::VAULT_SEED, &intent_id], &env.program_id);
 
+        let requirements_pda =
+            setup_gmp_requirements(&mut context, &env, intent_id, amount, u64::MAX).await;
         let ix = create_escrow_ix(
             env.program_id,
             intent_id,
@@ -260,8 +266,7 @@ async fn test_handle_concurrent_escrow_operations() {
             env.mint,
             env.requester_token,
             env.solver.pubkey(),
-            None, // Default expiry
-            None, // No requirements PDA
+            requirements_pda,
         );
 
         let blockhash = context.banks_client.get_latest_blockhash().await.unwrap();

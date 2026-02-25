@@ -31,9 +31,10 @@ describe("IntentInflowEscrow - Expiry Handling", function () {
   });
 
   /// 1. Test: test_cancel_expired_escrow: Expired Escrow Cancellation
-  /// Verifies that requesters can cancel escrows after expiry and reclaim funds.
-  /// Why: Requesters need a way to reclaim funds if fulfillment doesn't occur before expiry.
-  it("Should allow requester to cancel expired escrow", async function () {
+  /// Verifies that admin can cancel escrows after expiry and funds return to requester.
+  /// Why: Admin acts as operator to unstick expired escrows; funds always go to original requester.
+  it("Should allow admin to cancel expired escrow", async function () {
+    const [admin] = await ethers.getSigners();
     const tokenAddr32 = addressToBytes32(token.target);
     const requesterAddr32 = addressToBytes32(requester.address);
     const solverAddr32 = addressToBytes32(solver.address);
@@ -57,15 +58,15 @@ describe("IntentInflowEscrow - Expiry Handling", function () {
 
     // Cancellation blocked before expiry
     await expect(
-      escrow.connect(requester).cancel(intentId)
+      escrow.connect(admin).cancel(intentId)
     ).to.be.revertedWithCustomError(escrow, "E_ESCROW_NOT_EXPIRED");
 
     // Advance time past expiry
     await advanceTime(DEFAULT_EXPIRY_OFFSET + 1);
 
-    // Cancellation allowed after expiry
+    // Admin cancellation allowed after expiry, funds go to requester
     const initialBalance = await token.balanceOf(requester.address);
-    await expect(escrow.connect(requester).cancel(intentId))
+    await expect(escrow.connect(admin).cancel(intentId))
       .to.emit(escrow, "EscrowCancelled")
       .withArgs(intentId, requester.address, DEFAULT_AMOUNT);
 

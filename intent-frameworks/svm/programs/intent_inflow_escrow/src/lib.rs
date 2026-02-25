@@ -17,6 +17,3 @@ pub use solana_program;
 pub use error::EscrowError;
 pub use instruction::EscrowInstruction;
 pub use state::{Escrow, EscrowState, GmpConfig, StoredIntentRequirements};
-
-/// Default expiry duration: 2 minutes in seconds
-pub const DEFAULT_EXPIRY_DURATION: i64 = 120;

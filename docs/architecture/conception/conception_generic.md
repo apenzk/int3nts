@@ -40,7 +40,7 @@ graph TD
     CC1[Connected Chain A]
     Hub[Hub Chain / M1]
     CC2[Connected Chain B]
-    
+
     CC1 -->|Inflow| Hub
     Hub -->|Outflow| CC2
     CC1 -->|Router Flow| CC2
