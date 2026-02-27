@@ -108,6 +108,34 @@ target_chain_id = $svm_chain_id
 target_token = "$svm_token_mint_hex"
 ratio = 1.0
 
+[liquidity]
+balance_poll_interval_ms = 10000
+in_flight_timeout_secs = 300
+
+# Threshold for USDhub on hub chain (inflow target token)
+[[liquidity.threshold]]
+chain_id = $hub_chain_id
+token = "$usdhub_metadata_chain1"
+min_balance = 1
+
+# Threshold for USDsvm on SVM chain (outflow target token)
+[[liquidity.threshold]]
+chain_id = $svm_chain_id
+token = "$svm_token_mint_hex"
+min_balance = 1
+
+# Gas token (MOVE) on hub chain
+[[liquidity.threshold]]
+chain_id = $hub_chain_id
+token = "0x000000000000000000000000000000000000000000000000000000000000000a"
+min_balance = 1
+
+# Gas token (SOL) on SVM chain
+[[liquidity.threshold]]
+chain_id = $svm_chain_id
+token = "11111111111111111111111111111111"
+min_balance = 1
+
 [solver]
 profile = "solver-chain1"
 address = "$solver_addr"

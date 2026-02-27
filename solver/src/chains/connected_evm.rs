@@ -108,6 +108,29 @@ pub struct ConnectedEvmClient {
     private_key_env: String,
 }
 
+/// Normalize an EVM address that may be 32-byte padded (for Move compatibility) to 20 bytes.
+///
+/// Addresses in solver configs may be stored as 32-byte hex (64 chars) for cross-chain
+/// compatibility with Move VMs. EVM nodes expect 20-byte addresses (40 hex chars).
+///
+/// - 40 hex chars (20 bytes): returned as-is with 0x prefix
+/// - 64 hex chars (32 bytes): extracts last 40 chars if first 24 are zeros
+/// - Other lengths: returned as-is (let the RPC node validate)
+pub fn normalize_evm_address(addr: &str) -> Result<String> {
+    let clean = addr.strip_prefix("0x").unwrap_or(addr);
+    if clean.len() == 64 {
+        let high_bytes = &clean[..24];
+        if high_bytes.chars().all(|c| c == '0') {
+            return Ok(format!("0x{}", &clean[24..]));
+        }
+        anyhow::bail!(
+            "32-byte address has non-zero high bytes, not a valid padded EVM address: {}",
+            addr
+        );
+    }
+    Ok(format!("0x{}", clean))
+}
+
 impl ConnectedEvmClient {
     /// Creates a new connected EVM chain client
     ///
@@ -471,6 +494,152 @@ impl ConnectedEvmClient {
         } else {
             anyhow::bail!("Unexpected output from get-is-released.js: {}", output_str)
         }
+    }
+
+    /// Queries the ERC20 balance of an account via `eth_call`.
+    ///
+    /// Calls `balanceOf(address)` on the token contract. The function selector
+    /// is `0x70a08231` (keccak256("balanceOf(address)")[0:4]).
+    ///
+    /// # Arguments
+    ///
+    /// * `token_addr` - ERC20 token contract address
+    /// * `account_addr` - Account address to query balance for
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Token balance
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub async fn get_token_balance(&self, token_addr: &str, account_addr: &str) -> Result<u128> {
+        // Normalize addresses — configs may store 32-byte padded addresses for Move compatibility
+        let token_normalized = normalize_evm_address(token_addr)?;
+        let account_normalized = normalize_evm_address(account_addr)?;
+
+        // balanceOf(address) selector: 0x70a08231
+        let selector = "70a08231";
+
+        // ABI-encode account address as address (left-padded to 32 bytes)
+        let account_clean = account_normalized.strip_prefix("0x").unwrap_or(&account_normalized);
+        let account_padded = format!("{:0>64}", account_clean);
+
+        let calldata = format!("0x{}{}", selector, account_padded);
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "eth_call".to_string(),
+            params: vec![
+                serde_json::json!({
+                    "to": token_normalized,
+                    "data": calldata,
+                }),
+                serde_json::json!("latest"),
+            ],
+            id: 1,
+        };
+
+        let response: JsonRpcResponse<String> = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send eth_call for balanceOf")?
+            .json()
+            .await
+            .context("Failed to parse eth_call balanceOf response")?;
+
+        if let Some(error) = response.error {
+            anyhow::bail!(
+                "eth_call balanceOf failed: {} (code: {})",
+                error.message,
+                error.code
+            );
+        }
+
+        let result = response
+            .result
+            .context("No result in balanceOf response")?;
+
+        // ABI uint256: 32 bytes hex-encoded. Parse as u128 (supports up to 32 hex chars).
+        let clean = result.strip_prefix("0x").unwrap_or(&result);
+        if clean.is_empty() || clean == "0" {
+            return Ok(0);
+        }
+
+        let hex_to_parse = if clean.len() > 32 {
+            let high_bytes = &clean[..clean.len() - 32];
+            if high_bytes.chars().any(|c| c != '0') {
+                anyhow::bail!("Token balance exceeds u128 range: 0x{}", clean);
+            }
+            &clean[clean.len() - 32..]
+        } else {
+            clean
+        };
+
+        let balance = u128::from_str_radix(hex_to_parse, 16)
+            .context("Failed to parse balance from hex")?;
+
+        Ok(balance)
+    }
+
+    /// Queries the native ETH balance of an account via `eth_getBalance`.
+    ///
+    /// Used for tracking gas token balance. Unlike `get_token_balance` which calls
+    /// ERC20 `balanceOf`, this queries the account's native ether balance directly.
+    ///
+    /// # Arguments
+    ///
+    /// * `account_addr` - Account address (0x-prefixed hex)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Native ETH balance in wei
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub async fn get_native_balance(&self, account_addr: &str) -> Result<u128> {
+        let account_normalized = normalize_evm_address(account_addr)?;
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            method: "eth_getBalance".to_string(),
+            params: vec![
+                serde_json::json!(account_normalized),
+                serde_json::json!("latest"),
+            ],
+            id: 1,
+        };
+
+        let response: JsonRpcResponse<String> = self
+            .client
+            .post(&self.base_url)
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send eth_getBalance request")?
+            .json()
+            .await
+            .context("Failed to parse eth_getBalance response")?;
+
+        if let Some(error) = response.error {
+            anyhow::bail!(
+                "eth_getBalance failed: {} (code: {})",
+                error.message,
+                error.code
+            );
+        }
+
+        let result = response
+            .result
+            .context("No result in eth_getBalance response")?;
+
+        let clean = result.strip_prefix("0x").unwrap_or(&result);
+        if clean.is_empty() || clean == "0" {
+            return Ok(0);
+        }
+
+        let balance = u128::from_str_radix(clean, 16)
+            .context("Failed to parse ETH balance from hex")?;
+
+        Ok(balance)
     }
 
     /// Checks if IntentOutflowValidator has requirements for an intent.

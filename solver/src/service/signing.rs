@@ -6,6 +6,7 @@
 use crate::acceptance::{evaluate_draft_acceptance, AcceptanceConfig, AcceptanceResult, DraftintentData};
 use crate::config::SolverConfig;
 use crate::crypto::{get_intent_hash, get_private_key_from_profile, sign_intent_hash};
+use crate::service::liquidity::{ChainToken, LiquidityMonitor};
 use crate::service::tracker::IntentTracker;
 use crate::coordinator_client::{PendingDraft, CoordinatorClient};
 use anyhow::{Context, Result};
@@ -26,6 +27,8 @@ pub struct SigningService {
     tracker: Arc<IntentTracker>,
     /// Track processed draft IDs to avoid repeated logging
     processed_drafts: Arc<RwLock<HashSet<String>>>,
+    /// Liquidity monitor for budget checks before signing
+    liquidity_monitor: Arc<LiquidityMonitor>,
 }
 
 impl SigningService {
@@ -39,7 +42,11 @@ impl SigningService {
     /// # Returns
     ///
     /// * `Result<SigningService>` - New service instance or error
-    pub fn new(config: SolverConfig, tracker: Arc<IntentTracker>) -> Result<Self> {
+    pub fn new(
+        config: SolverConfig,
+        tracker: Arc<IntentTracker>,
+        liquidity_monitor: Arc<LiquidityMonitor>,
+    ) -> Result<Self> {
         // Convert config token pairs to AcceptanceConfig
         let token_pairs = config.get_token_pairs()?;
         let acceptance_config = AcceptanceConfig {
@@ -51,6 +58,7 @@ impl SigningService {
             acceptance_config,
             tracker,
             processed_drafts: Arc::new(RwLock::new(HashSet::new())),
+            liquidity_monitor,
         })
     }
 
@@ -174,8 +182,55 @@ impl SigningService {
         // Evaluate acceptance
         match evaluate_draft_acceptance(&draft_data, &self.acceptance_config) {
             AcceptanceResult::Accept => {
+                // A) Target chain: desired_amount must leave at least threshold in account
+                let target = ChainToken {
+                    chain_id: draft_data.desired_chain_id,
+                    token: draft_data.desired_token.clone(),
+                };
+
+                if !self.liquidity_monitor.has_budget_after_spend(&target, draft_data.desired_amount).await? {
+                    warn!(
+                        "Draft {} rejected: insufficient budget for {} on chain {} token {} (must retain threshold after spend)",
+                        draft.draft_id, draft_data.desired_amount, target.chain_id, target.token
+                    );
+                    return Ok(false);
+                }
+
+                // A) Target chain: gas token must be above threshold
+                let gas_target = self.liquidity_monitor.gas_token_for_chain(draft_data.desired_chain_id)?;
+                if !self.liquidity_monitor.is_above_threshold(&gas_target).await? {
+                    warn!(
+                        "Draft {} rejected: gas token below threshold on target chain {}",
+                        draft.draft_id, draft_data.desired_chain_id
+                    );
+                    return Ok(false);
+                }
+
+                // B) Source chain: gas token must be above threshold
+                let gas_source = self.liquidity_monitor.gas_token_for_chain(draft_data.offered_chain_id)?;
+                if !self.liquidity_monitor.is_above_threshold(&gas_source).await? {
+                    warn!(
+                        "Draft {} rejected: gas token below threshold on source chain {}",
+                        draft.draft_id, draft_data.offered_chain_id
+                    );
+                    return Ok(false);
+                }
+
                 info!("Draft {} accepted, signing...", draft.draft_id);
-                self.sign_and_submit(draft, &draft_data).await
+                let result = self.sign_and_submit(draft, &draft_data).await?;
+
+                // Reserve budget after successful sign+submit
+                if result {
+                    let target = ChainToken {
+                        chain_id: draft_data.desired_chain_id,
+                        token: draft_data.desired_token.clone(),
+                    };
+                    if let Err(e) = self.liquidity_monitor.reserve(&target, &draft.draft_id, draft_data.desired_amount).await {
+                        warn!("Failed to reserve budget for draft {}: {}", draft.draft_id, e);
+                    }
+                }
+
+                Ok(result)
             }
             AcceptanceResult::Reject(reason) => {
                 warn!("Draft {} rejected: {}", draft.draft_id, reason);

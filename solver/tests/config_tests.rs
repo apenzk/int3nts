@@ -4,7 +4,9 @@
 mod test_helpers;
 use test_helpers::{
     create_default_connected_mvm_chain_config, create_default_solver_config, create_default_token_pair,
-    DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_SVM_ESCROW_PROGRAM_ID, DUMMY_TOKEN_ADDR_EVM, DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
+    create_mvm_pair_liquidity_config,
+    DUMMY_ESCROW_CONTRACT_ADDR_EVM, DUMMY_SVM_ESCROW_PROGRAM_ID, DUMMY_TOKEN_ADDR_EVM,
+    DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB, GAS_TOKEN_MVM,
 };
 
 use solver::config::{AcceptanceConfig, ConnectedChainConfig, EvmChainConfig, MvmChainConfig, SvmChainConfig, SolverConfig, TokenPairConfig};
@@ -13,8 +15,18 @@ use solver::config::{AcceptanceConfig, ConnectedChainConfig, EvmChainConfig, Mvm
 // HELPER FUNCTIONS
 // ============================================================================
 
-/// Create a minimal valid SolverConfig for testing
+/// Create a minimal valid SolverConfig for testing.
+/// Includes a single acceptance pair with matching liquidity thresholds.
 fn create_test_config() -> SolverConfig {
+    let mut liq = create_mvm_pair_liquidity_config();
+    // Only need one-directional thresholds for this config's single pair
+    // (target=chain 2, plus gas on chains 1 and 2)
+    liq.thresholds.retain(|t|
+        // Keep target token threshold for chain 2 (MVMCON)
+        (t.chain_id == 2 && t.token == DUMMY_TOKEN_ADDR_MVMCON) ||
+        // Keep gas token thresholds for both chains
+        t.token == GAS_TOKEN_MVM
+    );
     SolverConfig {
         acceptance: AcceptanceConfig {
             token_pairs: vec![TokenPairConfig {
@@ -25,6 +37,7 @@ fn create_test_config() -> SolverConfig {
                 ratio: 1.0,
             }],
         },
+        liquidity: liq,
         ..create_default_solver_config()
     }
 }
@@ -391,16 +404,37 @@ profile = "connected-profile"
 [acceptance]
 [[acceptance.tokenpair]]
 source_chain_id = 1
-source_token = "{}"
+source_token = "{hub_token}"
 target_chain_id = 2
-target_token = "{}"
+target_token = "{con_token}"
 ratio = 1.0
+
+[liquidity]
+balance_poll_interval_ms = 10000
+in_flight_timeout_secs = 300
+
+[[liquidity.threshold]]
+chain_id = 2
+token = "{con_token}"
+min_balance = 100
+
+[[liquidity.threshold]]
+chain_id = 1
+token = "{gas}"
+min_balance = 100
+
+[[liquidity.threshold]]
+chain_id = 2
+token = "{gas}"
+min_balance = 100
 
 [solver]
 profile = "hub-profile"
 address = "0xccc"
 "#,
-        DUMMY_TOKEN_ADDR_HUB, DUMMY_TOKEN_ADDR_MVMCON
+        hub_token = DUMMY_TOKEN_ADDR_HUB,
+        con_token = DUMMY_TOKEN_ADDR_MVMCON,
+        gas = GAS_TOKEN_MVM,
     );
     
     fs::write(&test_config_file, toml_content).unwrap();

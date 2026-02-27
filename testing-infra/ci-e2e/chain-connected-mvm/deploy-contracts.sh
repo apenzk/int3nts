@@ -224,7 +224,7 @@ log " Minting USDcon to Requester and Solver on Chain 2..."
 
 REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain2")
 SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain2")
-USDCON_MINT_AMOUNT="1000000"  # 1 USDcon (6 decimals = 1_000_000)
+USDCON_MINT_AMOUNT="2000000"  # 2 USDcon (6 decimals = 2_000_000)
 
 log "   - Minting $USDCON_MINT_AMOUNT 10e-6.USDcon to Requester ($REQUESTER_MVMCON_ADDR)..."
 if aptos move run --profile test-tokens-chain2 --assume-yes \
@@ -246,11 +246,11 @@ else
     exit 1
 fi
 
-log_and_echo "✅ USDcon minted to Requester and Solver on connected chain (1 USDcon each)"
+log_and_echo "✅ USDcon minted to Requester and Solver on connected chain (2 USDcon each)"
 
 # Assert balances are correct after minting
-assert_usdxyz_balance "requester-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "1000000" "post-mint-requester"
-assert_usdxyz_balance "solver-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "1000000" "post-mint-solver"
+assert_usdxyz_balance "requester-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "2000000" "post-mint-requester"
+assert_usdxyz_balance "solver-chain2" "2" "$USD_MVMCON_MODULE_ADDR" "2000000" "post-mint-solver"
 
 # Display balances (APT + USDcon)
 display_balances_connected_mvm "$USD_MVMCON_MODULE_ADDR"

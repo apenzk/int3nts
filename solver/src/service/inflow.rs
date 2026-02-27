@@ -10,6 +10,7 @@
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
 use crate::config::SolverConfig;
+use crate::service::liquidity::LiquidityMonitor;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use anyhow::{Context, Result};
 use std::sync::Arc;
@@ -30,6 +31,8 @@ pub struct InflowService {
     evm_client: Option<ConnectedEvmClient>,
     /// Optional connected SVM chain client
     svm_client: Option<ConnectedSvmClient>,
+    /// Liquidity monitor for releasing budget after fulfillment
+    liquidity_monitor: Arc<LiquidityMonitor>,
 }
 
 /// Helper struct for matching escrow events to intents
@@ -50,7 +53,11 @@ impl InflowService {
     ///
     /// * `Ok(InflowService)` - Successfully created service
     /// * `Err(anyhow::Error)` - Failed to create service
-    pub fn new(config: SolverConfig, tracker: Arc<IntentTracker>) -> Result<Self> {
+    pub fn new(
+        config: SolverConfig,
+        tracker: Arc<IntentTracker>,
+        liquidity_monitor: Arc<LiquidityMonitor>,
+    ) -> Result<Self> {
         let hub_client = HubChainClient::new(&config.hub_chain)?;
 
         // Create connected chain clients for all configured chains
@@ -76,6 +83,7 @@ impl InflowService {
             mvm_client,
             evm_client,
             svm_client,
+            liquidity_monitor,
         })
     }
 
@@ -314,6 +322,8 @@ impl InflowService {
                                 {
                                     warn!("Failed to mark intent as fulfilled: {}", e);
                                 }
+                                // Release liquidity budget for this draft
+                                self.liquidity_monitor.release(&intent.draft_id).await;
                             }
                             Err(e) => {
                                 let msg = e.to_string();

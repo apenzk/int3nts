@@ -195,7 +195,7 @@ log " Minting USDhub to Requester and Solver on Hub..."
 
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
-USDHUB_MINT_AMOUNT="1000000"  # 1 USDhub (6 decimals = 1_000_000)
+USDHUB_MINT_AMOUNT="2000000"  # 2 USDhub (6 decimals = 2_000_000)
 
 log "   - Minting $USDHUB_MINT_AMOUNT 10e-6.USDhub to Requester ($REQUESTER_HUB_ADDR)..."
 if aptos move run --profile test-tokens-chain1 --assume-yes \
@@ -217,7 +217,7 @@ else
     exit 1
 fi
 
-log_and_echo "✅ USDhub minted to Requester and Solver on hub chain (1 USDhub each)"
+log_and_echo "✅ USDhub minted to Requester and Solver on hub chain (2 USDhub each)"
 
 # Display balances (APT + USDhub)
 display_balances_hub "$TEST_TOKENS_HUB_ADDR"

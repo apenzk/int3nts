@@ -12,6 +12,7 @@
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
 use crate::config::SolverConfig;
+use crate::service::liquidity::LiquidityMonitor;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use anyhow::{Context, Result};
 use std::sync::Arc;
@@ -30,6 +31,8 @@ pub struct OutflowService {
     evm_client: Option<ConnectedEvmClient>,
     /// Optional connected SVM chain client
     svm_client: Option<ConnectedSvmClient>,
+    /// Liquidity monitor for releasing budget after fulfillment
+    liquidity_monitor: Arc<LiquidityMonitor>,
 }
 
 impl OutflowService {
@@ -47,16 +50,17 @@ impl OutflowService {
     pub fn new(
         config: SolverConfig,
         tracker: Arc<IntentTracker>,
+        liquidity_monitor: Arc<LiquidityMonitor>,
     ) -> Result<Self> {
         // Create connected chain clients for all configured chains
         let mvm_client = config.get_mvm_config()
             .map(|cfg| ConnectedMvmClient::new(cfg))
             .transpose()?;
-        
+
         let evm_client = config.get_evm_config()
             .map(|cfg| ConnectedEvmClient::new(cfg))
             .transpose()?;
-        
+
         let svm_client = config.get_svm_config()
             .map(|cfg| ConnectedSvmClient::new(cfg))
             .transpose()?;
@@ -67,6 +71,7 @@ impl OutflowService {
             mvm_client,
             evm_client,
             svm_client,
+            liquidity_monitor,
         })
     }
     
@@ -492,6 +497,8 @@ impl OutflowService {
                                 if let Err(e) = self.tracker.mark_fulfilled(&intent.draft_id).await {
                                     error!("Failed to mark intent {} as fulfilled: {}", intent.draft_id, e);
                                 }
+                                // Release liquidity budget for this draft
+                                self.liquidity_monitor.release(&intent.draft_id).await;
                             }
                             Err(e) => {
                                 error!(

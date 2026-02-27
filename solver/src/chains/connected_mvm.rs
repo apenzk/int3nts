@@ -57,6 +57,70 @@ impl ConnectedMvmClient {
         })
     }
 
+    /// Queries the fungible asset balance for an account on the connected MVM chain.
+    ///
+    /// Calls `0x1::primary_fungible_store::balance` view function.
+    ///
+    /// # Arguments
+    ///
+    /// * `account_addr` - Account address (0x-prefixed hex)
+    /// * `token_metadata` - Token metadata object address (0x-prefixed hex)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Token balance
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub async fn get_token_balance(
+        &self,
+        account_addr: &str,
+        token_metadata: &str,
+    ) -> Result<u128> {
+        let account_normalized = Self::normalize_hex_to_address(account_addr);
+        let metadata_normalized = Self::normalize_hex_to_address(token_metadata);
+
+        // base_url already includes /v1
+        let view_url = format!("{}/view", self.base_url);
+        let request_body = serde_json::json!({
+            "function": "0x1::primary_fungible_store::balance",
+            "type_arguments": ["0x1::fungible_asset::Metadata"],
+            "arguments": [account_normalized, metadata_normalized]
+        });
+
+        let response = self
+            .client
+            .post(&view_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to query token balance on connected MVM")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
+            anyhow::bail!(
+                "Failed to query token balance: HTTP {} - {}",
+                status,
+                error_body
+            );
+        }
+
+        let result: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse token balance response")?;
+
+        let balance_str = result
+            .first()
+            .and_then(|v| v.as_str())
+            .context("Unexpected response format from balance view function")?;
+
+        let balance = balance_str
+            .parse::<u128>()
+            .context("Failed to parse balance as u128")?;
+
+        Ok(balance)
+    }
+
     /// Checks if outflow requirements have been delivered via GMP to the connected chain.
     ///
     /// Calls the `outflow_validator_impl::has_requirements` view function.
@@ -91,7 +155,7 @@ impl ConnectedMvmClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query outflow requirements: HTTP {} - {}",
                 status,
@@ -147,7 +211,7 @@ impl ConnectedMvmClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query escrow release status: HTTP {} - {}",
                 status,

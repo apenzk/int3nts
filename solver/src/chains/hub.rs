@@ -219,7 +219,7 @@ impl HubChainClient {
 
             let status = response.status();
             if !status.is_success() {
-                let error_body = response.text().await.unwrap_or_default();
+                let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
                 tracing::debug!("Query failed for account {}: HTTP {} - {}", account, status, error_body);
                 continue;
             }
@@ -526,7 +526,7 @@ impl HubChainClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query escrow confirmation: HTTP {} - {}",
                 status,
@@ -546,6 +546,79 @@ impl HubChainClient {
         }
 
         anyhow::bail!("Unexpected response format from is_escrow_confirmed view function")
+    }
+
+    /// Queries the fungible asset balance for an account on the hub chain.
+    ///
+    /// Uses the `0x1::primary_fungible_store::balance` view function.
+    ///
+    /// # Arguments
+    ///
+    /// * `account_addr` - Account address (0x-prefixed hex)
+    /// * `token_metadata` - Token metadata object address (0x-prefixed hex)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Token balance
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub async fn get_token_balance(
+        &self,
+        account_addr: &str,
+        token_metadata: &str,
+    ) -> Result<u128> {
+        let account_normalized = if account_addr.starts_with("0x") {
+            account_addr.to_string()
+        } else {
+            format!("0x{}", account_addr)
+        };
+        let token_normalized = if token_metadata.starts_with("0x") {
+            token_metadata.to_string()
+        } else {
+            format!("0x{}", token_metadata)
+        };
+
+        let view_url = format!("{}/v1/view", self.base_url);
+        let request_body = serde_json::json!({
+            "function": "0x1::primary_fungible_store::balance",
+            "type_arguments": ["0x1::fungible_asset::Metadata"],
+            "arguments": [account_normalized, token_normalized]
+        });
+
+        let response = self
+            .client
+            .post(&view_url)
+            .json(&request_body)
+            .send()
+            .await
+            .context("Failed to query token balance")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
+            anyhow::bail!(
+                "Failed to query token balance: HTTP {} - {}",
+                status,
+                error_body
+            );
+        }
+
+        let result: Vec<serde_json::Value> = response
+            .json()
+            .await
+            .context("Failed to parse token balance response")?;
+
+        if let Some(first_result) = result.first() {
+            if let Some(balance_str) = first_result.as_str() {
+                return balance_str
+                    .parse::<u128>()
+                    .context("Failed to parse balance as u128");
+            }
+            if let Some(balance_num) = first_result.as_u64() {
+                return Ok(balance_num as u128);
+            }
+        }
+
+        anyhow::bail!("Unexpected response format from primary_fungible_store::balance view function")
     }
 
     /// Checks if a FulfillmentProof has been received via GMP for an outflow intent.
@@ -582,7 +655,7 @@ impl HubChainClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query fulfillment proof status: HTTP {} - {}",
                 status,
@@ -714,7 +787,7 @@ impl HubChainClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query solver registration: HTTP {} - {}",
                 status,
@@ -904,7 +977,7 @@ impl HubChainClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
             anyhow::bail!(
                 "Failed to query solver info: HTTP {} - {}",
                 status,

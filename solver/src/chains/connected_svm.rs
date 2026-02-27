@@ -179,6 +179,64 @@ impl ConnectedSvmClient {
         Ok(events)
     }
 
+    /// Queries the SPL token balance for an owner's associated token account.
+    ///
+    /// Derives the Associated Token Account (ATA) for the given owner and mint,
+    /// then queries its balance via `get_token_account_balance`.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_mint` - SPL token mint address (base58)
+    /// * `owner` - Owner public key (base58)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Token balance in base units
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub fn get_token_balance(&self, token_mint: &str, owner: &str) -> Result<u128> {
+        let mint_pubkey = Pubkey::from_str(token_mint)
+            .context("Invalid token mint address")?;
+        let owner_pubkey = Pubkey::from_str(owner)
+            .context("Invalid owner address")?;
+
+        let ata = get_associated_token_address(&owner_pubkey, &mint_pubkey)?;
+
+        let token_balance = self
+            .rpc_client
+            .get_token_account_balance(&ata)
+            .context("Failed to get token account balance")?;
+
+        let amount_str = &token_balance.amount;
+        let balance = amount_str
+            .parse::<u128>()
+            .context("Failed to parse token balance amount as u128")?;
+
+        Ok(balance)
+    }
+
+    /// Queries the native SOL balance (in lamports) for an account.
+    ///
+    /// Used for tracking gas token balance. Unlike `get_token_balance` which queries
+    /// an SPL Associated Token Account, this queries the account's native SOL balance.
+    ///
+    /// # Arguments
+    ///
+    /// * `owner` - Account public key (base58)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(u128)` - Native SOL balance in lamports
+    /// * `Err(anyhow::Error)` - Failed to query balance
+    pub fn get_native_balance(&self, owner: &str) -> Result<u128> {
+        let owner_pubkey = Pubkey::from_str(owner)
+            .context("Invalid owner address")?;
+        let balance = self
+            .rpc_client
+            .get_balance(&owner_pubkey)
+            .context("Failed to get native SOL balance")?;
+        Ok(balance as u128)
+    }
+
     /// Checks if GMP outflow requirements have been delivered for an intent.
     ///
     /// This polls the outflow_validator's requirements PDA account to see if it exists.

@@ -35,6 +35,8 @@ pub struct SolverConfig {
     pub acceptance: AcceptanceConfig,
     /// Solver signing configuration
     pub solver: SolverSigningConfig,
+    /// Liquidity monitoring configuration
+    pub liquidity: LiquidityMonitorConfig,
 }
 
 impl SolverConfig {
@@ -402,6 +404,78 @@ impl SolverConfig {
             }
         }
 
+        // Validate liquidity config
+        {
+            let liq = &self.liquidity;
+            if liq.balance_poll_interval_ms == 0 {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: liquidity.balance_poll_interval_ms must be > 0"
+                ));
+            }
+            if liq.in_flight_timeout_secs == 0 {
+                return Err(anyhow::anyhow!(
+                    "Configuration error: liquidity.in_flight_timeout_secs must be > 0"
+                ));
+            }
+            for threshold in &liq.thresholds {
+                let chain_type = self.chain_type_for_id(threshold.chain_id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Unknown chain_id {} in liquidity threshold",
+                        threshold.chain_id
+                    ))?;
+                validate_token_format(&threshold.token, chain_type)
+                    .map_err(|e| anyhow::anyhow!(
+                        "Invalid token in liquidity threshold for chain {}: {}",
+                        chain_type, e
+                    ))?;
+                if threshold.min_balance == 0 {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: liquidity threshold min_balance must be > 0 for chain {} token {}",
+                        threshold.chain_id, threshold.token
+                    ));
+                }
+            }
+
+            // Every acceptance target token must have a liquidity threshold
+            for pair in &self.acceptance.token_pairs {
+                let has_threshold = liq.thresholds.iter().any(|t|
+                    t.chain_id == pair.target_chain_id && t.token == pair.target_token
+                );
+                if !has_threshold {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: acceptance target token {} on chain {} has no [[liquidity.threshold]]. \
+                         Every token the solver spends must have a minimum balance threshold configured.",
+                        pair.target_token, pair.target_chain_id
+                    ));
+                }
+            }
+
+            // Every chain referenced in acceptance pairs must have a gas token threshold
+            let mut referenced_chain_ids = std::collections::HashSet::new();
+            for pair in &self.acceptance.token_pairs {
+                referenced_chain_ids.insert(pair.source_chain_id);
+                referenced_chain_ids.insert(pair.target_chain_id);
+            }
+            for chain_id in referenced_chain_ids {
+                let chain_type = self.chain_type_for_id(chain_id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "Unknown chain_id {} referenced in acceptance pairs",
+                        chain_id
+                    ))?;
+                let gas_sentinel = gas_token_for_chain_type(chain_type)?;
+                let has_gas_threshold = liq.thresholds.iter().any(|t|
+                    t.chain_id == chain_id && t.token == gas_sentinel
+                );
+                if !has_gas_threshold {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: chain {} ({}) has no gas token [[liquidity.threshold]] (token = \"{}\"). \
+                         Every chain the solver operates on must have a gas token threshold.",
+                        chain_id, chain_type, gas_sentinel
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -428,6 +502,42 @@ impl SolverConfig {
 
         Ok(pairs)
     }
+}
+
+/// Liquidity monitoring configuration.
+///
+/// When present, the solver periodically polls wallet balances and tracks in-flight
+/// commitments to prevent accepting intents it cannot fulfill.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiquidityMonitorConfig {
+    /// How often to poll chain balances (milliseconds)
+    #[serde(default = "default_balance_poll_interval_ms")]
+    pub balance_poll_interval_ms: u64,
+    /// How long before an in-flight commitment is considered failed and released (seconds)
+    #[serde(default = "default_in_flight_timeout_secs")]
+    pub in_flight_timeout_secs: u64,
+    /// Minimum balance thresholds per chain+token
+    #[serde(rename = "threshold", default)]
+    pub thresholds: Vec<LiquidityThresholdConfig>,
+}
+
+/// Minimum balance threshold for a specific token on a specific chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiquidityThresholdConfig {
+    /// Chain ID where the token resides
+    pub chain_id: u64,
+    /// Token address or mint
+    pub token: String,
+    /// Minimum balance below which the solver stops accepting new intents
+    pub min_balance: u64,
+}
+
+fn default_balance_poll_interval_ms() -> u64 {
+    10_000
+}
+
+fn default_in_flight_timeout_secs() -> u64 {
+    300
 }
 
 /// Validates token address format for a chain type.
@@ -471,6 +581,20 @@ fn validate_token_format(token: &str, chain_type: &str) -> anyhow::Result<()> {
         _ => anyhow::bail!("Unknown chain type {}", chain_type),
     }
     Ok(())
+}
+
+/// Returns the gas token sentinel address for a given chain type.
+///
+/// - MVM: `0xa` (MOVE FA metadata, 32-byte padded)
+/// - EVM: zero address (20 bytes)
+/// - SVM: system program (base58)
+pub fn gas_token_for_chain_type(chain_type: &str) -> anyhow::Result<&'static str> {
+    match chain_type {
+        "mvm" => Ok("0x000000000000000000000000000000000000000000000000000000000000000a"),
+        "evm" => Ok("0x0000000000000000000000000000000000000000"),
+        "svm" => Ok("11111111111111111111111111111111"),
+        _ => anyhow::bail!("Unknown chain type: {}", chain_type),
+    }
 }
 
 /// Validates a `0x`-prefixed hex token with expected byte length.

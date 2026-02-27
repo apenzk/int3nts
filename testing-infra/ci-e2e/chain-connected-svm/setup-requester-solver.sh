@@ -72,10 +72,10 @@ log ""
 log " Minting USDcon..."
 # spl-token mint expects token units; 1 token = 1_000_000 base units at 6 decimals.
 log "   Minting to requester..."
-REQUESTER_MINT_OUTPUT=$(mint_svm_tokens "$MINT_ADDR" 1 "$REQUESTER_SVM_TOKEN_ACCOUNT" "$PAYER_KEYPAIR" "$SVM_RPC_URL" 2>&1 || true)
+REQUESTER_MINT_OUTPUT=$(mint_svm_tokens "$MINT_ADDR" 2 "$REQUESTER_SVM_TOKEN_ACCOUNT" "$PAYER_KEYPAIR" "$SVM_RPC_URL" 2>&1 || true)
 log "$REQUESTER_MINT_OUTPUT"
 log "   Minting to solver..."
-SOLVER_MINT_OUTPUT=$(mint_svm_tokens "$MINT_ADDR" 1 "$SOLVER_SVM_TOKEN_ACCOUNT" "$PAYER_KEYPAIR" "$SVM_RPC_URL" 2>&1 || true)
+SOLVER_MINT_OUTPUT=$(mint_svm_tokens "$MINT_ADDR" 2 "$SOLVER_SVM_TOKEN_ACCOUNT" "$PAYER_KEYPAIR" "$SVM_RPC_URL" 2>&1 || true)
 log "$SOLVER_MINT_OUTPUT"
 
 log ""
@@ -90,7 +90,7 @@ fetch_svm_balance_with_retry() {
     local token_account="$2"
     local attempts="${3:-$BALANCE_ATTEMPTS}"
     local delay_seconds="${4:-$BALANCE_RETRY_DELAY}"
-    local expected="${5:-1000000}"
+    local expected="${5:-2000000}"
     local attempt=1
     local output=""
     local status=1
@@ -147,10 +147,10 @@ if [ -z "$REQUESTER_BALANCE" ] || [ -z "$SOLVER_BALANCE" ]; then
     exit 1
 fi
 
-if [ "$REQUESTER_BALANCE" != "1000000" ] || [ "$SOLVER_BALANCE" != "1000000" ]; then
+if [ "$REQUESTER_BALANCE" != "2000000" ] || [ "$SOLVER_BALANCE" != "2000000" ]; then
     log_and_echo "❌ ERROR: Token balances do not match expected values after minting"
-    log_and_echo "   Requester balance: $REQUESTER_BALANCE (expected 1000000)"
-    log_and_echo "   Solver balance:    $SOLVER_BALANCE (expected 1000000)"
+    log_and_echo "   Requester balance: $REQUESTER_BALANCE (expected 2000000)"
+    log_and_echo "   Solver balance:    $SOLVER_BALANCE (expected 2000000)"
     exit 1
 fi
 

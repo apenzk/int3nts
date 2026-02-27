@@ -6,12 +6,14 @@
 #[path = "helpers.rs"]
 mod test_helpers;
 use test_helpers::{
-    create_default_solver_config, DUMMY_EXPIRY, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM,
-    DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
+    create_default_solver_config, create_mvm_pair_liquidity_config,
+    DUMMY_EXPIRY, DUMMY_INTENT_ID, DUMMY_REQUESTER_ADDR_EVM, DUMMY_SOLVER_ADDR_MVMCON,
+    DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB, GAS_TOKEN_MVM,
 };
 
 use serde_json::json;
 use solver::service::parse_draft_data;
+use solver::service::liquidity::LiquidityMonitor;
 use std::sync::Arc;
 
 // ============================================================================
@@ -32,11 +34,19 @@ fn create_default_draft_data() -> serde_json::Value {
     })
 }
 
-/// Create a minimal SolverConfig for testing
-/// Configures token pairs to match the default draft data so drafts would be accepted if not expired
+/// Create a minimal SolverConfig for testing.
+/// Configures token pairs to match the default draft data so drafts would be accepted if not expired.
+/// Includes required liquidity thresholds for all target tokens and gas tokens.
 fn create_test_solver_config() -> solver::config::SolverConfig {
     use solver::config::{AcceptanceConfig, SolverConfig, TokenPairConfig};
 
+    let mut liq = create_mvm_pair_liquidity_config();
+    // Only need one-directional pair for signing tests: source=1, target=2
+    // Keep thresholds for target token (chain 2) and gas tokens (both chains)
+    liq.thresholds.retain(|t|
+        (t.chain_id == 2 && t.token == DUMMY_TOKEN_ADDR_MVMCON) ||
+        t.token == GAS_TOKEN_MVM
+    );
     SolverConfig {
         acceptance: AcceptanceConfig {
             token_pairs: vec![TokenPairConfig {
@@ -47,8 +57,16 @@ fn create_test_solver_config() -> solver::config::SolverConfig {
                 ratio: 0.5,
             }],
         },
+        liquidity: liq,
         ..create_default_solver_config()
     }
+}
+
+/// Create a LiquidityMonitor for testing.
+/// Sets required env vars for connected chain solver addresses.
+fn create_test_liquidity_monitor(config: &solver::config::SolverConfig) -> Arc<LiquidityMonitor> {
+    std::env::set_var("SOLVER_MVMCON_ADDR", DUMMY_SOLVER_ADDR_MVMCON);
+    Arc::new(LiquidityMonitor::new(config.clone(), config.liquidity.clone()).unwrap())
 }
 
 /// Create a PendingDraft with specified expiry time
@@ -285,7 +303,8 @@ fn test_parse_draft_data_max_amounts() {
 async fn test_process_draft_rejects_expired_draft() {
     let config = create_test_solver_config();
     let tracker = Arc::new(solver::service::IntentTracker::new(&config).unwrap());
-    let service = solver::service::SigningService::new(config, tracker).unwrap();
+    let monitor = create_test_liquidity_monitor(&config);
+    let service = solver::service::SigningService::new(config, tracker, monitor).unwrap();
 
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -303,9 +322,41 @@ async fn test_process_draft_rejects_expired_draft() {
 /// Why: Ensure valid drafts are not rejected due to expiry check and proceed to signing
 #[tokio::test]
 async fn test_process_draft_accepts_non_expired_draft() {
+    use solver::service::liquidity::ChainToken;
+
     let config = create_test_solver_config();
     let tracker = Arc::new(solver::service::IntentTracker::new(&config).unwrap());
-    let service = solver::service::SigningService::new(config, tracker).unwrap();
+    let monitor = create_test_liquidity_monitor(&config);
+
+    // Seed the monitor with sufficient balance so the draft passes liquidity checks
+    // and proceeds to signing (which will fail due to missing profile/private key).
+    // Must seed both the intent token AND gas tokens on all referenced chains.
+    {
+        let mut state = monitor.state().write().await;
+        // Target intent token on chain 2
+        let target = ChainToken {
+            chain_id: 2,
+            token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+        };
+        let liq = state.get_mut(&target).expect("test setup: target token must be in state");
+        liq.confirmed_balance = 1_000_000;
+        // Gas token (MOVE) on target chain 2
+        let gas_target = ChainToken {
+            chain_id: 2,
+            token: GAS_TOKEN_MVM.to_string(),
+        };
+        let liq = state.get_mut(&gas_target).expect("test setup: gas target token must be in state");
+        liq.confirmed_balance = 1_000_000;
+        // Gas token (MOVE) on source chain 1
+        let gas_source = ChainToken {
+            chain_id: 1,
+            token: GAS_TOKEN_MVM.to_string(),
+        };
+        let liq = state.get_mut(&gas_source).expect("test setup: gas source token must be in state");
+        liq.confirmed_balance = 1_000_000;
+    }
+
+    let service = solver::service::SigningService::new(config, tracker, monitor).unwrap();
 
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -316,13 +367,13 @@ async fn test_process_draft_accepts_non_expired_draft() {
     let non_expired_draft = create_test_pending_draft(future_expiry);
 
     let result = service.process_draft(&non_expired_draft).await;
-    
+
     // Should fail, but from signing (CLI/HTTP), not expiry
     assert!(result.is_err());
     let error_msg = result.unwrap_err().to_string();
     assert!(
-        error_msg.contains("profile") || 
-        error_msg.contains("private key") || 
+        error_msg.contains("profile") ||
+        error_msg.contains("private key") ||
         error_msg.contains("Failed to get") ||
         error_msg.contains("CLI") ||
         error_msg.contains("HTTP") ||
@@ -338,7 +389,8 @@ async fn test_process_draft_accepts_non_expired_draft() {
 async fn test_process_draft_rejects_draft_at_expiry_boundary() {
     let config = create_test_solver_config();
     let tracker = Arc::new(solver::service::IntentTracker::new(&config).unwrap());
-    let service = solver::service::SigningService::new(config, tracker).unwrap();
+    let monitor = create_test_liquidity_monitor(&config);
+    let service = solver::service::SigningService::new(config, tracker, monitor).unwrap();
 
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

@@ -113,8 +113,8 @@ log_and_echo "   Submitting outflow cross-chain intents via coordinator negotiat
 log_and_echo ""
 log_and_echo " Pre-Intent Balance Validation"
 log_and_echo "=========================================="
-log_and_echo "   Everybody starts with 1 USDhub/USDcon on each chain"
-./testing-infra/ci-e2e/e2e-tests-evm/balance-check.sh 1000000 1000000 1000000 1000000
+log_and_echo "   Everybody starts with 2 USDhub/USDcon on each chain"
+./testing-infra/ci-e2e/e2e-tests-evm/balance-check.sh 2000000 2000000 2000000 2000000
 
 ./testing-infra/ci-e2e/e2e-tests-evm/outflow-submit-hub-intent.sh
 
@@ -147,13 +147,52 @@ log_and_echo " Final Balance View"
 log_and_echo "=========================================="
 # Outflow: Solver gets from hub intent (2000000 on hub, 0 on EVM transferred to requester)
 #          Requester receives on EVM (0 on hub locked in intent, 2000000 on EVM)
-./testing-infra/ci-e2e/e2e-tests-evm/balance-check.sh 2000000 0 0 2000000
+./testing-infra/ci-e2e/e2e-tests-evm/balance-check.sh 3000000 1000000 1000000 3000000
+
+log_and_echo ""
+log_and_echo " Step 6: Verify solver rejects intent when liquidity is insufficient..."
+log_and_echo "=========================================================================="
+log_and_echo "   Solver started with 2,000,000 USDcon on connected EVM, spent 1,000,000 fulfilling intent 1."
+log_and_echo "   Remaining: 1,000,000. Second intent requests 1,000,000."
+log_and_echo "   Liquidity check: available >= requested + min_balance => 1,000,000 >= 1,000,000 + 1 => false."
+log_and_echo "   Solver must reject: not enough to cover the request AND retain the min_balance threshold."
+
+CONNECTED_CHAIN_ID=31337
+HUB_CHAIN_ID=1
+HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
+REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
+USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
+
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+EVM_TOKEN_ADDR_NO_PREFIX="${USD_EVM_ADDR#0x}"
+EVM_TOKEN_ADDR_LOWER=$(echo "$EVM_TOKEN_ADDR_NO_PREFIX" | tr '[:upper:]' '[:lower:]')
+DESIRED_METADATA_EVM="0x000000000000000000000000${EVM_TOKEN_ADDR_LOWER}"
+
+REQUESTER_EVM_ADDR=$(source "$SCRIPT_DIR/../chain-connected-evm/utils.sh" && get_hardhat_account_address "1")
+
+EXPIRY_TIME=$(date -d "+1 hour" +%s)
+SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
+DRAFT_DATA=$(build_draft_data \
+    "$USDHUB_METADATA_HUB" \
+    "1000000" \
+    "$HUB_CHAIN_ID" \
+    "$DESIRED_METADATA_EVM" \
+    "1000000" \
+    "$CONNECTED_CHAIN_ID" \
+    "$EXPIRY_TIME" \
+    "$SECOND_INTENT_ID" \
+    "$REQUESTER_HUB_ADDR" \
+    "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"outflow\", \"connected_chain_type\": \"evm\", \"requester_addr_connected_chain\": \"$REQUESTER_EVM_ADDR\"}")
+
+assert_solver_rejects_draft "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME"
+log_and_echo "✅ Solver correctly rejected second intent due to insufficient liquidity!"
 
 log_and_echo ""
 log_and_echo "✅ E2E outflow test completed!"
 log_and_echo ""
 
-log_and_echo " Step 6: Cleaning up chains, accounts and processes..."
+log_and_echo " Step 7: Cleaning up chains, accounts and processes..."
 log_and_echo "========================================================"
 ./testing-infra/ci-e2e/chain-connected-evm/cleanup.sh
 

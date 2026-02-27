@@ -17,6 +17,7 @@ export SKIP_BUILD
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../util_mvm.sh"
 source "$SCRIPT_DIR/../util_svm.sh"
 
 setup_project_root
@@ -122,7 +123,7 @@ log_and_echo "==================================================================
 log_and_echo ""
 log_and_echo " Pre-Escrow Balance Validation"
 log_and_echo "=========================================="
-./testing-infra/ci-e2e/e2e-tests-svm/balance-check.sh 1000000 1000000 1000000 1000000
+./testing-infra/ci-e2e/e2e-tests-svm/balance-check.sh 2000000 2000000 2000000 2000000
 
 ./testing-infra/ci-e2e/e2e-tests-svm/inflow-submit-escrow.sh
 
@@ -151,9 +152,44 @@ log_and_echo " Final Balance Validation"
 log_and_echo "=========================================="
 # Inflow: Solver transfers to hub requester (0 on hub, 2000000 on hub requester)
 #         Solver receives escrow on SVM (2000000), requester escrow balance 0
-./testing-infra/ci-e2e/e2e-tests-svm/balance-check.sh 0 2000000 2000000 0
+./testing-infra/ci-e2e/e2e-tests-svm/balance-check.sh 1000000 3000000 3000000 1000000
 
 log_and_echo ""
-log_and_echo " Step 6: Cleaning up chains, accounts and processes..."
+log_and_echo " Step 6: Verify solver rejects intent when liquidity is insufficient..."
+log_and_echo "=========================================================================="
+log_and_echo "   Solver started with 2,000,000 USDhub on hub, spent 1,000,000 fulfilling intent 1."
+log_and_echo "   Remaining: 1,000,000. Second intent requests 1,000,000."
+log_and_echo "   Liquidity check: available >= requested + min_balance => 1,000,000 >= 1,000,000 + 1 => false."
+log_and_echo "   Solver must reject: not enough to cover the request AND retain the min_balance threshold."
+
+HUB_CHAIN_ID=1
+CONNECTED_CHAIN_ID=901
+HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
+REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
+USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
+
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+SVM_TOKEN_HEX=$(svm_pubkey_to_hex "$USD_SVM_MINT_ADDR")
+
+EXPIRY_TIME=$(date -d "+1 hour" +%s)
+SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
+DRAFT_DATA=$(build_draft_data \
+    "$SVM_TOKEN_HEX" \
+    "1000000" \
+    "$CONNECTED_CHAIN_ID" \
+    "$USDHUB_METADATA_HUB" \
+    "1000000" \
+    "$HUB_CHAIN_ID" \
+    "$EXPIRY_TIME" \
+    "$SECOND_INTENT_ID" \
+    "$REQUESTER_HUB_ADDR" \
+    "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"inflow\", \"connected_chain_type\": \"svm\"}")
+
+assert_solver_rejects_draft "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME"
+log_and_echo "✅ Solver correctly rejected second intent due to insufficient liquidity!"
+
+log_and_echo ""
+log_and_echo " Step 7: Cleaning up chains, accounts and processes..."
 log_and_echo "========================================================"
 ./testing-infra/ci-e2e/chain-connected-svm/cleanup.sh

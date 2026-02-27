@@ -84,6 +84,18 @@ pub const DUMMY_MODULE_ADDR_HUB: &str =
 pub const DUMMY_MODULE_ADDR_CON: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000011";
 
+// ----------------------------- GAS TOKENS --------------------------------
+
+/// MVM gas token sentinel (MOVE FA metadata, full 32-byte form)
+pub const GAS_TOKEN_MVM: &str =
+    "0x000000000000000000000000000000000000000000000000000000000000000a";
+
+/// EVM gas token sentinel (native ETH, zero address, 20 bytes)
+pub const GAS_TOKEN_EVM: &str = "0x0000000000000000000000000000000000000000";
+
+/// SVM gas token sentinel (native SOL, system program base58)
+pub const GAS_TOKEN_SVM: &str = "11111111111111111111111111111111";
+
 // -------------------------------- OTHER ---------------------------------
 
 /// Dummy transaction hash (64 hex characters)
@@ -185,6 +197,82 @@ pub fn create_default_solver_signing_config() -> solver::config::SolverSigningCo
     }
 }
 
+/// Create a default liquidity monitor config with test values.
+///
+/// Has no thresholds — only valid for configs with empty acceptance pairs.
+/// For configs with acceptance pairs, use `create_mvm_pair_liquidity_config()`.
+pub fn create_default_liquidity_config() -> solver::config::LiquidityMonitorConfig {
+    solver::config::LiquidityMonitorConfig {
+        balance_poll_interval_ms: 10_000,
+        in_flight_timeout_secs: 300,
+        thresholds: Vec::new(),
+    }
+}
+
+/// Create a liquidity config with thresholds for the default MVM hub<->connected pair.
+///
+/// Covers: both target tokens (hub token on chain 1, connected token on chain 2)
+/// and gas tokens (MVM native on both chains).
+pub fn create_mvm_pair_liquidity_config() -> solver::config::LiquidityMonitorConfig {
+    solver::config::LiquidityMonitorConfig {
+        balance_poll_interval_ms: 10_000,
+        in_flight_timeout_secs: 300,
+        thresholds: vec![
+            // Target token on hub chain (for inflow: solver spends USDhub)
+            solver::config::LiquidityThresholdConfig {
+                chain_id: 1,
+                token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+                min_balance: 500,
+            },
+            // Target token on connected chain (for outflow: solver spends USDcon)
+            solver::config::LiquidityThresholdConfig {
+                chain_id: 2,
+                token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+                min_balance: 500,
+            },
+            // Gas token on hub chain
+            solver::config::LiquidityThresholdConfig {
+                chain_id: 1,
+                token: GAS_TOKEN_MVM.to_string(),
+                min_balance: 100,
+            },
+            // Gas token on connected chain
+            solver::config::LiquidityThresholdConfig {
+                chain_id: 2,
+                token: GAS_TOKEN_MVM.to_string(),
+                min_balance: 100,
+            },
+        ],
+    }
+}
+
+/// Create a default connected EVM chain config with test values.
+pub fn create_default_connected_evm_chain_config() -> solver::config::EvmChainConfig {
+    solver::config::EvmChainConfig {
+        name: "connected-evm-chain".to_string(),
+        rpc_url: "http://127.0.0.1:8545".to_string(),
+        chain_id: 3,
+        escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
+        private_key_env: "SOLVER_EVM_PRIVATE_KEY".to_string(),
+        network_name: "localhost".to_string(),
+        outflow_validator_addr: None,
+        gmp_endpoint_addr: None,
+    }
+}
+
+/// Create a default connected SVM chain config with test values.
+pub fn create_default_connected_svm_chain_config() -> solver::config::SvmChainConfig {
+    solver::config::SvmChainConfig {
+        name: "connected-svm-chain".to_string(),
+        rpc_url: "http://127.0.0.1:8899".to_string(),
+        chain_id: 4,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    }
+}
+
 /// Create a default solver config with test values.
 /// This can be customized using Rust's struct update syntax:
 /// ```
@@ -206,5 +294,18 @@ pub fn create_default_solver_config() -> solver::config::SolverConfig {
             token_pairs: Vec::new(),
         },
         solver: create_default_solver_signing_config(),
+        liquidity: create_default_liquidity_config(),
+    }
+}
+
+/// Create a solver config with all chain types (MVM, EVM, SVM) for multi-chain tests.
+pub fn create_multi_chain_solver_config() -> solver::config::SolverConfig {
+    solver::config::SolverConfig {
+        connected_chain: vec![
+            solver::config::ConnectedChainConfig::Mvm(create_default_connected_mvm_chain_config()),
+            solver::config::ConnectedChainConfig::Evm(create_default_connected_evm_chain_config()),
+            solver::config::ConnectedChainConfig::Svm(create_default_connected_svm_chain_config()),
+        ],
+        ..create_default_solver_config()
     }
 }

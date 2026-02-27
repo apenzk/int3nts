@@ -1,11 +1,14 @@
 # Solver Service Configuration
-# 
+#
 # This file contains all configuration settings for the solver service.
 # Copy this template to solver.toml and update the values for your environment.
 #
 # SECURITY WARNING: This file contains private keys and should never be committed to version control!
 
-# Service Configuration
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# SERVICE
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 [service]
 coordinator_url = "http://127.0.0.1:3333"  # Coordinator API base URL (draft negotiation)
 polling_interval_ms = 2000               # Polling interval for checking pending drafts (milliseconds)
@@ -13,8 +16,11 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 acceptance_api_host = "127.0.0.1"         # Solver acceptance API host
 acceptance_api_port = 4444                # Solver acceptance API port
 
-# Hub Chain Configuration
-# The hub chain is where intents are created
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# CHAINS
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# Hub Chain - where intents are created
 [hub_chain]
 name = "Hub Chain"                        # Human-readable name for the chain
 rpc_url = "http://127.0.0.1:8080/v1"     # RPC endpoint URL for blockchain communication
@@ -57,8 +63,10 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 # escrow_program_id = "<your-svm-program-id>"
 # private_key_env = "SOLANA_SOLVER_PRIVATE_KEY" # Environment variable containing solver private key (base58)
 
-# Acceptance Criteria
-# Defines which token pairs are supported and their exchange rates
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# ACCEPTANCE
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 [acceptance]
 # Token pair format: "offered_chain_id:offered_token:desired_chain_id:desired_token" = exchange_rate
 # Exchange rate = how many offered tokens per 1 desired token
@@ -89,7 +97,46 @@ ratio = 1.0
 # target_token = "0xcccccccccccccccccccccccccccccccccccccccc"
 # ratio = 0.5
 
-# Solver Signing Configuration
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# LIQUIDITY
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+[liquidity]
+balance_poll_interval_ms = 10000         # How often to poll chain balances (milliseconds)
+in_flight_timeout_secs = 300             # How long before an in-flight commitment is released (seconds)
+
+# REQUIRED: Per-token minimum balance thresholds.
+# The solver will REFUSE TO START if thresholds are missing for:
+#   1. Every acceptance target token (the token the solver spends)
+#   2. The gas token on every chain referenced in acceptance pairs
+#
+# Native gas token sentinels:
+#   Movement (MVM): "0x000000000000000000000000000000000000000000000000000000000000000a"
+#   EVM:            "0x0000000000000000000000000000000000000000"
+#   SVM:            "11111111111111111111111111111111"
+
+# Asset token threshold (must match acceptance target_token)
+[[liquidity.threshold]]
+chain_id = 2
+token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+min_balance = 100000
+
+# Gas token threshold for hub chain (MOVE)
+[[liquidity.threshold]]
+chain_id = 1
+token = "0x000000000000000000000000000000000000000000000000000000000000000a"
+min_balance = 100000
+
+# Gas token threshold for connected chain (MOVE for MVM, ETH for EVM, SOL for SVM)
+[[liquidity.threshold]]
+chain_id = 2
+token = "0x000000000000000000000000000000000000000000000000000000000000000a"
+min_balance = 100000
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# SOLVER
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 [solver]
 profile = "solver-chain1"                # Aptos/Movement CLI profile name for solver account
 address = "0x..."                        # Solver address (0x-prefixed hex)

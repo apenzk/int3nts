@@ -153,7 +153,7 @@ log " Minting USDcon to Requester and Solver on EVM chain..."
 
 REQUESTER_EVM_ADDR=$(get_hardhat_account_address "1")
 SOLVER_EVM_ADDR=$(get_hardhat_account_address "2")
-USDCON_MINT_AMOUNT="1000000"  # 1 USDcon (6 decimals = 1_000_000)
+USDCON_MINT_AMOUNT="2000000"  # 2 USDcon (6 decimals = 2_000_000)
 
 log "   - Minting $USDCON_MINT_AMOUNT 10e-6.USDcon to Requester ($REQUESTER_EVM_ADDR)..."
 MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDR='$USD_EVM_ADDR' RECIPIENT='$REQUESTER_EVM_ADDR' AMOUNT='$USDCON_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
@@ -173,7 +173,7 @@ else
     exit 1
 fi
 
-log_and_echo "✅ USDcon minted to Requester and Solver on EVM chain"
+log_and_echo "✅ USDcon minted to Requester and Solver on EVM chain (2 USDcon each)"
 
 # Configure hub chain to trust EVM connected chain
 log ""

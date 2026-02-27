@@ -347,6 +347,16 @@ display_service_logs() {
     fi
     
     if [ -f "$solver_log" ]; then
+        # Surface WARN/ERROR lines first for quick diagnosis
+        local warn_error_lines
+        warn_error_lines=$(grep -E 'WARN|ERROR' "$solver_log" 2>/dev/null | sed 's/^/   /' || true)
+        if [ -n "$warn_error_lines" ]; then
+            log_and_echo ""
+            log_and_echo "⚠ Solver WARN/ERROR lines:"
+            log_and_echo "-----------------------------------"
+            echo "$warn_error_lines" | while IFS= read -r line; do log_and_echo "$line"; done
+            log_and_echo "-----------------------------------"
+        fi
         log_and_echo ""
         log_and_echo " Solver logs:"
         log_and_echo "-----------------------------------"
@@ -1402,5 +1412,94 @@ wait_for_solver_fulfillment() {
     log_and_echo "⏰ Timeout waiting for solver fulfillment after ${timeout_seconds}s"
 
     return 1
+}
+
+# Assert that the solver rejects a draft intent due to insufficient liquidity.
+#
+# After a successful intent, the solver's balance is depleted. Submitting a second
+# draft with the same amount should be rejected by the liquidity monitor.
+#
+# This function:
+#   1. Submits a new draft to the coordinator
+#   2. Polls for a signature (expecting none)
+#   3. Verifies the solver log contains an "insufficient budget" rejection
+#
+# Usage: assert_solver_rejects_draft <requester_addr> <draft_data_json> <expiry_time>
+# Returns: 0 on expected rejection, exits 1 on unexpected acceptance
+assert_solver_rejects_draft() {
+    local requester_addr="$1"
+    local draft_data_json="$2"
+    local expiry_time="$3"
+
+    if [ -z "$requester_addr" ] || [ -z "$draft_data_json" ] || [ -z "$expiry_time" ]; then
+        log_and_echo "❌ ERROR: assert_solver_rejects_draft() requires requester_addr, draft_data_json, and expiry_time"
+        exit 1
+    fi
+
+    local solver_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/solver.log"
+
+    # Record current solver log line count so we only check NEW lines
+    local log_lines_before=0
+    if [ -f "$solver_log_file" ]; then
+        log_lines_before=$(wc -l < "$solver_log_file")
+    fi
+
+    log ""
+    log "   Submitting second draft intent (expecting rejection)..."
+
+    # Submit the draft to the coordinator
+    local draft_id
+    draft_id=$(submit_draft_intent "$requester_addr" "$draft_data_json" "$expiry_time")
+    if [ -z "$draft_id" ] || [ "$draft_id" = "null" ]; then
+        log_and_echo "❌ ERROR: Failed to submit draft intent for liquidity rejection test"
+        exit 1
+    fi
+    log "   Draft ID: $draft_id"
+
+    # Poll for signature with short timeout — we expect NO signature
+    log "   Polling for signature (expecting timeout = no signature)..."
+    local signature_data
+    signature_data=$(poll_for_signature "$draft_id" 5 2) || true
+
+    local signature=""
+    if [ -n "$signature_data" ]; then
+        signature=$(echo "$signature_data" | jq -r '.signature // empty' 2>/dev/null)
+    fi
+
+    if [ -n "$signature" ] && [ "$signature" != "null" ]; then
+        log_and_echo "❌ ERROR: Solver unexpectedly SIGNED the draft!"
+        log_and_echo "   The solver should have rejected this draft due to insufficient liquidity."
+        log_and_echo "   Signature: $signature"
+        display_service_logs "Unexpected signature on depleted balance"
+        exit 1
+    fi
+
+    log "   ✅ No signature received (as expected)"
+
+    # Verify that the solver logged the rejection for the right reason
+    if [ -f "$solver_log_file" ]; then
+        local new_lines
+        new_lines=$(tail -n +"$((log_lines_before + 1))" "$solver_log_file")
+
+        if echo "$new_lines" | grep -q "rejected: insufficient budget"; then
+            log "   ✅ Solver log confirms: draft rejected due to insufficient budget"
+        elif echo "$new_lines" | grep -q "rejected:"; then
+            # Rejected for another reason (e.g., gas token below threshold) — still a valid liquidity guard
+            local rejection_reason
+            rejection_reason=$(echo "$new_lines" | grep "rejected:" | head -1)
+            log "   ✅ Solver log confirms rejection: $rejection_reason"
+        else
+            log_and_echo "❌ ERROR: No rejection message found in solver logs"
+            log_and_echo "   Expected solver to log 'rejected: insufficient budget' or similar"
+            log_and_echo "   New solver log lines since draft submission:"
+            echo "$new_lines" | tail -30 | while IFS= read -r line; do log_and_echo "   $line"; done
+            exit 1
+        fi
+    else
+        log_and_echo "❌ ERROR: Solver log file not found at $solver_log_file"
+        exit 1
+    fi
+
+    return 0
 }
 

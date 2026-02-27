@@ -589,6 +589,21 @@ async fn test_revert_if_already_cancelled() {
     );
     context.banks_client.process_transaction(cancel_tx).await.unwrap();
 
+    // Warp to next slot to ensure transaction uniqueness in test framework
+    // (solana-program-test silently deduplicates identical transactions within the same slot)
+    context.warp_to_slot(100).unwrap();
+
+    // Re-set clock past expiry (warp_to_slot resets sysvars)
+    let clock_account = context
+        .banks_client
+        .get_account(sysvar::clock::id())
+        .await
+        .unwrap()
+        .unwrap();
+    let mut clock: Clock = deserialize(&clock_account.data).unwrap();
+    clock.unix_timestamp = escrow_data.expiry + 1;
+    context.set_sysvar(&clock);
+
     // Second cancel should fail — escrow already released
     let cancel_ix2 = create_cancel_ix(
         env.program_id,

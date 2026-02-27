@@ -140,12 +140,20 @@ if [ -z "$RETRIEVED_SIGNATURE" ] || [ "$RETRIEVED_SIGNATURE" = "null" ]; then
         log_and_echo "   ❌ Solver PID file not found"
     fi
     
-    # Show solver log
+    # Show solver log - surface WARN/ERROR lines first
     if [ -f "$SOLVER_LOG_FILE" ]; then
+        SOLVER_WARNINGS=$(grep -E 'WARN|ERROR' "$SOLVER_LOG_FILE" 2>/dev/null || true)
+        if [ -n "$SOLVER_WARNINGS" ]; then
+            log_and_echo ""
+            log_and_echo "   ⚠ Solver WARN/ERROR lines:"
+            log_and_echo "   ----------------------------------------"
+            echo "$SOLVER_WARNINGS" | while IFS= read -r line; do log_and_echo "   $line"; done
+            log_and_echo "   ----------------------------------------"
+        fi
         log_and_echo ""
         log_and_echo "    Solver log (last 100 lines):"
         log_and_echo "   ----------------------------------------"
-        tail -100 "$SOLVER_LOG_FILE" | while read line; do log_and_echo "   $line"; done
+        tail -100 "$SOLVER_LOG_FILE" | while IFS= read -r line; do log_and_echo "   $line"; done
         log_and_echo "   ----------------------------------------"
     else
         log_and_echo "   ️  Solver log file not found: $SOLVER_LOG_FILE"

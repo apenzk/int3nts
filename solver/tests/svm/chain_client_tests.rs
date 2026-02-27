@@ -24,7 +24,7 @@ use test_helpers::{DUMMY_INTENT_ID, DUMMY_SVM_ESCROW_PROGRAM_ID};
 /// Why: Client initialization is the entry point for all SVM operations. A failure
 /// here would prevent any solver operations on connected SVM chains.
 #[test]
-fn test_new_accepts_valid_program_id() {
+fn test_client_new() {
     let config = SvmChainConfig {
         name: "svm".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
@@ -44,7 +44,7 @@ fn test_new_accepts_valid_program_id() {
 /// Why: Misconfigured program ids should fail fast instead of causing RPC errors later.
 /// This prevents confusing error messages during escrow operations.
 #[test]
-fn test_new_rejects_invalid_program_id() {
+fn test_client_new_rejects_invalid() {
     let config = SvmChainConfig {
         name: "svm".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
@@ -66,18 +66,17 @@ fn test_new_rejects_invalid_program_id() {
 // #7: fulfillment_id_formatting - TODO: implement for SVM
 // #8: fulfillment_signature_encoding - N/A for SVM (uses different mechanism)
 // #9: fulfillment_command_building - TODO: implement for SVM
-// #10: fulfillment_hash_extraction - TODO: implement for SVM
 
 // ============================================================================
 // GMP FULFILLMENT
 // ============================================================================
 
-/// 11. Test: Fulfill Outflow Via GMP Returns Error When Not Configured
+/// 10. Test: Fulfill Outflow Via GMP Returns Error When Not Configured
 /// Verifies that fulfill_outflow_via_gmp returns an error when GMP config is missing.
 /// Why: The GMP flow for SVM requires outflow_validator_program_id and gmp_endpoint_program_id
 /// to be configured. If not configured, the function should return a clear error message.
 #[tokio::test]
-async fn test_fulfill_outflow_via_gmp_requires_config() {
+async fn test_fulfillment_error_handling() {
     let config = SvmChainConfig {
         name: "svm".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
@@ -111,7 +110,7 @@ async fn test_fulfill_outflow_via_gmp_requires_config() {
 // INPUT PARSING
 // ============================================================================
 
-/// 12. Test: Pubkey From Hex With Leading Zeros
+/// 11. Test: Pubkey From Hex With Leading Zeros
 /// Verifies that pubkey parsing handles hex strings with leading zeros.
 /// Why: Intent IDs often have leading zeros. If they're stripped during conversion,
 /// the pubkey will be wrong and escrow lookups will fail silently.
@@ -128,10 +127,10 @@ fn test_pubkey_from_hex_with_leading_zeros() {
     assert!(hex_no_prefix.starts_with("0000"));
 }
 
-/// 13. Test: Pubkey From Hex No Leading Zeros
+/// 12. Test: Pubkey From Hex No Leading Zeros
 /// Verifies that pubkey parsing handles hex strings without leading zeros.
 /// Why: Ensures non-zero-prefixed hex strings are parsed correctly. This is the
-/// complementary test to #12 to ensure both cases work.
+/// complementary test to #11 to ensure both cases work.
 #[test]
 fn test_pubkey_from_hex_no_leading_zeros() {
     // Test hex without leading zeros
@@ -184,7 +183,7 @@ fn create_mock_escrow_response(is_claimed: bool) -> serde_json::Value {
     })
 }
 
-/// 14. Test: is_escrow_released returns true when escrow has been released
+/// 13. Test: is_escrow_released returns true when escrow has been released
 /// Verifies that is_escrow_released() correctly parses escrow account data
 /// and returns true when is_claimed flag is set.
 /// Why: With auto-release, the solver polls this to confirm release happened.
@@ -214,11 +213,11 @@ async fn test_is_escrow_released_success() {
     assert!(result, "Expected is_escrow_released to return true");
 }
 
-/// 15. Test: is_escrow_released returns false when escrow not yet released
+/// 14. Test: is_escrow_released returns false when escrow not yet released
 /// Verifies that is_escrow_released() correctly parses a false is_claimed value.
 /// Why: The solver polls this function repeatedly; false must not be misinterpreted.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_is_escrow_released_returns_false() {
+async fn test_is_escrow_released_false() {
     let mock_server = MockServer::start().await;
     let rpc_url = mock_server.uri();
 
@@ -243,11 +242,11 @@ async fn test_is_escrow_released_returns_false() {
     assert!(!result, "Expected is_escrow_released to return false");
 }
 
-/// 16. Test: is_escrow_released handles RPC error
+/// 15. Test: is_escrow_released handles RPC error
 /// Verifies that is_escrow_released() propagates errors from failed RPC requests.
 /// Why: Network errors must not be silently swallowed; the solver needs to retry.
 #[tokio::test(flavor = "multi_thread")]
-async fn test_is_escrow_released_rpc_error() {
+async fn test_is_escrow_released_error() {
     let mock_server = MockServer::start().await;
     let rpc_url = mock_server.uri();
 
@@ -279,3 +278,210 @@ async fn test_is_escrow_released_rpc_error() {
     let result = client.is_escrow_released(DUMMY_INTENT_ID);
     assert!(result.is_err(), "Expected RPC error to propagate");
 }
+
+// ============================================================================
+// BALANCE QUERIES
+// ============================================================================
+
+/// 16. Test: get_token_balance returns correct SPL token balance
+/// Verifies that get_token_balance() derives the ATA and parses the balance response.
+/// Why: Liquidity monitoring depends on accurate token balance reads from SVM chains.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_token_balance_success() {
+    let mock_server = MockServer::start().await;
+    let rpc_url = mock_server.uri();
+
+    // Mock getTokenAccountBalance response
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": { "slot": 123 },
+                "value": {
+                    "amount": "1000000",
+                    "decimals": 6,
+                    "uiAmount": 1.0,
+                    "uiAmountString": "1.0"
+                }
+            },
+            "id": 1
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = SvmChainConfig {
+        name: "svm".to_string(),
+        rpc_url,
+        chain_id: 901,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    };
+
+    let client = ConnectedSvmClient::new(&config).unwrap();
+
+    // Use a valid base58 mint and owner (system program as mint, for simplicity)
+    let mint = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+    let owner = "11111111111111111111111111111112";
+
+    let balance = client.get_token_balance(mint, owner).unwrap();
+    assert_eq!(balance, 1_000_000);
+}
+
+/// 17. Test: get_token_balance propagates RPC errors
+/// Verifies that get_token_balance() returns Err on RPC error.
+/// Why: RPC errors must propagate so the liquidity monitor can log and retry.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_token_balance_error() {
+    let mock_server = MockServer::start().await;
+    let rpc_url = mock_server.uri();
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32602,
+                "message": "Invalid param: could not find account"
+            },
+            "id": 1
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = SvmChainConfig {
+        name: "svm".to_string(),
+        rpc_url,
+        chain_id: 901,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    };
+
+    let client = ConnectedSvmClient::new(&config).unwrap();
+
+    let mint = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+    let owner = "11111111111111111111111111111112";
+
+    let result = client.get_token_balance(mint, owner);
+    assert!(result.is_err(), "Expected RPC error to propagate");
+}
+
+// #18: get_token_balance_zero - N/A for SVM (token account either exists with balance or doesn't exist)
+
+/// 19. Test: get_native_balance returns correct SOL balance
+/// Verifies that get_native_balance() calls getBalance and returns lamports.
+/// Why: Gas token monitoring uses native SOL balance, not SPL token balance.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_native_balance_success() {
+    let mock_server = MockServer::start().await;
+    let rpc_url = mock_server.uri();
+
+    // 0.1 SOL = 100_000_000 lamports
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": { "slot": 123 },
+                "value": 100_000_000u64
+            },
+            "id": 1
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = SvmChainConfig {
+        name: "svm".to_string(),
+        rpc_url,
+        chain_id: 901,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    };
+
+    let client = ConnectedSvmClient::new(&config).unwrap();
+    let owner = "11111111111111111111111111111112";
+
+    let balance = client.get_native_balance(owner).unwrap();
+    assert_eq!(balance, 100_000_000);
+}
+
+/// 20. Test: get_native_balance propagates RPC errors
+/// Verifies that get_native_balance() returns Err on RPC failure.
+/// Why: RPC errors must propagate so the liquidity monitor can log and retry.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_get_native_balance_error() {
+    let mock_server = MockServer::start().await;
+    let rpc_url = mock_server.uri();
+
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32602,
+                "message": "Invalid param: could not find account"
+            },
+            "id": 1
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let config = SvmChainConfig {
+        name: "svm".to_string(),
+        rpc_url,
+        chain_id: 901,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    };
+
+    let client = ConnectedSvmClient::new(&config).unwrap();
+    let owner = "11111111111111111111111111111112";
+
+    let result = client.get_native_balance(owner);
+    assert!(result.is_err(), "Expected RPC error to propagate");
+}
+
+// ============================================================================
+// HEX ADDRESS NORMALIZATION (MVM-specific)
+// ============================================================================
+
+// #21: normalize_hex_to_address_full_length - N/A for SVM (MVM-specific Move address normalization)
+// #22: normalize_hex_to_address_short_address - N/A for SVM (MVM-specific Move address normalization)
+// #23: normalize_hex_to_address_odd_length - N/A for SVM (MVM-specific Move address normalization)
+// #24: normalize_hex_to_address_no_prefix - N/A for SVM (MVM-specific Move address normalization)
+
+// ============================================================================
+// HAS OUTFLOW REQUIREMENTS (MVM-specific)
+// ============================================================================
+
+// #25: has_outflow_requirements_success - N/A for SVM (MVM-specific GMP view function)
+// #26: has_outflow_requirements_false - N/A for SVM (MVM-specific GMP view function)
+// #27: has_outflow_requirements_error - N/A for SVM (MVM-specific GMP view function)
+
+// ============================================================================
+// IS ESCROW RELEASED HELPERS (EVM-specific)
+// ============================================================================
+
+// #28: is_escrow_released_id_formatting - N/A for SVM (EVM-specific Hardhat script mechanics)
+// #29: is_escrow_released_output_parsing - N/A for SVM (EVM-specific Hardhat script mechanics)
+// #30: is_escrow_released_command_building - N/A for SVM (EVM-specific Hardhat script mechanics)
+// #31: is_escrow_released_error_handling - N/A for SVM (EVM-specific Hardhat script mechanics)
+
+// ============================================================================
+// EVM ADDRESS NORMALIZATION (EVM-specific)
+// ============================================================================
+
+// #32: get_native_balance_exceeds_u64 - N/A for SVM (EVM-specific u64 overflow from large ETH balances)
+// #33: get_token_balance_with_padded_address - N/A for SVM (EVM-specific 32-byte address padding)
+// #34: get_native_balance_with_padded_address - N/A for SVM (EVM-specific 32-byte address padding)
+// #35: normalize_evm_address_padded - N/A for SVM (EVM-specific address normalization)
+// #36: normalize_evm_address_passthrough - N/A for SVM (EVM-specific address normalization)
+// #37: normalize_evm_address_rejects_non_zero_high_bytes - N/A for SVM (EVM-specific address normalization)

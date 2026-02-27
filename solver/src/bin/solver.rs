@@ -25,7 +25,7 @@ use solver::{
     config::SolverConfig,
     crypto::{get_private_key_from_profile, sign_intent_hash},
     api::run_acceptance_server,
-    service::{InflowService, IntentTracker, OutflowService, SigningService},
+    service::{InflowService, IntentTracker, LiquidityMonitor, OutflowService, SigningService},
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -277,21 +277,27 @@ async fn main() -> Result<()> {
     let tracker = Arc::new(IntentTracker::new(&config)?);
     info!("Intent tracker initialized");
 
+    // Create liquidity monitor
+    let liquidity_monitor = Arc::new(
+        LiquidityMonitor::new(config.clone(), config.liquidity.clone())?
+    );
+    info!("Liquidity monitor initialized");
+
     // Create services
-    let signing_service = SigningService::new(config.clone(), tracker.clone())?;
+    let signing_service = SigningService::new(config.clone(), tracker.clone(), Arc::clone(&liquidity_monitor))?;
     info!("Signing service initialized");
 
-    let inflow_service = InflowService::new(config.clone(), tracker.clone())?;
+    let inflow_service = InflowService::new(config.clone(), tracker.clone(), Arc::clone(&liquidity_monitor))?;
     info!("Inflow service initialized");
 
-    let outflow_service = OutflowService::new(config.clone(), tracker.clone())?;
+    let outflow_service = OutflowService::new(config.clone(), tracker.clone(), Arc::clone(&liquidity_monitor))?;
     info!("Outflow service initialized");
 
     let polling_interval = Duration::from_millis(config.service.polling_interval_ms);
 
     // Run all services concurrently with graceful shutdown
     info!("Starting all services...");
-    
+
     let acceptance_host = config.service.acceptance_api_host.clone();
     let acceptance_port = config.service.acceptance_api_port;
     let acceptance_server = run_acceptance_server(config_arc.clone(), acceptance_host, acceptance_port);
@@ -303,7 +309,7 @@ async fn main() -> Result<()> {
                 error!("Signing service error: {}", e);
             }
         }
-        
+
         // Intent tracker loop (polls hub chain for created intents)
         _ = async {
             loop {
@@ -313,20 +319,27 @@ async fn main() -> Result<()> {
                 tokio::time::sleep(polling_interval).await;
             }
         } => {}
-        
+
         // Inflow fulfillment service loop
         result = inflow_service.run() => {
             if let Err(e) = result {
                 error!("Inflow service error: {}", e);
             }
         }
-        
+
         // Outflow fulfillment service loop
         _ = outflow_service.run(polling_interval) => {}
 
         // Acceptance API server for live ratio lookup
         _ = acceptance_server => {}
-        
+
+        // Liquidity monitor loop (polls balances and cleans up expired commitments)
+        result = liquidity_monitor.run() => {
+            if let Err(e) = result {
+                error!("Liquidity monitor error: {}", e);
+            }
+        }
+
         // Graceful shutdown on Ctrl+C
         _ = signal::ctrl_c() => {
             info!("Received shutdown signal, stopping services...");

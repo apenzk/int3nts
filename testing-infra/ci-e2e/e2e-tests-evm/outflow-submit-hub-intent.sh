@@ -141,24 +141,32 @@ if [ -z "$RETRIEVED_SIGNATURE" ] || [ "$RETRIEVED_SIGNATURE" = "null" ]; then
         log_and_echo "   ❌ Solver PID file not found"
     fi
     
-    # Show solver log
+    # Show solver log - surface WARN/ERROR lines first
     if [ -f "$SOLVER_LOG_FILE" ]; then
+        SOLVER_WARNINGS=$(grep -E 'WARN|ERROR' "$SOLVER_LOG_FILE" 2>/dev/null || true)
+        if [ -n "$SOLVER_WARNINGS" ]; then
+            log_and_echo ""
+            log_and_echo "   ⚠ Solver WARN/ERROR lines:"
+            log_and_echo "   ----------------------------------------"
+            echo "$SOLVER_WARNINGS" | while IFS= read -r line; do log_and_echo "   $line"; done
+            log_and_echo "   ----------------------------------------"
+        fi
         log_and_echo ""
         log_and_echo "    Solver log (last 100 lines):"
         log_and_echo "   ----------------------------------------"
-        tail -100 "$SOLVER_LOG_FILE" | while read line; do log_and_echo "   $line"; done
+        tail -100 "$SOLVER_LOG_FILE" | while IFS= read -r line; do log_and_echo "   $line"; done
         log_and_echo "   ----------------------------------------"
     else
         log_and_echo "   ️  Solver log file not found: $SOLVER_LOG_FILE"
     fi
-    
+
     # Show coordinator and integrated-gmp logs
     for f in "$PROJECT_ROOT/.tmp/e2e-tests/coordinator.log" "$PROJECT_ROOT/.tmp/e2e-tests/integrated-gmp.log"; do
         if [ -f "$f" ]; then
             log_and_echo ""
             log_and_echo "    $(basename "$f") (last 30 lines):"
             log_and_echo "   ----------------------------------------"
-            tail -30 "$f" | while read line; do log_and_echo "   $line"; done
+            tail -30 "$f" | while IFS= read -r line; do log_and_echo "   $line"; done
             log_and_echo "   ----------------------------------------"
         fi
     done

@@ -7,7 +7,7 @@
 
 use serde_json::json;
 use solver::chains::ConnectedMvmClient;
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_partial_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[path = "../helpers.rs"]
@@ -26,7 +26,7 @@ use test_helpers::{
 /// Why: Client initialization is the entry point for all MVM operations. A failure
 /// here would prevent any solver operations on connected MVM chains.
 #[test]
-fn test_mvm_client_new() {
+fn test_client_new() {
     let config = create_default_connected_mvm_chain_config();
     let _client = ConnectedMvmClient::new(&config).unwrap();
 }
@@ -51,7 +51,7 @@ fn test_mvm_client_new() {
 /// Why: The aptos CLI expects hex arguments without the 0x prefix. Wrong formatting
 /// would cause the transaction to fail with a parse error.
 #[test]
-fn test_fulfill_outflow_via_gmp_intent_id_formatting() {
+fn test_fulfillment_id_formatting() {
     // Test that intent_id with 0x prefix has it stripped for hex: arg
     let intent_id_with_prefix = "0x1234567890abcdef";
     let formatted = intent_id_with_prefix
@@ -74,7 +74,7 @@ fn test_fulfill_outflow_via_gmp_intent_id_formatting() {
 /// Why: The fulfill_intent function is called via aptos CLI. Wrong argument formatting
 /// would cause silent failures or wrong function parameters.
 #[test]
-fn test_fulfill_outflow_via_gmp_command_building() {
+fn test_fulfillment_command_building() {
     let module_addr = DUMMY_MODULE_ADDR_CON;
     let intent_id = DUMMY_INTENT_ID;
     let token_metadata = DUMMY_TOKEN_ADDR_MVMCON;
@@ -102,16 +102,15 @@ fn test_fulfill_outflow_via_gmp_command_building() {
     assert_eq!(profile, "solver-chain2");
 }
 
-// #10: fulfillment_hash_extraction - TODO: implement for MVM
-// #11: fulfillment_error_handling - TODO: implement for MVM
-// #12: pubkey_from_hex_with_leading_zeros - N/A for MVM (SVM-specific)
-// #13: pubkey_from_hex_no_leading_zeros - N/A for MVM (SVM-specific)
+// #10: fulfillment_error_handling - TODO: implement for MVM
+// #11: pubkey_from_hex_with_leading_zeros - N/A for MVM (SVM-specific)
+// #12: pubkey_from_hex_no_leading_zeros - N/A for MVM (SVM-specific)
 
 // ============================================================================
 // GMP ESCROW STATE QUERYING (MVM-specific)
 // ============================================================================
 
-/// 14. Test: is_escrow_released returns true when escrow has been auto-released
+/// 13. Test: is_escrow_released returns true when escrow has been auto-released
 /// Verifies that is_escrow_released() calls the intent_inflow_escrow::is_released
 /// view function and parses the boolean response.
 /// Why: With auto-release, the solver polls this to confirm release happened.
@@ -135,11 +134,11 @@ async fn test_is_escrow_released_success() {
     assert!(result);
 }
 
-/// 15. Test: is_escrow_released returns false when not yet released
+/// 14. Test: is_escrow_released returns false when not yet released
 /// Verifies that is_escrow_released() correctly parses a false response.
 /// Why: The solver polls this function repeatedly; false must not be misinterpreted.
 #[tokio::test]
-async fn test_is_escrow_released_returns_false() {
+async fn test_is_escrow_released_false() {
     let mock_server = MockServer::start().await;
     let base_url = format!("{}/v1", mock_server.uri());
 
@@ -157,11 +156,11 @@ async fn test_is_escrow_released_returns_false() {
     assert!(!result);
 }
 
-/// 16. Test: is_escrow_released handles HTTP error
+/// 15. Test: is_escrow_released handles HTTP error
 /// Verifies that is_escrow_released() propagates errors from failed HTTP requests.
 /// Why: Network errors must not be silently swallowed; the solver needs to retry.
 #[tokio::test]
-async fn test_is_escrow_released_http_error() {
+async fn test_is_escrow_released_error() {
     let mock_server = MockServer::start().await;
     let base_url = format!("{}/v1", mock_server.uri());
 
@@ -180,10 +179,96 @@ async fn test_is_escrow_released_http_error() {
 }
 
 // ============================================================================
-// HEX ADDRESS NORMALIZATION
+// BALANCE QUERIES
 // ============================================================================
 
-/// 19. Test: normalize_hex_to_address preserves full-length 64-char addresses
+/// 16. Test: get_token_balance returns correct FA balance
+/// Verifies that get_token_balance() calls the primary_fungible_store::balance view function
+/// with the required Metadata type argument and parses the string response as u128.
+/// Why: Liquidity monitoring depends on accurate balance reads from MVM chains.
+#[tokio::test]
+async fn test_get_token_balance_success() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .and(body_partial_json(json!({
+            "function": "0x1::primary_fungible_store::balance",
+            "type_arguments": ["0x1::fungible_asset::Metadata"]
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!(["1000000"])))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let balance = client
+        .get_token_balance(DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_MVMCON)
+        .await
+        .unwrap();
+    assert_eq!(balance, 1_000_000);
+}
+
+/// 17. Test: get_token_balance propagates HTTP errors
+/// Verifies that get_token_balance() returns Err on HTTP failure.
+/// Why: Errors must propagate so the liquidity monitor can log and retry.
+#[tokio::test]
+async fn test_get_token_balance_error() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let result = client
+        .get_token_balance(DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_MVMCON)
+        .await;
+    assert!(result.is_err());
+}
+
+/// 18. Test: get_token_balance returns zero balance
+/// Verifies that get_token_balance() correctly parses "0" from the view function.
+/// Why: Zero balance is a valid state (empty wallet), not an error.
+#[tokio::test]
+async fn test_get_token_balance_zero() {
+    let mock_server = MockServer::start().await;
+    let base_url = format!("{}/v1", mock_server.uri());
+
+    Mock::given(method("POST"))
+        .and(path("/v1/view"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!(["0"])))
+        .mount(&mock_server)
+        .await;
+
+    let mut config = create_default_connected_mvm_chain_config();
+    config.rpc_url = base_url;
+    let client = ConnectedMvmClient::new(&config).unwrap();
+
+    let balance = client
+        .get_token_balance(DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_MVMCON)
+        .await
+        .unwrap();
+    assert_eq!(balance, 0);
+}
+
+// #19: get_native_balance_success - N/A for MVM (native MOVE is queried as FA token via get_token_balance with 0xa metadata)
+// #20: get_native_balance_error - N/A for MVM
+
+// ============================================================================
+// HEX ADDRESS NORMALIZATION (MVM-specific)
+// ============================================================================
+
+/// 21. Test: normalize_hex_to_address preserves full-length 64-char addresses
 /// Verifies that a correctly formatted 64-char hex address passes through unchanged.
 /// Why: Normalization must be a no-op for well-formed addresses to avoid corruption.
 #[test]
@@ -192,7 +277,7 @@ fn test_normalize_hex_to_address_full_length() {
     assert_eq!(result, DUMMY_INTENT_ID);
 }
 
-/// 20. Test: normalize_hex_to_address pads short addresses to 64 chars
+/// 22. Test: normalize_hex_to_address pads short addresses to 64 chars
 /// Verifies that short addresses (e.g., "0x1") are zero-padded to 32 bytes.
 /// Why: Move addresses are always 32 bytes. Short forms like "0x1" appear in framework
 /// addresses and must be padded for the Aptos REST API.
@@ -205,7 +290,7 @@ fn test_normalize_hex_to_address_short_address() {
     );
 }
 
-/// 21. Test: normalize_hex_to_address fixes odd-length hex from stripped leading zeros
+/// 23. Test: normalize_hex_to_address fixes odd-length hex from stripped leading zeros
 /// Verifies that 63-char hex (from Move stripping a leading zero) becomes 64-char.
 /// Why: Move events strip leading zeros from addresses. "0x0f...fe" becomes "0xf...fe"
 /// (63 hex chars, odd length), which the Aptos REST API rejects with "Odd number of digits".
@@ -221,7 +306,7 @@ fn test_normalize_hex_to_address_odd_length() {
     );
 }
 
-/// 22. Test: normalize_hex_to_address handles input without 0x prefix
+/// 24. Test: normalize_hex_to_address handles input without 0x prefix
 /// Verifies that bare hex strings (no "0x") are correctly padded and prefixed.
 /// Why: Intent IDs from different sources may or may not include the 0x prefix.
 #[test]
@@ -235,10 +320,10 @@ fn test_normalize_hex_to_address_no_prefix() {
 }
 
 // ============================================================================
-// HAS OUTFLOW REQUIREMENTS (GMP view function)
+// HAS OUTFLOW REQUIREMENTS (MVM-specific, GMP view function)
 // ============================================================================
 
-/// 23. Test: has_outflow_requirements returns true when requirements delivered
+/// 25. Test: has_outflow_requirements returns true when requirements delivered
 /// Verifies that has_outflow_requirements() calls the intent_outflow_validator_impl::has_requirements
 /// view function and parses the boolean response.
 /// Why: The solver polls this before calling fulfill_intent. A parse error would block fulfillment.
@@ -261,11 +346,11 @@ async fn test_has_outflow_requirements_success() {
     assert!(result);
 }
 
-/// 24. Test: has_outflow_requirements returns false when not yet delivered
+/// 26. Test: has_outflow_requirements returns false when not yet delivered
 /// Verifies that has_outflow_requirements() correctly parses a false response.
 /// Why: The solver polls this function repeatedly; false must not be misinterpreted.
 #[tokio::test]
-async fn test_has_outflow_requirements_returns_false() {
+async fn test_has_outflow_requirements_false() {
     let mock_server = MockServer::start().await;
     let base_url = format!("{}/v1", mock_server.uri());
 
@@ -283,11 +368,11 @@ async fn test_has_outflow_requirements_returns_false() {
     assert!(!result);
 }
 
-/// 25. Test: has_outflow_requirements propagates HTTP errors
+/// 27. Test: has_outflow_requirements propagates HTTP errors
 /// Verifies that has_outflow_requirements() returns Err on HTTP failure.
 /// Why: Errors must propagate (not be swallowed as warnings) so the caller can fail fast.
 #[tokio::test]
-async fn test_has_outflow_requirements_http_error() {
+async fn test_has_outflow_requirements_error() {
     let mock_server = MockServer::start().await;
     let base_url = format!("{}/v1", mock_server.uri());
 
@@ -306,3 +391,19 @@ async fn test_has_outflow_requirements_http_error() {
     let result = client.has_outflow_requirements(DUMMY_INTENT_ID).await;
     assert!(result.is_err());
 }
+
+// #28: is_escrow_released_id_formatting - N/A for MVM (EVM-specific Hardhat script mechanics)
+// #29: is_escrow_released_output_parsing - N/A for MVM (EVM-specific Hardhat script mechanics)
+// #30: is_escrow_released_command_building - N/A for MVM (EVM-specific Hardhat script mechanics)
+// #31: is_escrow_released_error_handling - N/A for MVM (EVM-specific Hardhat script mechanics)
+
+// ============================================================================
+// EVM ADDRESS NORMALIZATION (EVM-specific)
+// ============================================================================
+
+// #32: get_native_balance_exceeds_u64 - N/A for MVM (EVM-specific u64 overflow from large ETH balances)
+// #33: get_token_balance_with_padded_address - N/A for MVM (EVM-specific 32-byte address padding)
+// #34: get_native_balance_with_padded_address - N/A for MVM (EVM-specific 32-byte address padding)
+// #35: normalize_evm_address_padded - N/A for MVM (EVM-specific address normalization)
+// #36: normalize_evm_address_passthrough - N/A for MVM (EVM-specific address normalization)
+// #37: normalize_evm_address_rejects_non_zero_high_bytes - N/A for MVM (EVM-specific address normalization)

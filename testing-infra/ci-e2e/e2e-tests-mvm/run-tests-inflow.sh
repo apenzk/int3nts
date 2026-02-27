@@ -22,6 +22,7 @@ export SKIP_BUILD
 # Source common utilities
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../util_mvm.sh"
 
 # Setup project root
 setup_project_root
@@ -107,8 +108,8 @@ echo "   Submitting inflow cross-chain intents via coordinator negotiation routi
 echo ""
 echo " Pre-Escrow Balance Validation"
 echo "=========================================="
-# Nobody should have done anything yet: all four actors start with 1 USDhub/USDcon on each chain
-./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 1000000 1000000 1000000 1000000
+# Nobody should have done anything yet: all four actors start with 2 USDhub/USDcon on each chain
+./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 2000000 2000000 2000000 2000000
 
 ./testing-infra/ci-e2e/e2e-tests-mvm/inflow-submit-escrow.sh
 
@@ -145,13 +146,48 @@ echo " Final Balance Validation"
 echo "=========================================="
 # Inflow: Solver transfers to hub requester (0 on hub, 2000000 on MVM from escrow)
 #         Requester receives on hub (2000000 on hub, 0 on MVM locked in escrow)
-./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 0 2000000 2000000 0
+./testing-infra/ci-e2e/e2e-tests-mvm/balance-check.sh 1000000 3000000 3000000 1000000
+
+echo ""
+echo " Step 7: Verify solver rejects intent when liquidity is insufficient..."
+echo "=========================================================================="
+echo "   Solver started with 2,000,000 USDhub on hub, spent 1,000,000 fulfilling intent 1."
+echo "   Remaining: 1,000,000. Second intent requests 1,000,000."
+echo "   Liquidity check: available >= requested + min_balance => 1,000,000 >= 1,000,000 + 1 => false."
+echo "   Solver must reject: not enough to cover the request AND retain the min_balance threshold."
+
+# Resolve chain addresses for the second draft
+CONNECTED_CHAIN_ID=2
+HUB_CHAIN_ID=1
+HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
+TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
+USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
+REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
+USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
+USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "2")
+EXPIRY_TIME=$(date -d "+1 hour" +%s)
+
+SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
+DRAFT_DATA=$(build_draft_data \
+    "$USD_MVMCON_ADDR" \
+    "1000000" \
+    "$CONNECTED_CHAIN_ID" \
+    "$USDHUB_METADATA_HUB" \
+    "1000000" \
+    "$HUB_CHAIN_ID" \
+    "$EXPIRY_TIME" \
+    "$SECOND_INTENT_ID" \
+    "$REQUESTER_HUB_ADDR" \
+    "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"inflow\"}")
+
+assert_solver_rejects_draft "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME"
+echo "✅ Solver correctly rejected second intent due to insufficient liquidity!"
 
 echo ""
 echo "✅ E2E inflow test completed!"
 echo ""
 
-echo " Step 7: Cleaning up chains, accounts and processes..."
+echo " Step 8: Cleaning up chains, accounts and processes..."
 echo "========================================================"
 ./testing-infra/ci-e2e/chain-connected-mvm/cleanup.sh
 

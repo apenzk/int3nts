@@ -6,12 +6,18 @@
 use solver::{
     service::tracker::IntentTracker,
     service::outflow::OutflowService,
+    service::liquidity::LiquidityMonitor,
 };
 use std::sync::Arc;
 
 #[path = "helpers.rs"]
 mod test_helpers;
 use test_helpers::create_default_solver_config;
+
+/// Create a LiquidityMonitor for testing
+fn create_test_liquidity_monitor(config: &solver::config::SolverConfig) -> Arc<LiquidityMonitor> {
+    Arc::new(LiquidityMonitor::new(config.clone(), config.liquidity.clone()).unwrap())
+}
 
 // ============================================================================
 // OUTFLOW SERVICE TESTS
@@ -23,7 +29,8 @@ use test_helpers::create_default_solver_config;
 fn test_outflow_service_new() {
     let config = create_default_solver_config();
     let tracker = Arc::new(IntentTracker::new(&config).unwrap());
-    let _service = OutflowService::new(config, tracker).unwrap();
+    let monitor = create_test_liquidity_monitor(&config);
+    let _service = OutflowService::new(config, tracker, monitor).unwrap();
 }
 
 /// What is tested: poll_and_execute_transfers() returns empty list when no pending outflow intents
@@ -39,10 +46,11 @@ fn test_poll_and_execute_transfers_empty() {
         .unwrap();
 
     let config = create_default_solver_config();
-    
+
     // These create reqwest::Client which may internally use tokio runtime
     let tracker = Arc::new(IntentTracker::new(&config).unwrap());
-    let service = OutflowService::new(config, tracker).unwrap();
+    let monitor = create_test_liquidity_monitor(&config);
+    let service = OutflowService::new(config, tracker, monitor).unwrap();
 
     let result = rt.block_on(service.poll_and_execute_transfers()).unwrap();
     assert_eq!(result.len(), 0);
