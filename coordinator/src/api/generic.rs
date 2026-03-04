@@ -88,6 +88,14 @@ pub struct ExchangeRateResponse {
     pub desired_chain_id: u64,
     /// Exchange rate (how many offered tokens per 1 desired token)
     pub exchange_rate: f64,
+    /// Base fee in MOVE smallest units (covers solver gas costs).
+    /// The frontend converts this to the offered token using move_rate.
+    pub base_fee_in_move: u64,
+    /// Exchange rate for MOVE → offered token (how many offered tokens per 1 MOVE).
+    /// Used by the frontend to convert base_fee_in_move to offered token units.
+    pub move_rate: f64,
+    /// Fee in basis points (e.g., 50 = 0.5%, covers solver opportunity cost)
+    pub fee_bps: u64,
 }
 
 /// Handler for the acceptance/exchange rate endpoint.

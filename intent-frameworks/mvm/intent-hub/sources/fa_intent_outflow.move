@@ -65,7 +65,8 @@ module mvmt_intent::fa_intent_outflow {
         desired_amount: u64,
         desired_chain_id: u64,
         expiry_time: u64,
-        requester: address
+        requester: address,
+        fee_in_offered_token: u64
     ): intent_reservation::Draftintent {
         intent_reservation::create_draft_intent(
             offered_metadata,
@@ -75,7 +76,8 @@ module mvmt_intent::fa_intent_outflow {
             desired_amount,
             desired_chain_id,
             expiry_time,
-            requester
+            requester,
+            fee_in_offered_token
         )
     }
 
@@ -267,7 +269,8 @@ module mvmt_intent::fa_intent_outflow {
         requester_addr_connected_chain: address,
         solver: address,
         solver_addr_connected_chain: address,
-        solver_signature: vector<u8>
+        solver_signature: vector<u8>,
+        fee_in_offered_token: u64
     ) {
         let _intent_obj =
             create_outflow_intent(
@@ -283,7 +286,8 @@ module mvmt_intent::fa_intent_outflow {
                 requester_addr_connected_chain,
                 solver,
                 solver_addr_connected_chain,
-                solver_signature
+                solver_signature,
+                fee_in_offered_token
             );
     }
 
@@ -312,6 +316,7 @@ module mvmt_intent::fa_intent_outflow {
     /// - `solver`: Address of the solver authorized to fulfill this intent (must be registered)
     /// - `solver_addr_connected_chain`: Solver's address on the connected chain (used in GMP message for authorization)
     /// - `solver_signature`: Ed25519 signature from the solver authorizing this intent
+    /// - `fee_in_offered_token`: Fee embedded in exchange rate, denominated in offered token units
     ///
     /// # Returns
     /// - `Object<Intent<FungibleStoreManager, OracleGuardedLimitOrder>>`: The created intent object
@@ -333,7 +338,8 @@ module mvmt_intent::fa_intent_outflow {
         requester_addr_connected_chain: address,
         solver: address,
         solver_addr_connected_chain: address,
-        solver_signature: vector<u8>
+        solver_signature: vector<u8>,
+        fee_in_offered_token: u64
     ): Object<Intent<fa_intent_with_oracle::FungibleStoreManager, fa_intent_with_oracle::OracleGuardedLimitOrder>> {
         // Validate requester_addr_connected_chain is not zero address
         // Outflow intents require a valid address on the connected chain where the solver should send tokens
@@ -362,7 +368,8 @@ module mvmt_intent::fa_intent_outflow {
                 desired_chain_id,
                 expiry_time,
                 signer::address_of(requester_signer),
-                solver
+                solver,
+                fee_in_offered_token
             );
 
         // Use verify_and_create_reservation_from_registry_raw to look up public key from registry
@@ -413,6 +420,7 @@ module mvmt_intent::fa_intent_outflow {
             false, // CRITICAL: All parts of a cross-chain intent MUST be non-revocable
             intent_id,
             option::some(requester_addr_connected_chain), // Store where solver should send tokens on connected chain
+            fee_in_offered_token,
             reservation_result // Reserved for specific solver
         );
 

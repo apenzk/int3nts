@@ -67,7 +67,8 @@ module mvmt_intent::utils {
         desired_chain_id: u64,
         expiry_time: u64,
         requester: address,
-        solver_addr: address
+        solver_addr: address,
+        fee_in_offered_token: u64
     ) {
         // Verify solver signer matches solver_addr
         assert!(signer::address_of(solver) == solver_addr, 1);
@@ -83,7 +84,8 @@ module mvmt_intent::utils {
                 desired_chain_id,
                 expiry_time,
                 requester,
-                solver_addr
+                solver_addr,
+                fee_in_offered_token
             );
 
         // Hash the intent (BCS encoding) - produces same bytes as Object<Metadata> version

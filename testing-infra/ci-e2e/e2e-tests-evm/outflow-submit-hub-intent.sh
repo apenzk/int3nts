@@ -51,6 +51,7 @@ EXPIRY_TIME=$(date -d "+1 hour" +%s)
 OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
 DESIRED_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals, on EVM connected chain)
 HUB_CHAIN_ID=1
+FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 
 log ""
 log " Configuration:"
@@ -103,6 +104,7 @@ DRAFT_DATA=$(build_draft_data \
     "$EXPIRY_TIME" \
     "$INTENT_ID" \
     "$REQUESTER_HUB_ADDR" \
+    "$FEE_IN_OFFERED_TOKEN" \
     "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"outflow\", \"connected_chain_type\": \"evm\", \"requester_addr_connected_chain\": \"$REQUESTER_EVM_ADDR\"}")
 
 DRAFT_ID=$(submit_draft_intent "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME")
@@ -195,7 +197,7 @@ SOLVER_EVM_RAW="${SOLVER_EVM_ADDR#0x}"
 SOLVER_EVM_PADDED="0x000000000000000000000000${SOLVER_EVM_RAW}"
 aptos move run --profile requester-chain1 --assume-yes \
     --function-id "0x${HUB_MODULE_ADDR}::fa_intent_outflow::create_outflow_intent_entry" \
-    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_EVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_EVM_ADDR}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_EVM_PADDED}" "hex:${SOLVER_SIGNATURE_HEX}" >> "$LOG_FILE" 2>&1
+    --args "address:${OFFERED_METADATA_HUB}" "u64:${OFFERED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "address:${DESIRED_METADATA_EVM}" "u64:${DESIRED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${REQUESTER_EVM_ADDR}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_EVM_PADDED}" "hex:${SOLVER_SIGNATURE_HEX}" "u64:${FEE_IN_OFFERED_TOKEN}" >> "$LOG_FILE" 2>&1
 
 # ============================================================================
 # SECTION 6: VERIFY RESULTS

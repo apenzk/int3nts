@@ -127,6 +127,7 @@ fn test_get_intent_hash_rejects_address_without_prefix() {
         1234567890,
         "0xissuer",
         solver_addr_no_prefix, // Missing 0x prefix
+        500, // fee_in_offered_token
         1,
         false, // e2e_mode: false (testnet mode)
     );

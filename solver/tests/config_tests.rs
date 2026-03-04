@@ -29,12 +29,15 @@ fn create_test_config() -> SolverConfig {
     );
     SolverConfig {
         acceptance: AcceptanceConfig {
+            base_fee_in_move: 1_000_000,
             token_pairs: vec![TokenPairConfig {
                 source_chain_id: 1,
                 source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
                 target_chain_id: 2,
                 target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
                 ratio: 1.0,
+                fee_bps: 50,
+                move_rate: 1.0,
             }],
         },
         liquidity: liq,
@@ -107,6 +110,8 @@ fn test_config_validation_unknown_chain_id_in_token_pair() {
         target_chain_id: 2,
         target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         ratio: 1.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     }];
 
     let result = config.validate();
@@ -134,6 +139,8 @@ fn test_config_validation_rejects_svm_invalid_hex_length() {
         target_chain_id: 901,
         target_token: "0xdeadbeef".to_string(), // Invalid: 4 bytes, not 32
         ratio: 1.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     }];
 
     let result = config.validate();
@@ -161,11 +168,73 @@ fn test_config_validation_rejects_invalid_svm_base58_token() {
         target_chain_id: 901,
         target_token: "not_base58".to_string(),
         ratio: 1.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     }];
 
     let result = config.validate();
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("Invalid base58 SVM mint"));
+}
+
+/// What is tested: SolverConfig::validate() rejects fee_bps > 10000
+/// Why: fee_bps > 10000 (>100%) is nonsensical
+#[test]
+fn test_config_validation_fee_bps_too_high() {
+    let mut config = create_test_config();
+    config.acceptance.token_pairs = vec![TokenPairConfig {
+        source_chain_id: 1,
+        source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+        target_chain_id: 2,
+        target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+        ratio: 1.0,
+        fee_bps: 10001,
+        move_rate: 1.0,
+    }];
+
+    let result = config.validate();
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("fee_bps"));
+}
+
+/// What is tested: SolverConfig::validate() accepts fee_bps at maximum (10000 = 100%)
+/// Why: 100% is the upper bound
+#[test]
+fn test_config_validation_fee_bps_max_accepted() {
+    let mut config = create_test_config();
+    config.acceptance.token_pairs = vec![TokenPairConfig {
+        source_chain_id: 1,
+        source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+        target_chain_id: 2,
+        target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+        ratio: 1.0,
+        fee_bps: 10000,
+        move_rate: 1.0,
+    }];
+
+    assert!(config.validate().is_ok());
+}
+
+/// What is tested: SolverConfig::get_token_pairs() propagates fee params
+/// Why: Ensure base_fee_in_move and fee_bps are carried through correctly
+#[test]
+fn test_get_token_pairs_with_fees() {
+    let mut config = create_test_config();
+    config.acceptance.base_fee_in_move = 500;
+    config.acceptance.token_pairs = vec![TokenPairConfig {
+        source_chain_id: 1,
+        source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+        target_chain_id: 2,
+        target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+        ratio: 1.0,
+        fee_bps: 100,
+        move_rate: 1.0,
+    }];
+
+    assert_eq!(config.acceptance.base_fee_in_move, 500);
+    let pairs = config.get_token_pairs().unwrap();
+    let expected_pair = create_default_token_pair();
+    assert_eq!(pairs[&expected_pair].fee_bps, 100);
 }
 
 /// What is tested: SolverConfig::validate() rejects non-positive exchange rates
@@ -179,6 +248,8 @@ fn test_config_validation_negative_exchange_rate() {
         target_chain_id: 2,
         target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         ratio: -1.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     }];
 
     let result = config.validate();
@@ -197,6 +268,8 @@ fn test_config_validation_zero_exchange_rate() {
         target_chain_id: 2,
         target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         ratio: 0.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     }];
 
     let result = config.validate();
@@ -220,7 +293,7 @@ fn test_get_token_pairs_success() {
     let expected_pair = create_default_token_pair();
     
     assert!(pairs.contains_key(&expected_pair));
-    assert_eq!(pairs[&expected_pair], 1.0);
+    assert_eq!(pairs[&expected_pair].rate, 1.0);
 }
 
 /// What is tested: SolverConfig::get_token_pairs() handles multiple token pairs
@@ -234,6 +307,8 @@ fn test_get_token_pairs_multiple() {
         target_chain_id: 1,
         target_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
         ratio: 0.5,
+        fee_bps: 50,
+        move_rate: 0.5,
     });
 
     let pairs = config.get_token_pairs().unwrap();
@@ -261,6 +336,8 @@ fn test_get_token_pairs_token_address() {
         target_chain_id: 3,
         target_token: DUMMY_TOKEN_ADDR_EVM.to_string(),
         ratio: 0.5,
+        fee_bps: 50,
+        move_rate: 0.5,
     }];
 
     let pairs = config.get_token_pairs().unwrap();
@@ -274,7 +351,7 @@ fn test_get_token_pairs_token_address() {
     };
     
     assert!(pairs.contains_key(&expected_pair));
-    assert_eq!(pairs[&expected_pair], 0.5);
+    assert_eq!(pairs[&expected_pair].rate, 0.5);
 }
 
 // ============================================================================
@@ -402,12 +479,15 @@ module_addr = "0x2"
 profile = "connected-profile"
 
 [acceptance]
+base_fee_in_move = 1000000
 [[acceptance.tokenpair]]
 source_chain_id = 1
 source_token = "{hub_token}"
 target_chain_id = 2
 target_token = "{con_token}"
 ratio = 1.0
+fee_bps = 50
+move_rate = 1.0
 
 [liquidity]
 balance_poll_interval_ms = 10000

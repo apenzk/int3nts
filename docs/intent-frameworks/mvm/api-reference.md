@@ -67,6 +67,7 @@ public fun create_fa_to_fa_intent_entry(
     expiry_time: u64,
     solver_addr: address,
     solver_signature: vector<u8>,
+    fee_in_offered_token: u64,
 ): Object<Intent<FungibleAsset, FALimitOrder>>
 ```
 
@@ -79,6 +80,7 @@ public fun create_fa_to_fa_intent_entry(
 - `expiry_time`: Unix timestamp when the intent expires
 - `solver_addr`: Address of the authorized solver (0x0 for unreserved)
 - `solver_signature`: Solver's signature (empty vector for unreserved)
+- `fee_in_offered_token`: Fee embedded in exchange rate (reduces desired_amount the user receives)
 
 **Returns:** A fungible asset trade intent object
 
@@ -97,6 +99,7 @@ public fun create_inflow_intent(
     intent_id: address,
     solver: address,
     solver_signature: vector<u8>,
+    fee_in_offered_token: u64,
 ): Object<Intent<FungibleStoreManager, FALimitOrder>>
 ```
 
@@ -115,6 +118,7 @@ public fun create_inflow_intent(
 - `intent_id`: Intent ID for cross-chain linking
 - `solver`: Address of the solver authorized to fulfill this intent (must be registered in solver registry)
 - `solver_signature`: Ed25519 signature from the solver authorizing this intent
+- `fee_in_offered_token`: Fee embedded in exchange rate (reduces desired_amount the user receives)
 
 **Note**: This intent has 0 tokens locked on the hub chain because tokens are in escrow elsewhere. The `offered_amount` specifies how much will be locked in escrow on the connected chain. Cross-chain intents MUST be reserved to ensure solver commitment across chains. The solver's public key is looked up from the on-chain solver registry, so the solver must be registered before calling this function.
 
@@ -253,6 +257,7 @@ public fun create_draft_intent(
     desired_chain_id: u64,
     expiry_time: u64,
     requester: address,
+    fee_in_offered_token: u64,
 ): Draftintent
 ```
 
@@ -266,6 +271,7 @@ public fun create_draft_intent(
 - `desired_chain_id`: Chain ID where desired tokens are located
 - `expiry_time`: Unix timestamp when the intent expires
 - `requester`: Address of the intent creator
+- `fee_in_offered_token`: Fee embedded in exchange rate (reduces desired_amount the user receives)
 
 **Returns:** A draft intent for off-chain sharing
 
@@ -508,6 +514,7 @@ struct LimitOrderEvent has store, drop {
     requester_addr: address,
     expiry_time: u64,
     revocable: bool,
+    fee_in_offered_token: u64,
 }
 ```
 
@@ -582,6 +589,7 @@ struct FALimitOrder has store, drop {
     intent_id: Option<address>,
     offered_chain_id: u64,
     desired_chain_id: u64,
+    fee_in_offered_token: u64,
 }
 ```
 

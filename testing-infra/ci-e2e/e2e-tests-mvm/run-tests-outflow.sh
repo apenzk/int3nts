@@ -181,6 +181,7 @@ DRAFT_DATA=$(build_draft_data \
     "$EXPIRY_TIME" \
     "$SECOND_INTENT_ID" \
     "$REQUESTER_HUB_ADDR" \
+    "15000" \
     "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"outflow\", \"requester_addr_connected_chain\": \"$REQUESTER_MVMCON_ADDR\"}")
 
 assert_solver_rejects_draft "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME"

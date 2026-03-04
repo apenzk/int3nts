@@ -36,6 +36,7 @@ export interface DraftIntentRequest {
     desired_chain_id: string;    // Chain ID as string
     expiry_time: number;         // Unix timestamp
     issuer: string;              // Requester address
+    fee_in_offered_token: string;          // Fee amount in smallest units
     // Optional flow metadata
     flow_type?: 'inflow' | 'outflow';
   };

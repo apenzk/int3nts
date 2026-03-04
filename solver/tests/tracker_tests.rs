@@ -26,6 +26,7 @@ fn create_default_draft_data_inflow() -> DraftintentData {
         desired_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
         desired_amount: 2000,
         desired_chain_id: 1, // Hub chain
+        fee_in_offered_token: 1000, // base_fee_in_move * ratio
     }
 }
 
@@ -39,6 +40,7 @@ fn create_default_draft_data_outflow() -> DraftintentData {
         desired_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
         desired_amount: 2000,
         desired_chain_id: 2, // Connected chain
+        fee_in_offered_token: 1000, // base_fee_in_move * ratio
     }
 }
 

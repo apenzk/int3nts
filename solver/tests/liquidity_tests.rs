@@ -41,6 +41,7 @@ fn create_test_monitor() -> LiquidityMonitor {
 fn test_solver_config_with_pairs() -> solver::config::SolverConfig {
     solver::config::SolverConfig {
         acceptance: AcceptanceConfig {
+            base_fee_in_move: 1_000_000,
             token_pairs: vec![
                 // Inflow: requester offers on connected, solver spends on hub
                 TokenPairConfig {
@@ -49,6 +50,8 @@ fn test_solver_config_with_pairs() -> solver::config::SolverConfig {
                     target_chain_id: 1,
                     target_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
                     ratio: 1.0,
+                    fee_bps: 50,
+                    move_rate: 1.0,
                 },
                 // Outflow: requester offers on hub, solver spends on connected
                 TokenPairConfig {
@@ -57,6 +60,8 @@ fn test_solver_config_with_pairs() -> solver::config::SolverConfig {
                     target_chain_id: 2,
                     target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
                     ratio: 1.0,
+                    fee_bps: 50,
+                    move_rate: 1.0,
                 },
             ],
         },
@@ -488,6 +493,7 @@ fn test_config_rejects_unknown_threshold_chain_id() {
     config.liquidity.thresholds.push(LiquidityThresholdConfig {
         chain_id: 999,
         token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+        label: None,
         min_balance: 100,
     });
     assert!(config.validate().is_err());
@@ -747,6 +753,8 @@ fn test_config_validation_catches_unknown_chain_before_runtime() {
         target_chain_id: 999, // no connected chain for this
         target_token: "0xdeadbeef".to_string(),
         ratio: 1.0,
+        fee_bps: 50,
+        move_rate: 1.0,
     });
     let result = config.validate();
     assert!(result.is_err(), "validate() must reject acceptance pairs targeting unconfigured chains");

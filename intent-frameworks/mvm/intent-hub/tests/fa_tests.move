@@ -45,7 +45,8 @@ module mvmt_intent::fa_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            500 // fee_in_offered_token
         );
         // Verify intent was created
         assert!(object::object_address(&intent) != @0x0);
@@ -102,7 +103,8 @@ module mvmt_intent::fa_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            500 // fee_in_offered_token
         );
 
         // Offerer2 deposits 15 of FA2 requesting 30 of FA1.
@@ -119,7 +121,8 @@ module mvmt_intent::fa_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            500 // fee_in_offered_token
         );
 
         // Solver unlocks both intents to gather the offered assets.
@@ -178,7 +181,8 @@ module mvmt_intent::fa_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            500 // fee_in_offered_token
         );
         // Check balance before revocation
         assert!(primary_fungible_store::balance(signer::address_of(offerer), offered_fa_type) == 50);
@@ -188,6 +192,54 @@ module mvmt_intent::fa_tests {
         
         // Check balance after revocation - should be back to 100
         assert!(primary_fungible_store::balance(signer::address_of(offerer), offered_fa_type) == 100);
+    }
+
+    #[test(
+        aptos_framework = @0x1,
+        mvmt_intent = @0x123,
+        offerer = @0xcafe,
+        solver = @0xdead
+    )]
+    /// What is tested: FA limit order stores a non-zero fee_in_offered_token and settles normally
+    /// Why: Verify fee_in_offered_token is persisted in the intent and does not affect settlement logic
+    fun test_fa_limit_order_with_fee(
+        aptos_framework: &signer,
+        mvmt_intent: &signer,
+        offerer: &signer,
+        solver: &signer,
+    ) {
+        fa_intent::initialize(mvmt_intent, 1);
+        let (offered_fa_type, _) = test_utils::register_and_mint_tokens(aptos_framework, offerer, 100);
+        let (desired_fa_type, _) = test_utils::register_and_mint_tokens(aptos_framework, solver, 25);
+
+        let intent = fa_intent::create_fa_to_fa_intent(
+            primary_fungible_store::withdraw(offerer, offered_fa_type, 50),
+            1,
+            option::none(),
+            option::none(),
+            desired_fa_type,
+            25,
+            1,
+            timestamp::now_seconds() + 3600,
+            signer::address_of(offerer),
+            option::none(),
+            true,
+            option::none(),
+            option::none(),
+            500 // fee_in_offered_token = 500
+        );
+
+        assert!(object::object_address(&intent) != @0x0);
+
+        // Solver fills the intent normally — fee_in_offered_token does not change settlement
+        let (unlocked_fa, session) = fa_intent::start_fa_offering_session(solver, intent);
+        assert!(fungible_asset::amount(&unlocked_fa) == 50);
+        primary_fungible_store::deposit(signer::address_of(solver), unlocked_fa);
+        let desired_fa = primary_fungible_store::withdraw(solver, desired_fa_type, 25);
+        fa_intent::finish_fa_receiving_session(session, desired_fa);
+
+        assert!(primary_fungible_store::balance(signer::address_of(solver), offered_fa_type) == 50);
+        assert!(primary_fungible_store::balance(signer::address_of(offerer), desired_fa_type) == 25);
     }
 
     #[test(
@@ -223,7 +275,8 @@ module mvmt_intent::fa_tests {
             option::none(),
             true, // revocable
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            500 // fee_in_offered_token
         );
         
         // Solver starts the session and unlocks the 50 offered tokens

@@ -44,6 +44,7 @@ module mvmt_intent::intent_reservation {
         desired_chain_id: u64,
         expiry_time: u64,
         requester: address,
+        fee_in_offered_token: u64,
     }
 
     /// The data structure that is signed by the solver off-chain.
@@ -57,6 +58,7 @@ module mvmt_intent::intent_reservation {
         expiry_time: u64,
         requester: address,
         solver: address,
+        fee_in_offered_token: u64,
     }
 
     /// Raw version of IntentToSign using addresses instead of Object<Metadata>.
@@ -72,6 +74,7 @@ module mvmt_intent::intent_reservation {
         expiry_time: u64,
         requester: address,
         solver: address,
+        fee_in_offered_token: u64,
     }
 
     /// Creates an IntentToSign struct from the provided parameters.
@@ -85,6 +88,7 @@ module mvmt_intent::intent_reservation {
         expiry_time: u64,
         requester: address,
         solver: address,
+        fee_in_offered_token: u64,
     ): IntentToSign {
         IntentToSign {
             offered_metadata,
@@ -96,6 +100,7 @@ module mvmt_intent::intent_reservation {
             expiry_time,
             requester,
             solver,
+            fee_in_offered_token,
         }
     }
 
@@ -111,6 +116,7 @@ module mvmt_intent::intent_reservation {
         expiry_time: u64,
         requester: address,
         solver: address,
+        fee_in_offered_token: u64,
     ): IntentToSignRaw {
         IntentToSignRaw {
             offered_metadata,
@@ -122,6 +128,7 @@ module mvmt_intent::intent_reservation {
             expiry_time,
             requester,
             solver,
+            fee_in_offered_token,
         }
     }
 
@@ -146,6 +153,7 @@ module mvmt_intent::intent_reservation {
         desired_chain_id: u64,
         expiry_time: u64,
         requester: address,
+        fee_in_offered_token: u64,
     ): Draftintent {
         Draftintent {
             offered_metadata,
@@ -156,6 +164,7 @@ module mvmt_intent::intent_reservation {
             desired_chain_id,
             expiry_time,
             requester,
+            fee_in_offered_token,
         }
     }
 
@@ -174,6 +183,7 @@ module mvmt_intent::intent_reservation {
             expiry_time: draft.expiry_time,
             requester: draft.requester,
             solver,
+            fee_in_offered_token: draft.fee_in_offered_token,
         }
     }
 

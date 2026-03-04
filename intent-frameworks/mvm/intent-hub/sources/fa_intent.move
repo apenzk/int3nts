@@ -45,7 +45,8 @@ module mvmt_intent::fa_intent {
         requester_addr: address,
         intent_id: Option<address>, // Optional cross-chain intent_id for linking (None for regular intents)
         offered_chain_id: u64,
-        desired_chain_id: u64
+        desired_chain_id: u64,
+        fee_in_offered_token: u64 // Fee embedded in exchange rate (reduces desired_amount)
     }
 
     /// Getter for desired_metadata to allow access from other modules
@@ -61,6 +62,11 @@ module mvmt_intent::fa_intent {
     /// Getter for offered_chain_id to allow access from other modules
     public fun get_offered_chain_id(order: &FALimitOrder): u64 {
         order.offered_chain_id
+    }
+
+    /// Getter for fee_in_offered_token to allow access from other modules
+    public fun get_fee_in_offered_token(order: &FALimitOrder): u64 {
+        order.fee_in_offered_token
     }
 
     /// Initialize chain info with the chain ID where this module is deployed.
@@ -118,6 +124,7 @@ module mvmt_intent::fa_intent {
         requester_addr: address,
         expiry_time: u64,
         revocable: bool,
+        fee_in_offered_token: u64, // Fee embedded in exchange rate (reduces desired_amount)
         reserved_solver: Option<address>, // Solver address if the intent is reserved (None for unreserved intents)
         requester_addr_connected_chain: Option<address> // Requester address on connected chain (for inflow intents)
     }
@@ -156,6 +163,7 @@ module mvmt_intent::fa_intent {
     /// - `reservation`: Optional solver reservation
     /// - `revocable`: Whether the intent can be revoked
     /// - `intent_id`: Optional cross-chain intent_id (None for regular intents)
+    /// - `fee_in_offered_token`: Fee embedded in exchange rate (reduces desired_amount)
     ///
     /// # Returns
     /// - `Object<Intent<FungibleStoreManager, FALimitOrder>>`: Intent object
@@ -172,7 +180,8 @@ module mvmt_intent::fa_intent {
         reservation: Option<IntentReserved>,
         revocable: bool,
         intent_id: Option<address>, // Optional cross-chain intent_id (None for regular intents)
-        requester_addr_connected_chain: Option<address> // Optional requester address on connected chain (for inflow intents)
+        requester_addr_connected_chain: Option<address>, // Optional requester address on connected chain (for inflow intents)
+        fee_in_offered_token: u64 // Fee embedded in exchange rate (reduces desired_amount)
     ): Object<Intent<FungibleStoreManager, FALimitOrder>> acquires ChainInfo {
         // Capture metadata before depositing
         let offered_metadata = fungible_asset::asset_metadata(&offered_fungible_asset);
@@ -232,7 +241,8 @@ module mvmt_intent::fa_intent {
                     requester_addr,
                     intent_id,
                     offered_chain_id,
-                    desired_chain_id
+                    desired_chain_id,
+                    fee_in_offered_token
                 },
                 expiry_time,
                 requester_addr,
@@ -264,6 +274,7 @@ module mvmt_intent::fa_intent {
                 expiry_time,
                 requester_addr,
                 revocable,
+                fee_in_offered_token,
                 reserved_solver,
                 requester_addr_connected_chain
             }
@@ -295,7 +306,8 @@ module mvmt_intent::fa_intent {
         expiry_time: u64,
         chain_id: u64,
         solver: address,
-        solver_signature: vector<u8>
+        solver_signature: vector<u8>,
+        fee_in_offered_token: u64
     ) acquires ChainInfo {
         let requester_addr = signer::address_of(account);
         let reservation =
@@ -312,7 +324,8 @@ module mvmt_intent::fa_intent {
                         chain_id,
                         expiry_time,
                         requester_addr,
-                        solver
+                        solver,
+                        fee_in_offered_token
                     );
                 let result =
                     intent_reservation::verify_and_create_reservation(
@@ -341,7 +354,8 @@ module mvmt_intent::fa_intent {
             reservation,
             true, // revocable by default for regular intents
             option::none(), // No cross-chain intent_id for regular intents
-            option::none() // No requester_addr_connected_chain for same-chain intents
+            option::none(), // No requester_addr_connected_chain for same-chain intents
+            fee_in_offered_token
         );
     }
 

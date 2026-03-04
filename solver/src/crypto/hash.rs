@@ -23,6 +23,7 @@ pub fn get_intent_hash(
     expiry_time: u64,
     issuer: &str,
     solver: &str,
+    fee_in_offered_token: u64,
     chain_num: u8,
     e2e_mode: bool,
 ) -> Result<Vec<u8>> {
@@ -98,6 +99,7 @@ pub fn get_intent_hash(
         format!("u64:{}", expiry_time),
         format!("address:{}", issuer),
         format!("address:{}", solver),
+        format!("u64:{}", fee_in_offered_token),
     ]);
 
     // Call Move function

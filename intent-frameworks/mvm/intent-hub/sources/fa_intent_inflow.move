@@ -36,7 +36,8 @@ module mvmt_intent::fa_intent_inflow {
         desired_amount: u64,
         desired_chain_id: u64,
         expiry_time: u64,
-        requester: address
+        requester: address,
+        fee_in_offered_token: u64
     ): intent_reservation::Draftintent {
         intent_reservation::create_draft_intent(
             offered_metadata,
@@ -46,7 +47,8 @@ module mvmt_intent::fa_intent_inflow {
             desired_amount,
             desired_chain_id,
             expiry_time,
-            requester
+            requester,
+            fee_in_offered_token
         )
     }
 
@@ -169,6 +171,7 @@ module mvmt_intent::fa_intent_inflow {
     /// - `solver_addr_connected_chain`: Solver's address on the connected chain (used in GMP message for authorization)
     /// - `solver_signature`: Ed25519 signature from the solver authorizing this intent
     /// - `requester_addr_connected_chain`: Requester's address on the connected chain (for escrow lookup)
+    /// - `fee_in_offered_token`: Fee embedded in exchange rate (reduces desired_amount)
     ///
     /// # Returns
     /// - `Object<Intent<FungibleStoreManager, FALimitOrder>>`: The created intent object
@@ -189,7 +192,8 @@ module mvmt_intent::fa_intent_inflow {
         solver: address,
         solver_addr_connected_chain: address,
         solver_signature: vector<u8>,
-        requester_addr_connected_chain: address
+        requester_addr_connected_chain: address,
+        fee_in_offered_token: u64
     ): Object<Intent<FungibleStoreManager, FALimitOrder>> {
         // Withdraw 0 tokens of DESIRED type (not offered type).
         // Why: The offered token metadata is on the connected chain, so the Object doesn't exist here.
@@ -212,7 +216,8 @@ module mvmt_intent::fa_intent_inflow {
                 desired_chain_id,
                 expiry_time,
                 signer::address_of(account),
-                solver
+                solver,
+                fee_in_offered_token
             );
 
         // Use verify_and_create_reservation_from_registry_raw to look up public key from registry
@@ -240,7 +245,8 @@ module mvmt_intent::fa_intent_inflow {
             false, // CRITICAL: All parts of a cross-chain intent MUST be non-revocable (including the hub intent)
             // Ensures consistent safety guarantees for approvers across chains
             option::some(intent_id), // Store the cross-chain intent_id for fulfillment event
-            option::some(requester_addr_connected_chain) // Store requester address on connected chain for escrow lookup
+            option::some(requester_addr_connected_chain), // Store requester address on connected chain for escrow lookup
+            fee_in_offered_token
         );
 
         // Register intent in the registry for dynamic account discovery
@@ -294,7 +300,8 @@ module mvmt_intent::fa_intent_inflow {
         solver: address,
         solver_addr_connected_chain: address,
         solver_signature: vector<u8>,
-        requester_addr_connected_chain: address
+        requester_addr_connected_chain: address,
+        fee_in_offered_token: u64
     ) {
         let _intent_obj =
             create_inflow_intent(
@@ -310,7 +317,8 @@ module mvmt_intent::fa_intent_inflow {
                 solver,
                 solver_addr_connected_chain,
                 solver_signature,
-                requester_addr_connected_chain
+                requester_addr_connected_chain,
+                fee_in_offered_token
             );
     }
 }

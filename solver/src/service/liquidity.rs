@@ -507,9 +507,10 @@ impl LiquidityMonitor {
 
             let available = liquidity.available_budget();
             if available < threshold.min_balance as u128 {
+                let label = threshold.label.as_deref().unwrap_or("?");
                 warn!(
-                    "LOW LIQUIDITY: chain {} token {} \u{2014} available: {}, threshold: {}",
-                    threshold.chain_id, threshold.token, available, threshold.min_balance
+                    "LOW LIQUIDITY: chain {} {} ({}) \u{2014} available: {}, threshold: {}",
+                    threshold.chain_id, label, threshold.token, available, threshold.min_balance
                 );
             }
         }

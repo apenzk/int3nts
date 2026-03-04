@@ -68,6 +68,11 @@ e2e_mode = false                          # E2E testing mode: true = use aptos C
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 [acceptance]
+# Base fee in MOVE smallest units (covers solver gas costs). REQUIRED.
+# Single value across all token pairs — denominated in MOVE because solver fixed costs (gas)
+# are paid in MOVE on the hub chain. The protocol converts it to the offered token.
+base_fee_in_move = 1000000
+
 # Token pair format: "offered_chain_id:offered_token:desired_chain_id:desired_token" = exchange_rate
 # Exchange rate = how many offered tokens per 1 desired token
 # Example: If rate is 1.0, then 1 offered token = 1 desired token
@@ -80,6 +85,12 @@ source_token = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 target_chain_id = 2
 target_token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 ratio = 1.0
+# Fee in basis points (e.g., 50 = 0.5%, covers solver opportunity cost). REQUIRED.
+fee_bps = 50
+# MOVE-to-offered-token conversion rate in base units. REQUIRED.
+# How many offered-token smallest units per 1 MOVE smallest unit (Octa).
+# e.g., for USD tokens (6 decimals) with MOVE (8 decimals) at 1:1 price: 0.01
+move_rate = 0.01
 
 # Example: USDC (Base Sepolia) -> USDC (Ethereum Sepolia) at 1:1 rate
 # [[acceptance.tokenpair]]
@@ -88,6 +99,7 @@ ratio = 1.0
 # target_chain_id = 11155111
 # target_token = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
 # ratio = 1.0
+# fee_bps = 50
 
 # Example: Token A (chain 1) -> Token C (chain 2) at 0.5 rate
 # [[acceptance.tokenpair]]
@@ -96,6 +108,7 @@ ratio = 1.0
 # target_chain_id = 2
 # target_token = "0xcccccccccccccccccccccccccccccccccccccccc"
 # ratio = 0.5
+# fee_bps = 50
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # LIQUIDITY
@@ -118,18 +131,21 @@ in_flight_timeout_secs = 300             # How long before an in-flight commitme
 # Asset token threshold (must match acceptance target_token)
 [[liquidity.threshold]]
 chain_id = 2
+label = "TOKEN"
 token = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 min_balance = 100000
 
 # Gas token threshold for hub chain (MOVE)
 [[liquidity.threshold]]
 chain_id = 1
+label = "MOVE"
 token = "0x000000000000000000000000000000000000000000000000000000000000000a"
 min_balance = 100000
 
 # Gas token threshold for connected chain (MOVE for MVM, ETH for EVM, SOL for SVM)
 [[liquidity.threshold]]
 chain_id = 2
+label = "MOVE"
 token = "0x000000000000000000000000000000000000000000000000000000000000000a"
 min_balance = 100000
 

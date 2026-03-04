@@ -80,8 +80,9 @@ module mvmt_intent::fa_intent_inflow_tests {
             1, // desired_chain_id (hub chain)
             expiry_time,
             signer::address_of(requestor),
+            500, // fee_in_offered_token
         );
-        
+
         // Step 2: Add solver to draft and create intent to sign
         let intent_to_sign = intent_reservation::add_solver_to_draft_intent(draft_intent, solver_addr);
         
@@ -107,8 +108,9 @@ module mvmt_intent::fa_intent_inflow_tests {
             solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
             signer::address_of(requestor), // requester_addr_connected_chain (same as requestor in test)
+            500, // fee_in_offered_token
         );
-        
+
         (intent_obj, offered_metadata, desired_metadata)
     }
 
@@ -176,8 +178,9 @@ module mvmt_intent::fa_intent_inflow_tests {
             1, // desired_chain_id (hub chain)
             expiry_time,
             signer::address_of(requestor),
+            500, // fee_in_offered_token
         );
-        
+
         // Step 2: Add solver to draft and create intent to sign
         let intent_to_sign = intent_reservation::add_solver_to_draft_intent(draft_intent, solver_addr);
         
@@ -206,8 +209,9 @@ module mvmt_intent::fa_intent_inflow_tests {
             solver_addr, // solver_addr_connected_chain (same as hub addr in tests)
             solver_signature_bytes,
             signer::address_of(requestor), // requester_addr_connected_chain (same as requestor in test)
+            500, // fee_in_offered_token
         );
-        
+
         // Step 6: Verify 0 tokens were locked (balance unchanged, still 0)
         assert!(primary_fungible_store::balance(signer::address_of(requestor), offered_metadata) == 0);
         
@@ -280,8 +284,9 @@ module mvmt_intent::fa_intent_inflow_tests {
             1, // desired_chain_id (hub chain)
             expiry_time,
             signer::address_of(requestor),
+            500, // fee_in_offered_token
         );
-        
+
         // Step 2: Add solver to draft and create intent to sign
         let intent_to_sign = intent_reservation::add_solver_to_draft_intent(draft_intent, solver_addr);
         
@@ -312,7 +317,8 @@ module mvmt_intent::fa_intent_inflow_tests {
             reservation_result, // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
-            option::none() // No requester_addr_connected_chain in test
+            option::none(), // No requester_addr_connected_chain in test
+            500 // fee_in_offered_token
         );
         let intent_addr = object::object_address(&intent_obj);
 
@@ -545,7 +551,8 @@ module mvmt_intent::fa_intent_inflow_tests {
             option::some(reservation), // Reserved for solver
             false, // Non-revocable
             option::some(dummy_intent_id),
-            option::none() // No requester_addr_connected_chain in test
+            option::none(), // No requester_addr_connected_chain in test
+            500 // fee_in_offered_token
         );
         let intent_addr = object::object_address(&intent_obj);
 

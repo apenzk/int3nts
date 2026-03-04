@@ -31,6 +31,7 @@ fn create_default_draft_data() -> serde_json::Value {
         "desired_amount": "2000",
         "desired_chain_id": "2",
         "expiry_time": DUMMY_EXPIRY.to_string(),
+        "fee_in_offered_token": "100",
     })
 }
 
@@ -49,12 +50,15 @@ fn create_test_solver_config() -> solver::config::SolverConfig {
     );
     SolverConfig {
         acceptance: AcceptanceConfig {
+            base_fee_in_move: 100,
             token_pairs: vec![TokenPairConfig {
                 source_chain_id: 1,
                 source_token: DUMMY_TOKEN_ADDR_HUB.to_string(),
                 target_chain_id: 2,
                 target_token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
                 ratio: 0.5,
+                fee_bps: 50,
+                move_rate: 0.5,
             }],
         },
         liquidity: liq,
@@ -255,6 +259,25 @@ fn test_parse_draft_data_empty_json() {
     assert!(result.is_err());
 }
 
+/// What is tested: parse_draft_data() returns error when fee_in_offered_token is missing
+/// Why: fee_in_offered_token is required — no silent fallback to 0
+#[test]
+fn test_parse_draft_data_missing_fee_in_offered_token() {
+    let draft_data = json!({
+        "intent_id": DUMMY_INTENT_ID,
+        "offered_metadata": DUMMY_TOKEN_ADDR_HUB,
+        "offered_amount": "1000",
+        "offered_chain_id": "1",
+        "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
+        "desired_amount": "2000",
+        "desired_chain_id": "2",
+    });
+
+    let result = parse_draft_data(&draft_data);
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("fee_in_offered_token"));
+}
+
 /// What is tested: parse_draft_data() accepts zero amounts
 /// Why: Ensure edge case of zero amounts is handled (validation of zero may be done elsewhere)
 #[test]
@@ -267,6 +290,7 @@ fn test_parse_draft_data_zero_amounts() {
         "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": "0",
         "desired_chain_id": "2",
+        "fee_in_offered_token": "0",
     });
 
     let result = parse_draft_data(&draft_data).unwrap();
@@ -286,6 +310,7 @@ fn test_parse_draft_data_max_amounts() {
         "desired_metadata": DUMMY_TOKEN_ADDR_MVMCON,
         "desired_amount": u64::MAX.to_string(),
         "desired_chain_id": "2",
+        "fee_in_offered_token": "1000000",
     });
 
     let result = parse_draft_data(&draft_data).unwrap();

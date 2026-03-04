@@ -11,7 +11,7 @@ pub mod service;
 pub mod coordinator_client;
 
 // Re-export public types for convenience
-pub use acceptance::{AcceptanceConfig, AcceptanceResult, DraftintentData, TokenPair};
+pub use acceptance::{AcceptanceConfig, AcceptanceResult, DraftintentData, TokenPair, TokenPairInfo, calculate_required_fee, convert_base_fee_in_move_to_offered};
 pub use chains::{ConnectedEvmClient, ConnectedMvmClient, HubChainClient};
 pub use config::{SolverConfig, SolverSigningConfig};
 pub use crypto::{get_intent_hash, get_private_key_from_profile, sign_intent_hash};

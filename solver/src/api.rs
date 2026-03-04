@@ -28,6 +28,14 @@ pub struct ExchangeRateResponse {
     pub desired_token: String,
     pub desired_chain_id: u64,
     pub exchange_rate: f64,
+    /// Base fee in MOVE smallest units (covers solver gas costs).
+    /// The frontend converts this to the offered token using move_rate.
+    pub base_fee_in_move: u64,
+    /// Exchange rate for MOVE → offered token (how many offered tokens per 1 MOVE).
+    /// Used by the frontend to convert base_fee_in_move to offered token units.
+    pub move_rate: f64,
+    /// Fee in basis points (e.g., 50 = 0.5%, covers solver opportunity cost)
+    pub fee_bps: u64,
 }
 
 /// Start the solver acceptance API server.
@@ -92,7 +100,7 @@ async fn get_exchange_rate_handler(
         .map_err(|e| warp::reject::custom(QueryError(e.to_string())))?;
 
     // Find matching pair
-    let (pair, rate) = if let (Some(d_chain_id), Some(d_token)) = (desired_chain_id, desired_token) {
+    let (pair, info) = if let (Some(d_chain_id), Some(d_token)) = (desired_chain_id, desired_token) {
         let offered_chain_id = offered_chain_id.parse::<u64>()
             .map_err(|e| warp::reject::custom(QueryError(format!("Invalid offered_chain_id: {}", e))))?;
         let desired_chain_id = d_chain_id.parse::<u64>()
@@ -104,30 +112,30 @@ async fn get_exchange_rate_handler(
             desired_chain_id,
             desired_token: d_token.to_string(),
         };
-        let rate = token_pairs.get(&key).copied().ok_or_else(|| {
+        let info = token_pairs.get(&key).copied().ok_or_else(|| {
             warp::reject::custom(QueryError(format!(
                 "No exchange rate found for token pair: {}:{} -> {}:{}",
                 offered_chain_id, offered_token, desired_chain_id, d_token
             )))
         })?;
-        (key, rate)
+        (key, info)
     } else {
         // Find first matching pair by offered chain/token
         let offered_chain_id = offered_chain_id.parse::<u64>()
             .map_err(|e| warp::reject::custom(QueryError(format!("Invalid offered_chain_id: {}", e))))?;
-        let (pair, rate) = token_pairs.iter()
+        let (pair, info) = token_pairs.iter()
             .find(|(pair, _)| {
                 pair.offered_chain_id == offered_chain_id
                     && pair.offered_token == *offered_token
             })
-            .map(|(pair, rate)| (pair.clone(), *rate))
+            .map(|(pair, info)| (pair.clone(), *info))
             .ok_or_else(|| {
                 warp::reject::custom(QueryError(format!(
                     "No exchange rate found for offered token {} on chain {}",
                     offered_token, offered_chain_id
                 )))
             })?;
-        (pair, rate)
+        (pair, info)
     };
 
     Ok(warp::reply::json(&ApiResponse::<ExchangeRateResponse> {
@@ -135,7 +143,10 @@ async fn get_exchange_rate_handler(
         data: Some(ExchangeRateResponse {
             desired_token: pair.desired_token,
             desired_chain_id: pair.desired_chain_id,
-            exchange_rate: rate,
+            exchange_rate: info.rate,
+            base_fee_in_move: config.acceptance.base_fee_in_move,
+            move_rate: info.move_rate,
+            fee_bps: info.fee_bps,
         }),
         error: None,
     }))

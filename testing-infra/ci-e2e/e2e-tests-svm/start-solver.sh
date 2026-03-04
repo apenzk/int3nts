@@ -94,12 +94,16 @@ outflow_validator_program_id = "$SVM_OUTFLOW_VALIDATOR_ID"
 private_key_env = "SOLANA_SOLVER_PRIVATE_KEY"
 
 [acceptance]
+base_fee_in_move = 1000000  # 0.01 MOVE (8 decimals) — covers solver gas costs
+
 [[acceptance.tokenpair]]
 source_chain_id = $svm_chain_id
 source_token = "$svm_token_mint_hex"
 target_chain_id = $hub_chain_id
 target_token = "$usdhub_metadata_chain1"
 ratio = 1.0
+fee_bps = 50  # 0.5% fee
+move_rate = 0.01  # 1 Octa = 0.01 micro-USD (MOVE 8 dec, USD 6 dec, 1:1 price)
 
 [[acceptance.tokenpair]]
 source_chain_id = $hub_chain_id
@@ -107,6 +111,8 @@ source_token = "$usdhub_metadata_chain1"
 target_chain_id = $svm_chain_id
 target_token = "$svm_token_mint_hex"
 ratio = 1.0
+fee_bps = 50  # 0.5% fee
+move_rate = 0.01  # 1 Octa = 0.01 micro-USD (MOVE 8 dec, USD 6 dec, 1:1 price)
 
 [liquidity]
 balance_poll_interval_ms = 10000

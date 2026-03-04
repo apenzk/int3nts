@@ -222,24 +222,28 @@ pub fn create_mvm_pair_liquidity_config() -> solver::config::LiquidityMonitorCon
             solver::config::LiquidityThresholdConfig {
                 chain_id: 1,
                 token: DUMMY_TOKEN_ADDR_HUB.to_string(),
+                label: None,
                 min_balance: 500,
             },
             // Target token on connected chain (for outflow: solver spends USDcon)
             solver::config::LiquidityThresholdConfig {
                 chain_id: 2,
                 token: DUMMY_TOKEN_ADDR_MVMCON.to_string(),
+                label: None,
                 min_balance: 500,
             },
             // Gas token on hub chain
             solver::config::LiquidityThresholdConfig {
                 chain_id: 1,
                 token: GAS_TOKEN_MVM.to_string(),
+                label: None,
                 min_balance: 100,
             },
             // Gas token on connected chain
             solver::config::LiquidityThresholdConfig {
                 chain_id: 2,
                 token: GAS_TOKEN_MVM.to_string(),
+                label: None,
                 min_balance: 100,
             },
         ],
@@ -291,6 +295,7 @@ pub fn create_default_solver_config() -> solver::config::SolverConfig {
             solver::config::ConnectedChainConfig::Mvm(create_default_connected_mvm_chain_config()),
         ],
         acceptance: solver::config::AcceptanceConfig {
+            base_fee_in_move: 1_000_000,
             token_pairs: Vec::new(),
         },
         solver: create_default_solver_signing_config(),

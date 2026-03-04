@@ -47,6 +47,7 @@ log "   Solver SVM (hex):                      $SOLVER_SVM_ADDR"
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 OFFERED_AMOUNT="1000000"
 DESIRED_AMOUNT="1000000"
+FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 
 log ""
 log " Configuration:"
@@ -92,6 +93,7 @@ DRAFT_DATA=$(build_draft_data \
     "$EXPIRY_TIME" \
     "$INTENT_ID" \
     "$REQUESTER_HUB_ADDR" \
+    "$FEE_IN_OFFERED_TOKEN" \
     "{\"chain_addr\": \"$HUB_MODULE_ADDR\", \"flow_type\": \"inflow\", \"connected_chain_type\": \"svm\"}")
 
 DRAFT_ID=$(submit_draft_intent "$REQUESTER_HUB_ADDR" "$DRAFT_DATA" "$EXPIRY_TIME")
@@ -121,7 +123,7 @@ log "     Solver address: $RETRIEVED_SOLVER"
 SOLVER_SIGNATURE_HEX="${RETRIEVED_SIGNATURE#0x}"
 aptos move run --profile requester-chain1 --assume-yes \
     --function-id "0x${HUB_MODULE_ADDR}::fa_intent_inflow::create_inflow_intent_entry" \
-    --args "address:${OFFERED_METADATA_SVM}" "u64:${OFFERED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "address:${DESIRED_METADATA_HUB}" "u64:${DESIRED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_SVM_ADDR}" "hex:${SOLVER_SIGNATURE_HEX}" "address:${REQUESTER_SVM_ADDR}" >> "$LOG_FILE" 2>&1
+    --args "address:${OFFERED_METADATA_SVM}" "u64:${OFFERED_AMOUNT}" "u64:${CONNECTED_CHAIN_ID}" "address:${DESIRED_METADATA_HUB}" "u64:${DESIRED_AMOUNT}" "u64:${HUB_CHAIN_ID}" "u64:${EXPIRY_TIME}" "address:${INTENT_ID}" "address:${RETRIEVED_SOLVER}" "address:${SOLVER_SVM_ADDR}" "hex:${SOLVER_SIGNATURE_HEX}" "address:${REQUESTER_SVM_ADDR}" "u64:${FEE_IN_OFFERED_TOKEN}" >> "$LOG_FILE" 2>&1
 
 if [ $? -eq 0 ]; then
     log "     ✅ Request-intent created on Hub!"

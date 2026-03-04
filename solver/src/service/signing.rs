@@ -50,6 +50,7 @@ impl SigningService {
         // Convert config token pairs to AcceptanceConfig
         let token_pairs = config.get_token_pairs()?;
         let acceptance_config = AcceptanceConfig {
+            base_fee_in_move: config.acceptance.base_fee_in_move,
             token_pairs,
         };
 
@@ -285,6 +286,7 @@ impl SigningService {
         let desired_token = draft_data.desired_token.clone();
         let desired_amount = draft_data.desired_amount;
         let desired_chain_id = draft_data.desired_chain_id;
+        let fee_in_offered_token = draft_data.fee_in_offered_token;
         let expiry_time = draft.expiry_time;
         let requester_addr = draft.requester_addr.clone();
         let solver_hub_addr_clone = solver_hub_addr.clone();
@@ -321,6 +323,7 @@ impl SigningService {
                 expiry_time,
                 &requester_addr,
                 &solver_hub_addr_clone,
+                fee_in_offered_token,
                 chain_num,
                 e2e_mode,
             )
@@ -450,6 +453,12 @@ pub fn parse_draft_data(draft_data: &Value) -> Result<DraftintentData> {
         .parse::<u64>()
         .context("desired_chain_id must be a valid number")?;
 
+    let fee_in_offered_token = draft_data["fee_in_offered_token"]
+        .as_str()
+        .context("Missing or invalid fee_in_offered_token")?
+        .parse::<u64>()
+        .context("fee_in_offered_token must be a valid number")?;
+
     Ok(DraftintentData {
         intent_id: intent_id.to_string(),
         offered_token: offered_metadata.to_string(),
@@ -458,6 +467,7 @@ pub fn parse_draft_data(draft_data: &Value) -> Result<DraftintentData> {
         desired_token: desired_metadata.to_string(),
         desired_amount,
         desired_chain_id,
+        fee_in_offered_token,
     })
 }
 

@@ -1279,7 +1279,7 @@ poll_for_signature() {
 }
 
 # Build draft data JSON for intent
-# Usage: build_draft_data <offered_metadata> <offered_amount> <offered_chain_id> <desired_metadata> <desired_amount> <desired_chain_id> <expiry_time> <intent_id> <issuer> [extra_fields_json]
+# Usage: build_draft_data <offered_metadata> <offered_amount> <offered_chain_id> <desired_metadata> <desired_amount> <desired_chain_id> <expiry_time> <intent_id> <issuer> <fee_in_offered_token> [extra_fields_json]
 # Returns JSON object suitable for submit_draft_intent
 build_draft_data() {
     local offered_metadata="$1"
@@ -1291,8 +1291,9 @@ build_draft_data() {
     local expiry_time="$7"
     local intent_id="$8"
     local issuer="$9"
-    local extra_fields="${10:-{}}"
-    
+    local fee_in_offered_token="${10}"
+    local extra_fields="${11:-{}}"
+
     # Validate extra_fields is valid JSON, default to {} if not
     local validated_extra
     if ! validated_extra=$(echo "$extra_fields" | jq . 2>/dev/null); then
@@ -1301,7 +1302,7 @@ build_draft_data() {
         [ -n "$LOG_FILE" ] && echo "   Warning: extra_fields is not valid JSON, using empty object" >> "$LOG_FILE"
         validated_extra="{}"
     fi
-    
+
     # Build the JSON object (redirect any warnings to stderr)
     local json
     json=$(jq -n \
@@ -1314,6 +1315,7 @@ build_draft_data() {
         --arg et "$expiry_time" \
         --arg ii "$intent_id" \
         --arg is "$issuer" \
+        --arg fiot "$fee_in_offered_token" \
         --argjson extra "$validated_extra" \
         '{
             offered_metadata: $om,
@@ -1324,21 +1326,22 @@ build_draft_data() {
             desired_chain_id: $dci,
             expiry_time: $et,
             intent_id: $ii,
-            issuer: $is
+            issuer: $is,
+            fee_in_offered_token: $fiot
         } + $extra' 2>&1)
-    
+
     local jq_exit=$?
     if [ $jq_exit -ne 0 ]; then
         log "   ERROR: build_draft_data jq failed with exit code $jq_exit"
         log "   jq output: $json"
         log "   Inputs: om=$offered_metadata, oa=$offered_amount, oci=$offered_chain_id"
         log "   Inputs: dm=$desired_metadata, da=$desired_amount, dci=$desired_chain_id"
-        log "   Inputs: et=$expiry_time, ii=$intent_id, is=$issuer"
+        log "   Inputs: et=$expiry_time, ii=$intent_id, is=$issuer, fiot=$fee_in_offered_token"
         log "   Inputs: extra=$validated_extra"
         echo "{}"
         return 1
     fi
-    
+
     echo "$json"
 }
 

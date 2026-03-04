@@ -147,6 +147,9 @@ class CoordinatorClient {
     desired_token: string;
     desired_chain_id: number;
     exchange_rate: number;
+    base_fee_in_move: number;
+    move_rate: number;
+    fee_bps: number;
   }>> {
     const params = new URLSearchParams({
       offered_chain_id: offeredChainId.toString(),

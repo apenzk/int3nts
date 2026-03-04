@@ -47,6 +47,7 @@ fn main() -> Result<()> {
     let mut expiry_time = None;
     let mut issuer = None;
     let mut solver = None;
+    let mut fee_in_offered_token: Option<u64> = None;
     let mut chain_num = None;
     let mut e2e_mode = false;
 
@@ -97,6 +98,10 @@ fn main() -> Result<()> {
                 solver = Some(args[i + 1].clone());
                 i += 2;
             }
+            "--fee-in-offered-token" => {
+                fee_in_offered_token = Some(args[i + 1].parse().context("Invalid fee-in-offered-token")?);
+                i += 2;
+            }
             "--chain-num" => {
                 chain_num = Some(args[i + 1].parse().context("Invalid chain-num")?);
                 i += 2;
@@ -123,6 +128,7 @@ fn main() -> Result<()> {
     let expiry_time = expiry_time.context("--expiry-time is required")?;
     let issuer = issuer.context("--issuer is required")?;
     let solver = solver.context("--solver is required")?;
+    let fee_in_offered_token = fee_in_offered_token.context("--fee-in-offered-token is required")?;
     let chain_num = chain_num.context("--chain-num is required")?;
 
     // Step 1: Call Move function to get the hash
@@ -138,6 +144,7 @@ fn main() -> Result<()> {
         expiry_time,
         &issuer,
         &solver,
+        fee_in_offered_token,
         chain_num,
         e2e_mode,
     )?;

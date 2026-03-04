@@ -8,7 +8,7 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::acceptance::TokenPair;
+use crate::acceptance::{TokenPair, TokenPairInfo};
 
 // ============================================================================
 // CONFIGURATION STRUCTURES
@@ -231,8 +231,14 @@ fn default_acceptance_api_port() -> u16 {
 /// Defines which token pairs are supported and their exchange rates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcceptanceConfig {
+    /// Base fee in MOVE smallest units (covers solver gas costs).
+    /// Single value across all token pairs — denominated in MOVE because
+    /// solver fixed costs (gas) are paid in MOVE on the hub chain.
+    /// Required — must be explicitly set (use 0 for no base fee).
+    pub base_fee_in_move: u64,
     /// Supported token pairs with exchange rates.
-    #[serde(rename = "tokenpair", default)]
+    /// Required — at least one token pair must be configured.
+    #[serde(rename = "tokenpair")]
     pub token_pairs: Vec<TokenPairConfig>,
 }
 
@@ -249,6 +255,13 @@ pub struct TokenPairConfig {
     pub target_token: String,
     /// Exchange rate (how many source tokens per 1 target token)
     pub ratio: f64,
+    /// Fee in basis points (e.g., 50 = 0.5%, covers solver opportunity cost).
+    /// Required — must be explicitly set (use 0 for no percentage fee).
+    pub fee_bps: u64,
+    /// MOVE-to-offered-token conversion rate in base units.
+    /// How many offered-token smallest units per 1 MOVE smallest unit (Octa).
+    /// e.g., for USD tokens (6 decimals) with MOVE (8 decimals) at 1:1 price: 0.01
+    pub move_rate: f64,
 }
 
 /// Solver signing configuration.
@@ -402,6 +415,30 @@ impl SolverConfig {
                     pair.target_token
                 ));
             }
+
+            // Validate move_rate is positive
+            if pair.move_rate <= 0.0 {
+                return Err(anyhow::anyhow!(
+                    "Invalid move_rate {} for token pair {}:{} -> {}:{}: must be positive",
+                    pair.move_rate,
+                    pair.source_chain_id,
+                    pair.source_token,
+                    pair.target_chain_id,
+                    pair.target_token
+                ));
+            }
+
+            // Validate fee_bps is within range (0-10000 basis points = 0-100%)
+            if pair.fee_bps > 10000 {
+                return Err(anyhow::anyhow!(
+                    "Invalid fee_bps {} for token pair {}:{} -> {}:{}: must be <= 10000 (100%)",
+                    pair.fee_bps,
+                    pair.source_chain_id,
+                    pair.source_token,
+                    pair.target_chain_id,
+                    pair.target_token
+                ));
+            }
         }
 
         // Validate liquidity config
@@ -479,14 +516,14 @@ impl SolverConfig {
         Ok(())
     }
 
-    /// Converts token pair configs to TokenPair structs.
+    /// Converts token pair configs to TokenPair structs with rate and fee info.
     ///
-    /// This is a helper method for the acceptance module to use.
+    /// This is a helper method for the acceptance module and API to use.
     ///
     /// # Returns
     ///
-    /// * `HashMap<TokenPair, f64>` - Token pairs with exchange rates
-    pub fn get_token_pairs(&self) -> anyhow::Result<HashMap<TokenPair, f64>> {
+    /// * `HashMap<TokenPair, TokenPairInfo>` - Token pairs with exchange rates and fee parameters
+    pub fn get_token_pairs(&self) -> anyhow::Result<HashMap<TokenPair, TokenPairInfo>> {
         let mut pairs = HashMap::new();
 
         for pair in &self.acceptance.token_pairs {
@@ -497,7 +534,11 @@ impl SolverConfig {
                 desired_token: pair.target_token.clone(),
             };
 
-            pairs.insert(token_pair, pair.ratio);
+            pairs.insert(token_pair, TokenPairInfo {
+                rate: pair.ratio,
+                fee_bps: pair.fee_bps,
+                move_rate: pair.move_rate,
+            });
         }
 
         Ok(pairs)
@@ -528,6 +569,9 @@ pub struct LiquidityThresholdConfig {
     pub chain_id: u64,
     /// Token address or mint
     pub token: String,
+    /// Human-readable token symbol for log messages (e.g. "MOVE", "USDC")
+    #[serde(default)]
+    pub label: Option<String>,
     /// Minimum balance below which the solver stops accepting new intents
     pub min_balance: u64,
 }

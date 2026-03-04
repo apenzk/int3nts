@@ -67,6 +67,7 @@ module mvmt_intent::fa_intent_with_oracle {
         requirement: OracleSignatureRequirement,
         intent_id: address, // Intent ID from hub chain (for escrows) - used for signature verification
         requester_addr_connected_chain: Option<address>, // Address on connected chain where solver should send tokens (for outflow intents)
+        fee_in_offered_token: u64, // Fee embedded in exchange rate, denominated in offered token units
     }
 
     /// Witness type proving receipt completion after oracle validation.
@@ -98,6 +99,7 @@ module mvmt_intent::fa_intent_with_oracle {
         revocable: bool,
         reserved_solver: Option<address>, // Solver address if the intent is reserved (None for unreserved intents)
         requester_addr_connected_chain: Option<address>, // Requester address on connected chain (for outflow intents)
+        fee_in_offered_token: u64, // Fee embedded in exchange rate, denominated in offered token units
     }
 
     // ============================================================================
@@ -139,6 +141,11 @@ module mvmt_intent::fa_intent_with_oracle {
         order.offered_chain_id
     }
 
+    /// Get the fee_in_offered_token from an OracleGuardedLimitOrder argument.
+    public fun get_fee_in_offered_token(order: &OracleGuardedLimitOrder): u64 {
+        order.fee_in_offered_token
+    }
+
     // ============================================================================
     // ENTRY / PUBLIC API
     // ============================================================================
@@ -163,6 +170,7 @@ module mvmt_intent::fa_intent_with_oracle {
     /// - `revocable`: Whether the intent can be revoked by the owner
     /// - `intent_id`: The original intent ID from hub chain (for escrows) or same as intent_addr (for regular intents)
     /// - `requester_addr_connected_chain`: Optional address on connected chain where solver should send tokens (for outflow intents)
+    /// - `fee_in_offered_token`: Fee embedded in exchange rate, denominated in offered token units
     /// - `reservation`: Optional reservation specifying which solver can claim the escrow
     ///
     /// # Returns
@@ -180,6 +188,7 @@ module mvmt_intent::fa_intent_with_oracle {
         revocable: bool,
         intent_id: address,
         requester_addr_connected_chain: Option<address>,
+        fee_in_offered_token: u64,
         reservation: Option<IntentReserved>,
     ): Object<Intent<FungibleStoreManager, OracleGuardedLimitOrder>> {
         // Capture metadata and amount before depositing
@@ -220,7 +229,7 @@ module mvmt_intent::fa_intent_with_oracle {
         
         let intent_obj = intent::create_intent<FungibleStoreManager, OracleGuardedLimitOrder, OracleGuardedWitness>(
             FungibleStoreManager { extend_ref, delete_ref },
-            OracleGuardedLimitOrder { desired_metadata, desired_amount, desired_chain_id, offered_chain_id, requester_addr, requirement, intent_id, requester_addr_connected_chain },
+            OracleGuardedLimitOrder { desired_metadata, desired_amount, desired_chain_id, offered_chain_id, requester_addr, requirement, intent_id, requester_addr_connected_chain, fee_in_offered_token },
             expiry_time,
             requester_addr,
             OracleGuardedWitness {},
@@ -246,6 +255,7 @@ module mvmt_intent::fa_intent_with_oracle {
             revocable,
             reserved_solver,
             requester_addr_connected_chain,
+            fee_in_offered_token,
         });
 
         intent_obj
