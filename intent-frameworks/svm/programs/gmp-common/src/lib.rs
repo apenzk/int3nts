@@ -1,4 +1,3 @@
-pub mod endpoints;
 pub mod messages;
 
 pub use messages::{

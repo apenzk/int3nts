@@ -666,6 +666,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "chain-clients-common"
+version = "0.1.0"
+
+[[package]]
+name = "chain-clients-evm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "sha3",
+ "tracing",
+]
+
+[[package]]
+name = "chain-clients-mvm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "chain-clients-svm"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "borsh 0.10.4",
+ "hex",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "solana-program",
+ "tracing",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5781,6 +5824,10 @@ dependencies = [
  "base64 0.21.7",
  "borsh 0.10.4",
  "bs58",
+ "chain-clients-common",
+ "chain-clients-evm",
+ "chain-clients-mvm",
+ "chain-clients-svm",
  "clap",
  "ed25519-dalek 2.2.0",
  "ethereum-types",

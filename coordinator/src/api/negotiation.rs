@@ -14,7 +14,7 @@ use warp::{http::StatusCode, Filter};
 
 use crate::api::generic::ApiResponse;
 use crate::config::Config;
-use crate::mvm_client::MvmClient;
+use chain_clients_mvm::MvmClient;
 use crate::storage::{DraftintentStatus, DraftintentStore};
 
 // ============================================================================

@@ -4,9 +4,7 @@
 //! It watches GMP endpoint events (MessageSent) and delivers messages to destination contracts.
 pub mod config;
 pub mod crypto;
-pub mod evm_client;
 pub mod svm_client;
-pub mod mvm_client;
 pub mod integrated_gmp_relay;
 
 // Re-export commonly used types

@@ -7,9 +7,7 @@
 pub mod api;
 pub mod config;
 pub mod monitor;
-pub mod mvm_client;
 pub mod storage;
-pub mod svm_client;
 
 // Re-export storage types for tests
 pub use storage::draftintents::{DraftintentStatus, DraftintentStore};

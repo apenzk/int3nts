@@ -42,9 +42,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::crypto::CryptoService;
-use crate::evm_client::EvmLog;
-use crate::mvm_client::MvmClient;
-use crate::svm_client::SvmClient;
+use chain_clients_evm::EvmLog;
+use chain_clients_mvm::MvmClient;
+use crate::svm_client::GmpSvmClient;
 
 // Well-known Solana program IDs.
 const SYSTEM_PROGRAM_ID: Pubkey = Pubkey::new_from_array([0; 32]);
@@ -226,7 +226,7 @@ pub struct NativeGmpRelay {
     crypto_service: CryptoService,
     mvm_client: MvmClient,
     mvm_connected_client: Option<MvmClient>,
-    svm_client: Option<SvmClient>,
+    svm_client: Option<GmpSvmClient>,
     #[allow(dead_code)]
     http_client: Client,
     state: Arc<RwLock<RelayState>>,
@@ -248,7 +248,7 @@ impl NativeGmpRelay {
         // Initialize SVM client if configured
         let svm_client = match (&config.svm_rpc_url, &config.svm_gmp_program_id) {
             (Some(rpc_url), Some(program_id)) => {
-                Some(SvmClient::new(rpc_url, program_id).context("Failed to create SVM client")?)
+                Some(GmpSvmClient::new(rpc_url, program_id).context("Failed to create SVM client")?)
             }
             _ => None,
         };

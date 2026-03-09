@@ -4,7 +4,7 @@
 //! Configuration includes chain endpoints, timing settings, and API settings.
 
 use serde::{Deserialize, Serialize};
-use solana_program::pubkey::Pubkey;
+use chain_clients_svm::solana_program::pubkey::Pubkey;
 use std::str::FromStr;
 
 // ============================================================================

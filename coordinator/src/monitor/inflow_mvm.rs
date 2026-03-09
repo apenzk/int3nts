@@ -5,7 +5,7 @@
 
 use crate::monitor::generic::{ChainType, EscrowEvent, EventMonitor};
 use crate::monitor::hub_mvm::parse_amount_with_u64_limit;
-use crate::mvm_client::{MvmClient, OracleLimitOrderEvent as MvmOracleLimitOrderEvent};
+use chain_clients_mvm::{MvmClient, OracleLimitOrderEvent as MvmOracleLimitOrderEvent};
 use anyhow::{Context, Result};
 use std::collections::HashSet;
 

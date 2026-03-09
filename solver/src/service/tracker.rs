@@ -12,6 +12,7 @@
 //! The tracker distinguishes between inflow and outflow intents for fulfillment routing.
 
 use anyhow::{Context, Result};
+use chain_clients_common::normalize_intent_id_to_64_chars;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -226,8 +227,8 @@ impl IntentTracker {
                 }
 
                 // Normalize intent_id for comparison (strip 0x prefix, pad to 64 chars)
-                let event_intent_id = normalize_intent_id(&event.intent_id);
-                let tracked_intent_id = normalize_intent_id(&tracked.intent_id);
+                let event_intent_id = normalize_intent_id_to_64_chars(&event.intent_id);
+                let tracked_intent_id = normalize_intent_id_to_64_chars(&tracked.intent_id);
 
                 // Match by intent_id (if available) or by draft data
                 let matches = if event_intent_id == tracked_intent_id {
@@ -445,11 +446,5 @@ impl IntentTracker {
             }
         }
     }
-}
-
-/// Normalize intent ID for comparison (strip 0x prefix, pad to 64 hex chars)
-fn normalize_intent_id(intent_id: &str) -> String {
-    let cleaned = intent_id.strip_prefix("0x").unwrap_or(intent_id);
-    format!("0x{:0>64}", cleaned)
 }
 

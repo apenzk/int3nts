@@ -22,6 +22,11 @@ jobs:
     with:
       script: "cd intent-frameworks/svm && ./scripts/test.sh"
 
+  chain-clients:
+    uses: ./.github/workflows/unit-tests-reusable.yml
+    with:
+      script: "./chain-clients/scripts/test.sh"
+
   solver:
     uses: ./.github/workflows/unit-tests-reusable.yml
     with:

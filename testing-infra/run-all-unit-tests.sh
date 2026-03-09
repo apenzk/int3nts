@@ -7,6 +7,20 @@
 # Track overall exit code
 OVERALL_EXIT=0
 
+echo "Running Chain-Clients tests..."
+CHAIN_CLIENTS_EXIT=0
+CHAIN_CLIENTS_TEST_OUTPUT=$(nix develop ./nix -c bash -c "./chain-clients/scripts/test.sh 2>&1") || CHAIN_CLIENTS_EXIT=$?
+if [ $CHAIN_CLIENTS_EXIT -ne 0 ]; then
+    echo "Chain-Clients tests failed (exit code $CHAIN_CLIENTS_EXIT):"
+    echo "$CHAIN_CLIENTS_TEST_OUTPUT"
+fi
+CHAIN_CLIENTS_PASSED=$(echo "$CHAIN_CLIENTS_TEST_OUTPUT" | grep -oE "[0-9]+ passed" | awk '{sum += $1} END {print sum+0}')
+CHAIN_CLIENTS_FAILED=$(echo "$CHAIN_CLIENTS_TEST_OUTPUT" | grep -oE "[0-9]+ failed" | awk '{sum += $1} END {print sum+0}')
+if [ $CHAIN_CLIENTS_EXIT -ne 0 ] && [ "$CHAIN_CLIENTS_PASSED" = "0" ] && [ "$CHAIN_CLIENTS_FAILED" = "0" ]; then
+    CHAIN_CLIENTS_FAILED="ERR"
+    OVERALL_EXIT=1
+fi
+
 echo "Running Coordinator tests..."
 COORDINATOR_EXIT=0
 COORDINATOR_TEST_OUTPUT=$(RUST_LOG=off nix develop ./nix -c bash -c "cd coordinator && cargo test --quiet 2>&1") || COORDINATOR_EXIT=$?
@@ -116,6 +130,7 @@ echo "=== Test Summary Table ==="
 echo ""
 printf "| %-14s | %6s | %6s |\n" "Tests" "Passed" "Failed"
 printf "|%-16s|%8s|%8s|\n" "----------------" "--------" "--------"
+printf "| %-14s | %6s | %6s |\n" "Chain-Clients" "$CHAIN_CLIENTS_PASSED" "$CHAIN_CLIENTS_FAILED"
 printf "| %-14s | %6s | %6s |\n" "Coordinator" "$COORDINATOR_PASSED" "$COORDINATOR_FAILED"
 printf "| %-14s | %6s | %6s |\n" "Integrated-GMP" "$INTEGRATED_GMP_PASSED" "$INTEGRATED_GMP_FAILED"
 printf "| %-14s | %6s | %6s |\n" "Solver" "$SOLVER_PASSED" "$SOLVER_FAILED"

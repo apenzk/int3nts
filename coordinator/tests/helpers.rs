@@ -11,7 +11,7 @@ use coordinator::config::{
     ApiConfig, ChainConfig, Config, CoordinatorConfig, EvmChainConfig, SvmChainConfig,
 };
 use coordinator::monitor::{ChainType, EscrowEvent, FulfillmentEvent, IntentEvent};
-use coordinator::mvm_client::MvmTransaction;
+use chain_clients_mvm::MvmTransaction;
 
 // ============================================================================
 // CONSTANTS

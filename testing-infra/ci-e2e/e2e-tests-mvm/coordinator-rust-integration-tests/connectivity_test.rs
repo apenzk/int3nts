@@ -3,7 +3,7 @@
 //! These tests verify basic connectivity to Aptos chains.
 //! They require the Aptos chains to be running.
 
-use coordinator::mvm_client::MvmClient;
+use chain_clients_mvm::MvmClient;
 
 /// Test that the Aptos client can connect to Hub
 /// Why: Verify the client can communicate with running Aptos nodes

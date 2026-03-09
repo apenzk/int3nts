@@ -10,6 +10,7 @@
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
 use crate::config::SolverConfig;
+use chain_clients_common::normalize_intent_id;
 use crate::service::liquidity::LiquidityMonitor;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use anyhow::{Context, Result};
@@ -355,14 +356,4 @@ impl InflowService {
             tokio::time::sleep(polling_interval).await;
         }
     }
-}
-
-/// Normalize intent ID for comparison (strip 0x prefix, remove leading zeros, lowercase)
-fn normalize_intent_id(intent_id: &str) -> String {
-    let stripped = intent_id.strip_prefix("0x").unwrap_or(intent_id);
-    // Remove leading zeros
-    let trimmed = stripped.trim_start_matches('0');
-    // If all zeros, keep at least one zero
-    let hex_part = if trimmed.is_empty() { "0" } else { trimmed };
-    format!("0x{}", hex_part.to_lowercase())
 }

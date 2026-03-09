@@ -3,7 +3,7 @@
 //! These tests verify that contracts are deployed on both chains.
 //! They require contracts to be deployed via deploy-contracts.sh
 
-use coordinator::mvm_client::MvmClient;
+use chain_clients_mvm::MvmClient;
 
 /// Test that intent framework contracts are deployed on the chains
 /// Why: Coordinator needs contracts to be deployed before it can monitor events

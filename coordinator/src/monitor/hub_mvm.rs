@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use tracing::{error, info};
 
 use crate::monitor::generic::{EventMonitor, FulfillmentEvent, IntentEvent};
-use crate::mvm_client::{
+use chain_clients_mvm::{
     LimitOrderEvent as MvmLimitOrderEvent,
     LimitOrderFulfillmentEvent as MvmLimitOrderFulfillmentEvent, MvmClient,
     OracleLimitOrderEvent as MvmOracleLimitOrderEvent,

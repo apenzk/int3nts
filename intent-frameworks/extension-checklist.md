@@ -18,11 +18,11 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/initialization.r
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should initialize escrow with approver address | [ ] | [x] | [x] |
-| 2 | Should allow requester to create an escrow | [ ] | [x] | [x] |
-| 3 | Should revert if escrow already exists | [ ] | [x] | [x] |
-| 4 | Should revert if amount is zero | [ ] | [x] | [x] |
-| 5 | Should revert if amount is zero (GMP variant) | [ ] | [x] | [ ] |
+| 1 | test_initialize_approver_address | [ ] | [x] | [x] |
+| 2 | test_allow_requester_to_create_escrow | [ ] | [x] | [x] |
+| 3 | test_revert_if_escrow_already_exists | [ ] | [x] | [x] |
+| 4 | test_revert_if_amount_is_zero | [ ] | [x] | [x] |
+| 5 | test_revert_if_amount_is_zero_gmp_variant | [ ] | [x] | [ ] |
 
 ## deposit
 
@@ -32,10 +32,10 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/deposit.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should allow requester to create escrow with tokens | [ ] | [x] | [x] |
-| 2 | Should revert if escrow is already claimed | [ ] | [x] | [x] |
-| 3 | Should support multiple escrows with different intent IDs | [ ] | [x] | [x] |
-| 4 | Should set correct expiry timestamp | [ ] | [x] | [x] |
+| 1 | test_create_escrow_with_tokens | [ ] | [x] | [x] |
+| 2 | test_revert_if_escrow_already_claimed | [ ] | [x] | [x] |
+| 3 | test_support_multiple_escrows_with_different_intent_ids | [ ] | [x] | [x] |
+| 4 | test_set_correct_expiry_timestamp | [ ] | [x] | [x] |
 
 ## claim
 
@@ -45,11 +45,11 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/claim.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should allow solver to claim with valid approver signature (EVM) / fulfillment proof (SVM) | [ ] | [x] | [x] |
-| 2 | Should revert with invalid signature (EVM) / without requirements (SVM) | [ ] | [x] | [x] |
-| 3 | Should prevent signature replay (EVM) / double fulfillment (SVM) | [ ] | [x] | [x] |
-| 4 | Should revert if escrow already claimed | [ ] | [x] | [x] |
-| 5 | Should revert if escrow does not exist | [ ] | [x] | [x] |
+| 1 | test_claim_with_valid_fulfillment_proof | [ ] | [x] | [x] |
+| 2 | test_revert_fulfillment_without_requirements | [ ] | [x] | [x] |
+| 3 | test_prevent_double_fulfillment | [ ] | [x] | [x] |
+| 4 | test_revert_if_escrow_already_claimed | [ ] | [x] | [x] |
+| 5 | test_revert_if_escrow_does_not_exist | [ ] | [x] | [x] |
 
 > **Note:** SVM uses GMP-based claim via `GmpReceiveFulfillmentProof` instruction. EVM uses signature-based claim.
 
@@ -61,12 +61,12 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/cancel.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should revert if escrow has not expired yet | [x] | [x] | [x] |
-| 2 | Should allow admin to cancel and return funds to requester after expiry | [x] | [x] | [x] |
-| 3 | Should revert if caller is not admin | [x] | [x] | [x] |
-| 4 | Should revert if already claimed | [x] | [x] | [x] |
-| 5 | Should revert if escrow does not exist | [x] | [x] | [x] |
-| 6 | Should revert if already cancelled | [x] | [x] | [x] |
+| 1 | test_revert_if_escrow_has_not_expired_yet | [x] | [x] | [x] |
+| 2 | test_cancel_after_expiry | [x] | [x] | [x] |
+| 3 | test_revert_if_not_admin | [x] | [x] | [x] |
+| 4 | test_revert_if_already_claimed | [x] | [x] | [x] |
+| 5 | test_revert_if_escrow_does_not_exist | [x] | [x] | [x] |
+| 6 | test_revert_if_already_cancelled | [x] | [x] | [x] |
 
 ## expiry
 
@@ -76,9 +76,9 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/expiry.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should allow admin to cancel expired escrow | [ ] | [x] | [x] |
-| 2 | Should verify expiry timestamp is stored correctly | [ ] | [x] | [x] |
-| 3 | Should prevent claim on expired escrow (EVM) / allow GMP fulfillment after local expiry (SVM) | [ ] | [x] | [x] |
+| 1 | test_allow_admin_to_cancel_expired_escrow | [ ] | [x] | [x] |
+| 2 | test_verify_expiry_timestamp_is_stored_correctly | [ ] | [x] | [x] |
+| 3 | test_expired_escrow_can_be_fulfilled_via_gmp | [ ] | [x] | [x] |
 
 > **Note:** SVM honors GMP fulfillment proofs regardless of local expiry (hub is source of truth). Local expiry only affects cancel operation.
 
@@ -90,10 +90,10 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/cross_chain.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should handle hex intent ID conversion to uint256/bytes32 | [ ] | [x] | [x] |
-| 2 | Should handle intent ID boundary values | [ ] | [x] | [x] |
-| 3 | Should handle intent ID zero padding correctly | [ ] | [x] | [x] |
-| 4 | Should handle multiple intent IDs from different formats | [ ] | [x] | [x] |
+| 1 | test_handle_hex_intent_id_conversion | [ ] | [x] | [x] |
+| 2 | test_handle_intent_id_boundary_values | [ ] | [x] | [x] |
+| 3 | test_handle_intent_id_zero_padding_correctly | [ ] | [x] | [x] |
+| 4 | test_handle_multiple_intent_ids_from_different_formats | [ ] | [x] | [x] |
 
 ## edge-cases
 
@@ -103,11 +103,11 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/edge_cases.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should handle maximum values for amounts | [ ] | [x] | [x] |
-| 2 | Should handle minimum deposit amount | [ ] | [x] | [x] |
-| 3 | Should allow requester to create multiple escrows | [ ] | [x] | [x] |
-| 4 | Should handle gas/compute consumption for large operations | [ ] | [x] | [x] |
-| 5 | Should handle concurrent escrow operations | [ ] | [x] | [x] |
+| 1 | test_handle_maximum_values_for_amounts | [ ] | [x] | [x] |
+| 2 | test_handle_minimum_deposit_amount | [ ] | [x] | [x] |
+| 3 | test_allow_requester_to_create_multiple_escrows | [ ] | [x] | [x] |
+| 4 | test_handle_gas_consumption_for_large_operations | [ ] | [x] | [x] |
+| 5 | test_handle_concurrent_escrow_operations | [ ] | [x] | [x] |
 
 ## error-conditions
 
@@ -117,17 +117,17 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/error_conditions
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should revert with zero amount in createEscrow | [ ] | [x] | [x] |
-| 2 | Should revert with insufficient token allowance | [ ] | [x] | N/A |
-| 3 | Should handle maximum value in createEscrow | [ ] | [ ] | [x] |
-| 4 | Should allow native currency escrow creation | [ ] | [ ] | N/A |
-| 5 | Should revert with native currency amount mismatch | [ ] | [ ] | N/A |
-| 6 | Should revert when native currency sent with token address | [ ] | [ ] | N/A |
-| 7 | Should revert with invalid signature length | [ ] | [ ] | N/A |
-| 8 | Should revert cancel on non-existent escrow | [ ] | [x] | [x] |
-| 9 | Should reject zero solver address | [ ] | [ ] | [x] |
-| 10 | Should reject duplicate escrow creation | [ ] | [x] | [x] |
-| 11 | Should reject insufficient token balance | [ ] | [x] | [x] |
+| 1 | test_reject_zero_amount | [ ] | [x] | [x] |
+| 2 | test_reject_insufficient_allowance | [ ] | [x] | N/A |
+| 3 | test_handle_maximum_u64_value_in_create_escrow | [ ] | [ ] | [x] |
+| 4 | test_allow_native_currency_escrow | [ ] | [ ] | N/A |
+| 5 | test_reject_native_currency_amount_mismatch | [ ] | [ ] | N/A |
+| 6 | test_reject_native_currency_with_token_address | [ ] | [ ] | N/A |
+| 7 | test_reject_invalid_signature_length | [ ] | [ ] | N/A |
+| 8 | test_revert_cancel_on_non_existent_escrow | [ ] | [x] | [x] |
+| 9 | test_reject_zero_solver_address | [ ] | [ ] | [x] |
+| 10 | test_reject_duplicate_intent_id | [ ] | [x] | [x] |
+| 11 | test_reject_insufficient_token_balance | [ ] | [x] | [x] |
 
 > **Note:** EVM error-conditions file uses GMP-specific errors (requirements not found, amount/token/requester mismatch, expired intent) at positions 3-7. Template tests 3-7 are not applicable to GMP escrow.
 
@@ -139,12 +139,12 @@ SVM: `intent-frameworks/svm/programs/intent_inflow_escrow/tests/integration.rs`
 
 | # | Test | MVM | EVM | SVM |
 | --- | ------ | ----- | ----- | ----- |
-| 1 | Should complete full deposit to claim workflow | [ ] | [x] | [x] |
-| 2 | Should handle multiple different token types | [ ] | [x] | [x] |
-| 3 | Should emit all events/logs with correct parameters | [ ] | [x] | N/A |
-| 4 | Should complete full cancellation workflow | [ ] | [x] | [x] |
-| 5 | Should require requirements before escrow creation | [ ] | [x] | N/A |
-| 6 | Should handle multiple participants with independent escrows | [ ] | [x] | N/A |
+| 1 | test_complete_full_deposit_to_claim_workflow | [ ] | [x] | [x] |
+| 2 | test_handle_multiple_different_token_types | [ ] | [x] | [x] |
+| 3 | test_emit_all_events_with_correct_parameters | [ ] | [x] | N/A |
+| 4 | test_complete_full_cancellation_workflow | [ ] | [x] | [x] |
+| 5 | test_require_requirements_before_escrow | [ ] | [x] | N/A |
+| 6 | test_handle_multiple_participants | [ ] | [x] | N/A |
 
 ---
 

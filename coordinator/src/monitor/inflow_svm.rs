@@ -5,7 +5,7 @@
 
 use crate::config::Config;
 use crate::monitor::generic::{ChainType, EscrowEvent};
-use crate::svm_client::{pubkey_to_hex, SvmClient};
+use chain_clients_svm::{pubkey_to_hex, SvmClient};
 use anyhow::{Context, Result};
 
 /// Polls the SVM connected chain for escrow accounts.

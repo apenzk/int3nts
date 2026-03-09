@@ -23,9 +23,7 @@ use tracing::info;
 mod api;
 mod config;
 mod monitor;
-mod mvm_client;
 mod storage;
-mod svm_client;
 
 use config::Config;
 

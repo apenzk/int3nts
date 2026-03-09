@@ -4,13 +4,13 @@
 //! Supports both Move VM (hub and connected MVM chains) and EVM (connected EVM chains).
 
 pub mod hub;
-pub mod connected_mvm;
-pub mod connected_evm;
-pub mod connected_svm;
+pub mod connected_mvm_client;
+pub mod connected_evm_client;
+pub mod connected_svm_client;
 
 // Re-export for convenience
 pub use hub::{HubChainClient, IntentCreatedEvent};
-pub use connected_mvm::ConnectedMvmClient;
-pub use connected_evm::{normalize_evm_address, ConnectedEvmClient, EscrowCreatedEvent};
-pub use connected_svm::{ConnectedSvmClient, EscrowAccount, EscrowEvent as SvmEscrowEvent};
+pub use connected_mvm_client::ConnectedMvmClient;
+pub use connected_evm_client::{normalize_evm_address, ConnectedEvmClient, EscrowCreatedEvent};
+pub use connected_svm_client::{ConnectedSvmClient, EscrowAccount, EscrowEvent as SvmEscrowEvent};
 

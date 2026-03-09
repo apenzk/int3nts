@@ -16,6 +16,12 @@ borsh = "0.10"
 clap = { version = "4.5", features = ["derive"] }
 ethereum-types = "0.14"
 
+# Shared chain client libraries
+chain-clients-common = { path = "../chain-clients/common" }
+chain-clients-mvm = { path = "../chain-clients/mvm" }
+chain-clients-evm = { path = "../chain-clients/evm" }
+chain-clients-svm = { path = "../chain-clients/svm" }
+
 # HTTP client
 reqwest = { version = "0.11", features = ["json", "blocking"] }
 warp = "0.3"

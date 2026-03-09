@@ -5,7 +5,7 @@ testing-infra/.aptos/
 testing-infra/single-validator/work/data/
 
 # Build artifacts
-solver/target/
+**/target/
 node_modules/
 frontend/.npm-cache/*
 .tmp/

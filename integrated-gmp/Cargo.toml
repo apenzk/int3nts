@@ -40,6 +40,11 @@ toml = "0.8"
 hex = "0.4"
 borsh = "0.10"
 
+# Shared chain client libraries
+chain-clients-mvm = { path = "../chain-clients/mvm" }
+chain-clients-evm = { path = "../chain-clients/evm" }
+chain-clients-svm = { path = "../chain-clients/svm" }
+
 # HTTP client for cross-chain communication
 reqwest = { version = "0.11", features = ["json"] }
 url = "2.5"

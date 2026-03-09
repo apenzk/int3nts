@@ -4,7 +4,7 @@
 //! from the outflow validator program.
 
 use crate::monitor::generic::EventMonitor;
-use crate::svm_client::SvmClient;
+use chain_clients_svm::SvmClient;
 use anyhow::{Context, Result};
 
 /// Poll connected SVM chain for IntentRequirementsReceived logs.

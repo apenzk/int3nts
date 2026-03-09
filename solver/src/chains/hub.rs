@@ -1264,9 +1264,9 @@ mod tests {
     #[test]
     fn test_parse_optional_address_some() {
         // Move Option<address> with value: {"vec": ["0x1234..."]}
-        let value = json!({"vec": ["0x92759d64e3225b2c8455562cdbf5be4f7461cd3555d29a1b124db503874603f5"]});
+        let value = json!({"vec": ["0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]});
         let result = parse_optional_address(&value);
-        assert_eq!(result, Some("0x92759d64e3225b2c8455562cdbf5be4f7461cd3555d29a1b124db503874603f5".to_string()));
+        assert_eq!(result, Some("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string()));
     }
 
     #[test]

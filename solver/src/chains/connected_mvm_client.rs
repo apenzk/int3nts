@@ -2,36 +2,28 @@
 //!
 //! Client for interacting with connected Move VM chains to query escrow state
 //! and execute transfers via GMP flow.
+//!
+//! Query methods (get_token_balance, is_escrow_released, has_outflow_requirements)
+//! delegate to the shared chain-clients-mvm MvmClient. CLI methods
+//! (transfer_with_intent_id, fulfill_outflow_via_gmp) remain solver-specific.
 
 use anyhow::{Context, Result};
-use reqwest::Client;
+use chain_clients_mvm::{normalize_hex_to_address, MvmClient};
 use std::process::Command;
-use std::time::Duration;
 
 use crate::config::MvmChainConfig;
 
 /// Client for interacting with a connected Move VM chain
 pub struct ConnectedMvmClient {
-    /// HTTP client for RPC calls
-    client: Client,
-    /// Base RPC URL (includes /v1, e.g., http://127.0.0.1:8082/v1)
-    base_url: String,
-    /// Module address
+    /// Shared MVM client for query methods (balance, escrow, view functions)
+    mvm_client: MvmClient,
+    /// Module address (for CLI methods and view function calls)
     module_addr: String,
     /// CLI profile name
     profile: String,
 }
 
 impl ConnectedMvmClient {
-    /// Normalizes a hex string to a 64-character (32-byte) 0x-prefixed address.
-    ///
-    /// Move addresses are 32 bytes but leading zeros may be stripped in event data,
-    /// producing odd-length hex strings that the Aptos REST API rejects.
-    pub fn normalize_hex_to_address(hex: &str) -> String {
-        let without_prefix = hex.strip_prefix("0x").unwrap_or(hex);
-        format!("0x{:0>64}", without_prefix)
-    }
-
     /// Creates a new connected MVM chain client
     ///
     /// # Arguments
@@ -43,15 +35,12 @@ impl ConnectedMvmClient {
     /// * `Ok(ConnectedMvmClient)` - Successfully created client
     /// * `Err(anyhow::Error)` - Failed to create client
     pub fn new(config: &MvmChainConfig) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .no_proxy() // Avoid macOS system-configuration issues in tests
-            .build()
-            .context("Failed to create HTTP client")?;
+        // MvmClient::new normalizes the URL (strips trailing /v1 if present)
+        let mvm_client = MvmClient::new(&config.rpc_url)
+            .context("Failed to create MVM client")?;
 
         Ok(Self {
-            client,
-            base_url: config.rpc_url.clone(),
+            mvm_client,
             module_addr: config.module_addr.clone(),
             profile: config.profile.clone(),
         })
@@ -59,178 +48,33 @@ impl ConnectedMvmClient {
 
     /// Queries the fungible asset balance for an account on the connected MVM chain.
     ///
-    /// Calls `0x1::primary_fungible_store::balance` view function.
-    ///
-    /// # Arguments
-    ///
-    /// * `account_addr` - Account address (0x-prefixed hex)
-    /// * `token_metadata` - Token metadata object address (0x-prefixed hex)
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(u128)` - Token balance
-    /// * `Err(anyhow::Error)` - Failed to query balance
+    /// Delegates to `MvmClient::get_token_balance`.
     pub async fn get_token_balance(
         &self,
         account_addr: &str,
         token_metadata: &str,
     ) -> Result<u128> {
-        let account_normalized = Self::normalize_hex_to_address(account_addr);
-        let metadata_normalized = Self::normalize_hex_to_address(token_metadata);
-
-        // base_url already includes /v1
-        let view_url = format!("{}/view", self.base_url);
-        let request_body = serde_json::json!({
-            "function": "0x1::primary_fungible_store::balance",
-            "type_arguments": ["0x1::fungible_asset::Metadata"],
-            "arguments": [account_normalized, metadata_normalized]
-        });
-
-        let response = self
-            .client
-            .post(&view_url)
-            .json(&request_body)
-            .send()
+        self.mvm_client
+            .get_token_balance(account_addr, token_metadata)
             .await
-            .context("Failed to query token balance on connected MVM")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
-            anyhow::bail!(
-                "Failed to query token balance: HTTP {} - {}",
-                status,
-                error_body
-            );
-        }
-
-        let result: Vec<serde_json::Value> = response
-            .json()
-            .await
-            .context("Failed to parse token balance response")?;
-
-        let balance_str = result
-            .first()
-            .and_then(|v| v.as_str())
-            .context("Unexpected response format from balance view function")?;
-
-        let balance = balance_str
-            .parse::<u128>()
-            .context("Failed to parse balance as u128")?;
-
-        Ok(balance)
     }
 
     /// Checks if outflow requirements have been delivered via GMP to the connected chain.
     ///
-    /// Calls the `outflow_validator_impl::has_requirements` view function.
-    /// Returns true if IntentRequirements were delivered for this intent_id.
-    ///
-    /// # Arguments
-    ///
-    /// * `intent_id` - Intent ID as hex string (e.g., "0x4b1e...")
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(bool)` - True if requirements are available
-    /// * `Err(anyhow::Error)` - Failed to query
+    /// Delegates to `MvmClient::has_outflow_requirements`.
     pub async fn has_outflow_requirements(&self, intent_id: &str) -> Result<bool> {
-        let intent_id_hex = Self::normalize_hex_to_address(intent_id);
-
-        // base_url already includes /v1
-        let view_url = format!("{}/view", self.base_url);
-        let request_body = serde_json::json!({
-            "function": format!("{}::intent_outflow_validator_impl::has_requirements", self.module_addr),
-            "type_arguments": [],
-            "arguments": [intent_id_hex]
-        });
-
-        let response = self
-            .client
-            .post(&view_url)
-            .json(&request_body)
-            .send()
+        self.mvm_client
+            .has_outflow_requirements(intent_id, &self.module_addr)
             .await
-            .context("Failed to query outflow requirements")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
-            anyhow::bail!(
-                "Failed to query outflow requirements: HTTP {} - {}",
-                status,
-                error_body
-            );
-        }
-
-        let result: Vec<serde_json::Value> = response
-            .json()
-            .await
-            .context("Failed to parse outflow requirements response")?;
-
-        if let Some(first_result) = result.first() {
-            if let Some(has_req) = first_result.as_bool() {
-                return Ok(has_req);
-            }
-        }
-
-        anyhow::bail!("Unexpected response format from has_requirements view function")
     }
 
     /// Checks if an inflow escrow has been released (auto-released when FulfillmentProof received).
     ///
-    /// Calls the `inflow_escrow::is_released` view function on the connected chain.
-    /// With auto-release, when this returns true, tokens have already been transferred to solver.
-    ///
-    /// # Arguments
-    ///
-    /// * `intent_id` - Intent ID as hex string (e.g., "0x4b1e...")
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(bool)` - True if escrow has been released to solver
-    /// * `Err(anyhow::Error)` - Failed to query
+    /// Delegates to `MvmClient::is_escrow_released`.
     pub async fn is_escrow_released(&self, intent_id: &str) -> Result<bool> {
-        let intent_id_hex = Self::normalize_hex_to_address(intent_id);
-
-        // base_url already includes /v1
-        let view_url = format!("{}/view", self.base_url);
-        let request_body = serde_json::json!({
-            "function": format!("{}::intent_inflow_escrow::is_released", self.module_addr),
-            "type_arguments": [],
-            "arguments": [intent_id_hex]
-        });
-
-        let response = self
-            .client
-            .post(&view_url)
-            .json(&request_body)
-            .send()
+        self.mvm_client
+            .is_escrow_released(intent_id, &self.module_addr)
             .await
-            .context("Failed to query escrow release status")?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_else(|e| format!("<failed to read body: {}>", e));
-            anyhow::bail!(
-                "Failed to query escrow release status: HTTP {} - {}",
-                status,
-                error_body
-            );
-        }
-
-        let result: Vec<serde_json::Value> = response
-            .json()
-            .await
-            .context("Failed to parse escrow release response")?;
-
-        if let Some(first_result) = result.first() {
-            if let Some(is_released) = first_result.as_bool() {
-                return Ok(is_released);
-            }
-        }
-
-        anyhow::bail!("Unexpected response format from is_released view function")
     }
 
     /// Executes a transfer with intent ID on the connected chain
@@ -392,7 +236,7 @@ impl ConnectedMvmClient {
 
         // Use aptos CLI for compatibility with E2E tests which create aptos profiles
         // Function signature: fulfill_intent(solver: &signer, intent_id: vector<u8>, token_metadata: Object<Metadata>)
-        let normalized = Self::normalize_hex_to_address(intent_id);
+        let normalized = normalize_hex_to_address(intent_id);
         let intent_id_bare = &normalized[2..]; // strip "0x" for hex: arg
         let output = Command::new("aptos")
             .args(&[

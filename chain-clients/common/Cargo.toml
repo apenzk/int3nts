@@ -1,0 +1,9 @@
+[package]
+name = "chain-clients-common"
+version = "0.1.0"
+edition = "2021"
+description = "Shared utilities for cross-chain client libraries"
+
+[dependencies]
+
+[dev-dependencies]

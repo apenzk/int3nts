@@ -5,7 +5,7 @@
 //! corresponding intent as ready for fulfillment.
 
 use crate::monitor::generic::EventMonitor;
-use crate::mvm_client::MvmClient;
+use chain_clients_mvm::MvmClient;
 use anyhow::{Context, Result};
 use serde::Deserialize;
 

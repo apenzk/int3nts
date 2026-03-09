@@ -3,7 +3,7 @@
 //! These tests verify event polling functionality for both chains.
 //! They require the Aptos chains to be running with deployed contracts.
 
-use coordinator::mvm_client::MvmClient;
+use chain_clients_mvm::MvmClient;
 
 /// Test that we can query events on Hub
 /// Why: Event polling is core functionality for monitoring blockchain activity
