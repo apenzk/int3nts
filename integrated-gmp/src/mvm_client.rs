@@ -1360,7 +1360,6 @@ impl MvmClient {
     ///
     /// * `Ok(serde_json::Value)` - Function return value
     /// * `Err(anyhow::Error)` - Failed to call view function
-    #[allow(dead_code)] // Reserved for future use
     pub async fn call_view_function(
         &self,
         module_addr: &str,

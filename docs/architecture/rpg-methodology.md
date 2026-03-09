@@ -71,7 +71,7 @@ graph TB
 
     subgraph Layer2["Layer 2 (Depends on Foundation + Layer 1)"]
         SM[Settlement Domain]
-        VM[Verification Domain]
+        VM[Validation Domain]
     end
 
     IM -->|Provides reservation & oracle-intent| EM
@@ -141,7 +141,7 @@ RPG methodology emphasizes clear boundaries between modules/domains. Each domain
 - **Exports**: Fulfillment, completion, and claim operations
 - **Note**: Distributed across Intent Management and Escrow modules (not a separate structural module)
 
-**Verification Domain**:
+**Validation Domain**:
 
 - **Responsibility**: Event monitoring, cross-chain GMP message relay
 - **Dependencies**: Intent Management (monitors events), Escrow (monitors events)

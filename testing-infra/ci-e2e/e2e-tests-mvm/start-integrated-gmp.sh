@@ -2,7 +2,7 @@
 
 # Start Integrated-GMP for MVM E2E Tests
 #
-# Configures and starts the integrated-gmp service (validation and signing, port 3334, HAS keys).
+# Configures and starts the integrated-gmp service (GMP message relay, port 3334, HAS keys).
 
 set -e
 

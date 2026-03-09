@@ -3,7 +3,7 @@
 # Configure Integrated-GMP for Hub Chain
 #
 # This script creates the integrated-gmp config file from scratch with Hub Chain addresses.
-# Integrated-GMP has crypto keys for validation and signing.
+# Integrated-GMP has operator wallet keys for submitting relay transactions.
 
 set -e
 

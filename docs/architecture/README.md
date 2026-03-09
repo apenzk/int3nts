@@ -47,7 +47,7 @@ Comprehensive reference for all data structures used across the Intent Framework
 - Intent Management Domain (Move data structures)
 - Event Structures (Move event emissions)
 - Escrow Domain (Move and Solidity escrow structures)
-- Verification Domain (Rust normalized event structures)
+- Validation Domain (Rust normalized event structures)
 - Cross-Chain Data Linking patterns
 
 ### [Security Hardening Checklist](security-checklist.md)

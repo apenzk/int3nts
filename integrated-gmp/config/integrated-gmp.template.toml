@@ -1,6 +1,6 @@
 # Integrated GMP Configuration
 #
-# This file contains configuration for the integrated-gmp service (validation and signing).
+# This file contains configuration for the integrated-gmp service (GMP message relay).
 # Copy this template to integrated-gmp.toml and update the values for your environment.
 #
 # SECURITY WARNING: Keys are loaded from environment variables. Never commit actual keys!
