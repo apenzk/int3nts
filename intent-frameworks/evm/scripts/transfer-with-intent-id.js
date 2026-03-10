@@ -6,6 +6,7 @@
 //! data for approver tracking.
 
 const hre = require("hardhat");
+const { requireEnvVars, toEvmAddress, runMain } = require("./helpers");
 
 /// Executes ERC20 transfer with intent_id in calldata
 ///
@@ -18,25 +19,13 @@ const hre = require("hardhat");
 /// # Returns
 /// Outputs transaction hash, recipient, amount, and intent_id on success.
 async function main() {
-  const tokenAddress = process.env.TOKEN_ADDR;
-  const recipient = process.env.RECIPIENT;
-  const amount = process.env.AMOUNT;
-  const intentId = process.env.INTENT_ID;
-
-  if (!tokenAddress || !recipient || !amount || !intentId) {
-    const error = new Error("Missing required environment variables: TOKEN_ADDR, RECIPIENT, AMOUNT, INTENT_ID");
-    console.error("Error:", error.message);
-    if (require.main === module) {
-      process.exit(1);
-    }
-    throw error;
-  }
+  const env = requireEnvVars(["TOKEN_ADDR", "RECIPIENT", "AMOUNT", "INTENT_ID"]);
 
   // Get solver signer
   // For in-memory Hardhat network (unit tests): use hre.ethers.getSigners()
   // For external networks (E2E tests): use raw ethers to avoid HardhatEthersProvider.resolveName bug
   let solver;
-  
+
   if (hre.network.name === "hardhat") {
     // In-memory Hardhat network (unit tests) - getSigners() works fine here
     const signers = await hre.ethers.getSigners();
@@ -62,27 +51,20 @@ async function main() {
     solver = await provider.getSigner(accounts[2]);
   }
 
-  const amountBigInt = BigInt(amount);
+  const amountBigInt = BigInt(env.AMOUNT);
   const selector = "0xa9059cbb";
-  
-  const recipientClean = recipient.toLowerCase().replace(/^0x/, "");
-  const intentIdClean = intentId.toLowerCase().replace(/^0x/, "");
+
+  const recipientClean = env.RECIPIENT.toLowerCase().replace(/^0x/, "");
+  const intentIdClean = env.INTENT_ID.toLowerCase().replace(/^0x/, "");
   const recipientPadded = "0".repeat(24) + recipientClean;
-  
+
   const amountHex = amountBigInt.toString(16);
   const amountPadded = "0".repeat(64 - amountHex.length) + amountHex;
   const intentIdPadded = intentIdClean.padStart(64, "0");
-  
+
   const data = selector + recipientPadded + amountPadded + intentIdPadded;
 
-  // Extract 20-byte EVM address from potentially 32-byte padded format
-  // 32-byte format: 0x000000000000000000000000<20-byte-address>
-  // 20-byte format: 0x<20-byte-address>
-  let evmTokenAddress = tokenAddress;
-  if (tokenAddress.length === 66) {
-    // 32-byte padded (0x + 64 chars) - extract last 40 chars
-    evmTokenAddress = "0x" + tokenAddress.slice(-40);
-  }
+  const evmTokenAddress = toEvmAddress(env.TOKEN_ADDR);
 
   const tx = await solver.sendTransaction({
     to: hre.ethers.getAddress(evmTokenAddress),
@@ -94,9 +76,9 @@ async function main() {
   if (receipt.status === 1) {
     console.log("SUCCESS");
     console.log("Transaction hash:", receipt.hash);
-    console.log("Recipient:", recipient);
-    console.log("Amount:", amount);
-    console.log("Intent ID:", intentId);
+    console.log("Recipient:", env.RECIPIENT);
+    console.log("Amount:", env.AMOUNT);
+    console.log("Intent ID:", env.INTENT_ID);
   } else {
     const error = new Error("Transaction failed");
     console.error("Error:", error.message);
@@ -108,14 +90,6 @@ async function main() {
 }
 
 // Export main function for testing
-if (require.main === module) {
-  main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-      console.error("Error:", error.message);
-      process.exit(1);
-    });
-}
+runMain(main, module);
 
 module.exports = { main };
-

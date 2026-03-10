@@ -32,10 +32,10 @@ OUTFLOW_VALIDATOR="${OUTFLOW_VALIDATOR_ADDR:-}"
 log_and_echo "   EVM GMP Endpoint: $GMP_ENDPOINT"
 log_and_echo "   EVM Outflow Validator: $OUTFLOW_VALIDATOR"
 
-# Use the relay's actual ECDSA-derived EVM address (saved by deploy-contract.sh)
+# Use the relay's actual ECDSA-derived EVM address (saved by deploy-contracts.sh)
 APPROVER_ADDR="${RELAY_ETH_ADDRESS:-}"
 if [ -z "$APPROVER_ADDR" ]; then
-    log_and_echo "   ERROR: RELAY_ETH_ADDRESS not found in chain-info.env. Run deploy-contract.sh first."
+    log_and_echo "   ERROR: RELAY_ETH_ADDRESS not found in chain-info.env. Run deploy-contracts.sh first."
     exit 1
 fi
 log_and_echo "   EVM Approver (relay): $APPROVER_ADDR"

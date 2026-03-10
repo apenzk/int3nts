@@ -63,6 +63,7 @@ module mvmt_intent::gmp_common {
     // CONSTRUCTORS
     // ============================================================================
 
+    /// Create a new IntentRequirements message (hub -> connected chain).
     public fun new_intent_requirements(
         intent_id: vector<u8>,
         requester_addr: vector<u8>,
@@ -81,6 +82,7 @@ module mvmt_intent::gmp_common {
         }
     }
 
+    /// Create a new EscrowConfirmation message (connected chain -> hub).
     public fun new_escrow_confirmation(
         intent_id: vector<u8>,
         escrow_id: vector<u8>,
@@ -97,6 +99,7 @@ module mvmt_intent::gmp_common {
         }
     }
 
+    /// Create a new FulfillmentProof message (either direction).
     public fun new_fulfillment_proof(
         intent_id: vector<u8>,
         solver_addr: vector<u8>,
@@ -115,36 +118,55 @@ module mvmt_intent::gmp_common {
     // ACCESSORS
     // ============================================================================
 
+    /// Returns the 32-byte intent ID from an IntentRequirements message.
     public fun intent_requirements_intent_id(msg: &IntentRequirements): &vector<u8> { &msg.intent_id }
+    /// Returns the 32-byte requester address from an IntentRequirements message.
     public fun intent_requirements_requester_addr(msg: &IntentRequirements): &vector<u8> { &msg.requester_addr }
+    /// Returns the required amount from an IntentRequirements message.
     public fun intent_requirements_amount_required(msg: &IntentRequirements): u64 { msg.amount_required }
+    /// Returns the 32-byte token address from an IntentRequirements message.
     public fun intent_requirements_token_addr(msg: &IntentRequirements): &vector<u8> { &msg.token_addr }
+    /// Returns the 32-byte solver address from an IntentRequirements message.
     public fun intent_requirements_solver_addr(msg: &IntentRequirements): &vector<u8> { &msg.solver_addr }
+    /// Returns the expiry timestamp from an IntentRequirements message.
     public fun intent_requirements_expiry(msg: &IntentRequirements): u64 { msg.expiry }
 
+    /// Returns the 32-byte intent ID from an EscrowConfirmation message.
     public fun escrow_confirmation_intent_id(msg: &EscrowConfirmation): &vector<u8> { &msg.intent_id }
+    /// Returns the 32-byte escrow ID from an EscrowConfirmation message.
     public fun escrow_confirmation_escrow_id(msg: &EscrowConfirmation): &vector<u8> { &msg.escrow_id }
+    /// Returns the escrowed amount from an EscrowConfirmation message.
     public fun escrow_confirmation_amount_escrowed(msg: &EscrowConfirmation): u64 { msg.amount_escrowed }
+    /// Returns the 32-byte token address from an EscrowConfirmation message.
     public fun escrow_confirmation_token_addr(msg: &EscrowConfirmation): &vector<u8> { &msg.token_addr }
+    /// Returns the 32-byte creator address from an EscrowConfirmation message.
     public fun escrow_confirmation_creator_addr(msg: &EscrowConfirmation): &vector<u8> { &msg.creator_addr }
 
+    /// Returns the 32-byte intent ID from a FulfillmentProof message.
     public fun fulfillment_proof_intent_id(msg: &FulfillmentProof): &vector<u8> { &msg.intent_id }
+    /// Returns the 32-byte solver address from a FulfillmentProof message.
     public fun fulfillment_proof_solver_addr(msg: &FulfillmentProof): &vector<u8> { &msg.solver_addr }
+    /// Returns the fulfilled amount from a FulfillmentProof message.
     public fun fulfillment_proof_amount_fulfilled(msg: &FulfillmentProof): u64 { msg.amount_fulfilled }
+    /// Returns the timestamp from a FulfillmentProof message.
     public fun fulfillment_proof_timestamp(msg: &FulfillmentProof): u64 { msg.timestamp }
 
     // ============================================================================
     // SIZE ACCESSORS (for tests and external callers)
     // ============================================================================
 
+    /// Returns the wire size of an encoded IntentRequirements message.
     public fun intent_requirements_size(): u64 { INTENT_REQUIREMENTS_SIZE }
+    /// Returns the wire size of an encoded EscrowConfirmation message.
     public fun escrow_confirmation_size(): u64 { ESCROW_CONFIRMATION_SIZE }
+    /// Returns the wire size of an encoded FulfillmentProof message.
     public fun fulfillment_proof_size(): u64 { FULFILLMENT_PROOF_SIZE }
 
     // ============================================================================
     // ENCODE
     // ============================================================================
 
+    /// Encode an IntentRequirements into the fixed-width wire format.
     public fun encode_intent_requirements(msg: &IntentRequirements): vector<u8> {
         let buf = vector::empty<u8>();
         vector::push_back(&mut buf, MESSAGE_TYPE_INTENT_REQUIREMENTS);
@@ -157,6 +179,7 @@ module mvmt_intent::gmp_common {
         buf
     }
 
+    /// Encode an EscrowConfirmation into the fixed-width wire format.
     public fun encode_escrow_confirmation(msg: &EscrowConfirmation): vector<u8> {
         let buf = vector::empty<u8>();
         vector::push_back(&mut buf, MESSAGE_TYPE_ESCROW_CONFIRMATION);
@@ -168,6 +191,7 @@ module mvmt_intent::gmp_common {
         buf
     }
 
+    /// Encode a FulfillmentProof into the fixed-width wire format.
     public fun encode_fulfillment_proof(msg: &FulfillmentProof): vector<u8> {
         let buf = vector::empty<u8>();
         vector::push_back(&mut buf, MESSAGE_TYPE_FULFILLMENT_PROOF);

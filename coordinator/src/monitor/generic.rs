@@ -16,17 +16,6 @@ pub use chain_clients_common::{normalize_intent_id, normalize_intent_id_to_64_ch
 // EVENT DATA STRUCTURES
 // ============================================================================
 
-/// Type of blockchain where an escrow or intent is located.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ChainType {
-    /// Move VM-based chain (e.g., Aptos)
-    Mvm,
-    /// EVM-compatible chain (e.g., Ethereum, Polygon, Arbitrum)
-    Evm,
-    /// Solana chain
-    Svm,
-}
-
 /// Request-intent creation event from the hub chain.
 ///
 /// This event is emitted when a new intent is created on the hub chain.
@@ -59,51 +48,6 @@ pub struct IntentEvent {
     pub expiry_time: u64,
     /// Timestamp when the event was received
     pub timestamp: u64,
-    /// Whether intent requirements have been delivered to connected chain (ready for solver fulfillment)
-    /// - True: IntentRequirementsReceived event observed on connected chain outflow validator
-    /// - False: Requirements not yet delivered or event not yet observed
-    pub ready_on_connected_chain: bool,
-}
-
-/// Escrow deposit event from the connected chain.
-///
-/// This event is emitted when a solver deposits assets into an escrow
-/// on the connected chain. The integrated-gmp validates that this deposit
-/// fulfills the conditions specified in the original intent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EscrowEvent {
-    /// Unique identifier for the escrow (on connected chain)
-    pub escrow_id: String,
-    /// Unique identifier for the intent on hub chain (for matching)
-    pub intent_id: String,
-    /// Metadata of the asset being offered (what's locked in escrow)
-    pub offered_metadata: String,
-    /// Amount of the asset being offered (u64, matching Move contract constraint)
-    pub offered_amount: u64,
-    /// Metadata of the desired asset (what solver needs to provide)
-    pub desired_metadata: String,
-    /// Amount of the desired asset (u64, matching Move contract constraint)
-    pub desired_amount: u64,
-    /// Whether the escrow intent can be revoked (should always be false for security)
-    pub revocable: bool,
-    /// Address of the requester who created the escrow (who locked the funds)
-    pub requester_addr: String,
-    /// Reserved solver address if the escrow is reserved (None for unreserved escrows)
-    /// For Move VM escrows: Move VM address
-    /// For EVM escrows: EVM address (0x-prefixed hex string)
-    pub reserved_solver_addr: Option<String>,
-    /// Chain ID where this escrow is located
-    /// Note: This is set by the coordinator based on which monitor discovered the event (from config),
-    /// not from the event data itself, so it can be trusted for validation.
-    pub chain_id: u64,
-    /// Type of blockchain where this escrow is located
-    /// Note: This is set by the coordinator based on which monitor discovered the event,
-    /// not from the event data itself, so it can be trusted for validation.
-    pub chain_type: ChainType,
-    /// Unix timestamp when the escrow expires
-    pub expiry_time: u64,
-    /// Timestamp when the event was received
-    pub timestamp: u64,
 }
 
 /// Fulfillment event from the hub chain.
@@ -131,11 +75,14 @@ pub struct FulfillmentEvent {
 // EVENT MONITOR STRUCTURE
 // ============================================================================
 
-/// Event monitor that watches both hub and connected chains for relevant events.
+/// Event monitor that watches the hub chain for relevant events.
 ///
-/// This monitor runs continuously, polling both chains for new events and
+/// This monitor runs continuously, polling the hub chain for new events and
 /// caching them for API access. The coordinator monitor is read-only - it does
 /// not perform validation or generate signatures.
+///
+/// Connected chain escrow monitoring is handled independently by the
+/// integrated-gmp and solver services.
 #[derive(Clone)]
 pub struct EventMonitor {
     /// Service configuration
@@ -143,21 +90,12 @@ pub struct EventMonitor {
     /// HTTP client for hub chain communication
     #[allow(dead_code)]
     pub hub_client: reqwest::Client,
-    /// HTTP client for connected chain communication
-    #[allow(dead_code)]
-    pub connected_client: reqwest::Client,
     /// In-memory cache of recent intent events
     ///
     /// **WARNING**: This field is public ONLY for unit testing purposes.
     /// It should not be accessed directly in production code.
     #[doc(hidden)]
     pub event_cache: Arc<RwLock<Vec<IntentEvent>>>,
-    /// In-memory cache of recent escrow events
-    ///
-    /// **WARNING**: This field is public ONLY for unit testing purposes.
-    /// It should not be accessed directly in production code.
-    #[doc(hidden)]
-    pub escrow_cache: Arc<RwLock<Vec<EscrowEvent>>>,
     /// In-memory cache of fulfillment events
     ///
     /// **WARNING**: This field is public ONLY for unit testing purposes.
@@ -189,102 +127,34 @@ impl EventMonitor {
             .no_proxy() // Avoid macOS system-configuration issues in tests
             .build()?;
 
-        // Create HTTP client for connected chain with configured timeout
-        let connected_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_millis(
-                config.coordinator.validation_timeout_ms,
-            ))
-            .no_proxy() // Avoid macOS system-configuration issues in tests
-            .build()?;
-
         Ok(Self {
             config: Arc::new(config.clone()),
             hub_client,
-            connected_client,
             event_cache: Arc::new(RwLock::new(Vec::new())),
-            escrow_cache: Arc::new(RwLock::new(Vec::new())),
             fulfillment_cache: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
-    /// Starts the event monitoring process for configured chains.
+    /// Starts the event monitoring process for the hub chain.
     ///
-    /// This function runs monitoring loops:
-    /// 1. Hub chain monitoring for intent events (always)
-    /// 2. Connected MVM chain monitoring for escrow events (if configured)
-    /// 3. Connected EVM chain monitoring for escrow events (if configured)
-    /// 4. Connected SVM chain monitoring for escrow events (if configured)
+    /// This function runs the hub chain monitoring loop for intent and
+    /// fulfillment events. Connected chain escrow monitoring is handled
+    /// independently by the integrated-gmp and solver services.
     ///
-    /// The function blocks until all monitors complete (which should be never
-    /// in normal operation, as they run infinite loops).
+    /// The function blocks until the monitor completes (which should be never
+    /// in normal operation, as it runs an infinite loop).
     ///
     /// # Returns
     ///
     /// * `Ok(())` - Monitoring started successfully
     /// * `Err(anyhow::Error)` - Failed to start monitoring
     pub async fn start_monitoring(&self) -> anyhow::Result<()> {
-        use super::inflow_generic;
         use super::outflow_generic;
         use tracing::info;
 
-        info!("Starting event monitoring");
+        info!("Starting hub chain event monitoring");
 
-        // Start hub chain monitoring (always required) - for outflow intents
-        let hub_monitor = outflow_generic::monitor_hub_chain(self);
-
-        let has_mvm = self.config.connected_chain_mvm.is_some();
-        let has_evm = self.config.connected_chain_evm.is_some();
-        let has_svm = self.config.connected_chain_svm.is_some();
-
-        if has_mvm {
-            info!("Connected Move VM chain configured, starting connected chain monitoring");
-        }
-        if has_evm {
-            info!("Connected EVM chain configured, starting EVM chain monitoring");
-        }
-        if has_svm {
-            info!("Connected SVM chain configured, starting SVM chain monitoring");
-        }
-
-        match (has_mvm, has_evm, has_svm) {
-            (true, true, true) => {
-                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
-                let evm_monitor = inflow_generic::monitor_evm_chain(self);
-                let svm_monitor = inflow_generic::monitor_svm_chain(self);
-                tokio::try_join!(hub_monitor, mvm_monitor, evm_monitor, svm_monitor)?;
-            }
-            (true, true, false) => {
-                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
-                let evm_monitor = inflow_generic::monitor_evm_chain(self);
-                tokio::try_join!(hub_monitor, mvm_monitor, evm_monitor)?;
-            }
-            (true, false, true) => {
-                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
-                let svm_monitor = inflow_generic::monitor_svm_chain(self);
-                tokio::try_join!(hub_monitor, mvm_monitor, svm_monitor)?;
-            }
-            (false, true, true) => {
-                let evm_monitor = inflow_generic::monitor_evm_chain(self);
-                let svm_monitor = inflow_generic::monitor_svm_chain(self);
-                tokio::try_join!(hub_monitor, evm_monitor, svm_monitor)?;
-            }
-            (true, false, false) => {
-                let mvm_monitor = inflow_generic::monitor_connected_chain(self);
-                tokio::try_join!(hub_monitor, mvm_monitor)?;
-            }
-            (false, true, false) => {
-                let evm_monitor = inflow_generic::monitor_evm_chain(self);
-                tokio::try_join!(hub_monitor, evm_monitor)?;
-            }
-            (false, false, true) => {
-                let svm_monitor = inflow_generic::monitor_svm_chain(self);
-                tokio::try_join!(hub_monitor, svm_monitor)?;
-            }
-            (false, false, false) => {
-                info!("No connected chains configured, monitoring hub chain only");
-                hub_monitor.await?;
-            }
-        }
+        outflow_generic::monitor_hub_chain(self).await?;
 
         Ok(())
     }
@@ -305,21 +175,6 @@ impl EventMonitor {
         outflow_generic::poll_hub_events(self).await
     }
 
-    /// Polls connected chains for new escrow events.
-    ///
-    /// This function queries connected chains (Move VM and/or EVM) for escrow initialization
-    /// events. It handles both Move VM and EVM chains if configured.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Vec<EscrowEvent>)` - List of new escrow events from all connected chains
-    /// * `Err(anyhow::Error)` - Failed to poll events
-    #[allow(dead_code)]
-    pub async fn poll_connected_events(&self) -> anyhow::Result<Vec<EscrowEvent>> {
-        use super::inflow_generic;
-        inflow_generic::poll_connected_events(self).await
-    }
-
     /// Returns a copy of all cached intent events.
     ///
     /// This function provides access to the event cache for API endpoints
@@ -331,19 +186,6 @@ impl EventMonitor {
     pub async fn get_cached_events(&self) -> Vec<IntentEvent> {
         use super::outflow_generic;
         outflow_generic::get_cached_events(self).await
-    }
-
-    /// Returns a copy of all cached escrow events.
-    ///
-    /// This function provides access to the escrow event cache for API endpoints
-    /// and external monitoring systems.
-    ///
-    /// # Returns
-    ///
-    /// A vector containing all cached escrow events
-    pub async fn get_cached_escrow_events(&self) -> Vec<EscrowEvent> {
-        use super::inflow_generic;
-        inflow_generic::get_cached_escrow_events(self).await
     }
 
     /// Returns a copy of all cached fulfillment events.
@@ -358,34 +200,4 @@ impl EventMonitor {
         outflow_generic::get_cached_fulfillment_events(self).await
     }
 
-    /// Mark an intent as ready when IntentRequirementsReceived event is observed on connected chain.
-    ///
-    /// This is called by connected chain monitors when they detect the outflow validator
-    /// received intent requirements via GMP.
-    ///
-    /// # Arguments
-    ///
-    /// * `intent_id` - The intent ID to mark as ready
-    pub async fn mark_intent_ready(&self, intent_id: &str) {
-        let mut cache = self.event_cache.write().await;
-
-        let normalized_intent_id = normalize_intent_id(intent_id);
-
-        if let Some(intent) = cache.iter_mut().find(|e| {
-            normalize_intent_id(&e.intent_id) == normalized_intent_id
-        }) {
-            if !intent.ready_on_connected_chain {
-                intent.ready_on_connected_chain = true;
-                tracing::info!(
-                    "Intent {} marked as ready on connected chain (requirements received)",
-                    intent_id
-                );
-            }
-        } else {
-            tracing::debug!(
-                "Intent {} not found in cache when marking ready (may not be created yet or already expired)",
-                intent_id
-            );
-        }
-    }
 }

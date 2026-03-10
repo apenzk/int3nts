@@ -56,19 +56,16 @@ pub async fn get_events_handler(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let monitor = monitor.read().await;
     let intent_events = monitor.get_cached_events().await;
-    let escrow_events = monitor.get_cached_escrow_events().await;
     let fulfillment_events = monitor.get_cached_fulfillment_events().await;
 
     #[derive(Debug, Serialize)]
     struct CombinedEvents {
         intent_events: Vec<crate::monitor::IntentEvent>,
-        escrow_events: Vec<crate::monitor::EscrowEvent>,
         fulfillment_events: Vec<crate::monitor::FulfillmentEvent>,
     }
 
     let combined = CombinedEvents {
         intent_events,
-        escrow_events,
         fulfillment_events,
     };
 

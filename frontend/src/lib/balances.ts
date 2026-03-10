@@ -36,9 +36,9 @@ export async function fetchMovementBalance(
       });
       
       if (!response.ok) {
-        return null;
+        throw new Error(`Movement REST API returned ${response.status} for account ${address}`);
       }
-      
+
       const resources = await response.json();
       const coinStore = resources.find(
         (r: any) => r.type === '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
@@ -76,8 +76,12 @@ export async function fetchMovementBalance(
       const faResult = await faResponse.json();
       console.log('Movement FA balance result:', faResult);
       raw = faResult[0] || '0';
+    } else if (faResponse.status >= 500) {
+      // 5xx = server error, propagate as failure
+      throw new Error(`Movement FA balance API error (${faResponse.status}) for ${token.symbol} at ${address}`);
     }
-    
+    // 4xx = resource not found (no FA store), raw stays '0'
+
     // If FA balance is 0 and token has a coinType, check CoinStore balance
     if (raw === '0' && token.coinType) {
       console.log('FA balance is 0, checking CoinStore:', token.coinType);
@@ -90,7 +94,7 @@ export async function fetchMovementBalance(
           arguments: [address],
         }),
       });
-      
+
       if (coinResponse.ok) {
         const coinResult = await coinResponse.json();
         console.log('Movement CoinStore balance result:', coinResult);
@@ -98,15 +102,17 @@ export async function fetchMovementBalance(
         if (parseInt(coinBalance) > parseInt(raw)) {
           raw = coinBalance;
         }
+      } else if (coinResponse.status >= 500) {
+        // 5xx = server error, propagate as failure
+        throw new Error(`Movement CoinStore balance API error (${coinResponse.status}) for ${token.symbol} at ${address}`);
       }
+      // 4xx = resource not found (no CoinStore), raw stays '0'
     }
     
     const formatted = fromSmallestUnits(parseInt(raw), token.decimals).toFixed(token.decimals);
     return { raw, formatted, symbol: token.symbol };
   } catch (error) {
-    console.error('Error fetching Movement balance:', error);
-    console.error('Token:', token.symbol, 'Address:', address);
-    return null;
+    throw new Error(`Failed to fetch Movement balance for ${token.symbol} at ${address}: ${error instanceof Error ? error.message : error}`);
   }
 }
 
@@ -141,19 +147,22 @@ export async function fetchEvmBalance(
       });
       
       if (!response.ok) {
-        return null;
+        throw new Error(`eth_getBalance returned ${response.status} for ${address}`);
       }
-      
+
       const result = await response.json();
+      if (result.error) {
+        throw new Error(`eth_getBalance RPC error: ${result.error.message || JSON.stringify(result.error)}`);
+      }
       const rawHex = result.result || '0x0';
       // Handle invalid hex values like "0x" or empty strings
       const validHex = rawHex === '0x' || rawHex === '' ? '0x0' : rawHex;
       const raw = BigInt(validHex).toString();
       const formatted = fromSmallestUnits(Number(raw), token.decimals).toFixed(token.decimals);
-      
+
       return { raw, formatted, symbol: token.symbol };
     }
-    
+
     // For ERC20 tokens, use balanceOf
     // balanceOf(address) selector = 0x70a08231
     // For EVM tokens, metadata field contains the contract address (20-byte or 32-byte format)
@@ -181,19 +190,16 @@ export async function fetchEvmBalance(
     console.log('RPC response status:', response.status, response.statusText);
     
     if (!response.ok) {
-      console.error(`RPC request failed: ${response.status} ${response.statusText}`);
       const text = await response.text();
-      console.error('Response body:', text);
-      return null;
+      throw new Error(`EVM RPC request failed (${response.status}): ${text}`);
     }
-    
+
     const result = await response.json();
     console.log('RPC response:', result);
-    
+
     // Check for JSON-RPC errors
     if (result.error) {
-      console.error('RPC error:', result.error);
-      return null;
+      throw new Error(`EVM RPC error: ${result.error.message || JSON.stringify(result.error)}`);
     }
     
     const rawHex = result.result || '0x0';
@@ -204,9 +210,7 @@ export async function fetchEvmBalance(
     
     return { raw, formatted, symbol: token.symbol };
   } catch (error) {
-    console.error('Error fetching EVM balance:', error);
-    console.error('Token:', token.symbol, 'Chain:', token.chain);
-    return null;
+    throw new Error(`Failed to fetch EVM balance for ${token.symbol} on ${token.chain}: ${error instanceof Error ? error.message : error}`);
   }
 }
 
@@ -246,9 +250,7 @@ export async function fetchSvmBalance(
     const formatted = fromSmallestUnits(parseInt(raw), decimals).toFixed(decimals);
     return { raw, formatted, symbol: token.symbol };
   } catch (error) {
-    console.error('Error fetching SVM balance:', error);
-    console.error('Token:', token.symbol, 'Address:', address);
-    return null;
+    throw new Error(`Failed to fetch SVM balance for ${token.symbol} at ${address}: ${error instanceof Error ? error.message : error}`);
   }
 }
 

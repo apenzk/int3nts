@@ -13,13 +13,14 @@ import { fetchTokenBalance, type TokenBalance } from '@/lib/balances';
 import { Aptos, AptosConfig } from '@aptos-labs/ts-sdk';
 import { PublicKey } from '@solana/web3.js';
 import { INTENT_MODULE_ADDR, hexToBytes, padEvmAddressToMove } from '@/lib/move-transactions';
-import { INTENT_ESCROW_ABI, ERC20_ABI, intentIdToEvmBytes32, getEscrowContractAddress, checkHasRequirements, checkIsFulfilled } from '@/lib/escrow';
+import { INTENT_ESCROW_ABI, ERC20_ABI, intentIdToEvmBytes32, getEscrowContractAddress, checkHasRequirements, checkHasRequirementsMvm, checkIsFulfilled } from '@/lib/escrow';
 import {
   buildCreateEscrowInstruction,
   getSvmTokenAccount,
   svmHexToPubkey,
   svmPubkeyToHex,
   readGmpOutboundNonce,
+  checkHasRequirementsSvm,
   checkIsFulfilledSvm,
 } from '@/lib/svm-escrow';
 import { fetchSolverSvmAddress, getSvmConnection, sendSvmTransaction } from '@/lib/svm-transactions';
@@ -29,6 +30,35 @@ import { fetchSolverSvmAddress, getSvmConnection, sendSvmTransaction } from '@/l
 // ============================================================================
 
 type FlowType = 'inflow' | 'outflow';
+
+// ============================================================================
+// Timing Constants
+// ============================================================================
+
+/** Actual on-chain intent expiry (seconds). */
+const INTENT_EXPIRY_SECS = 180;
+/** Frontend countdown display (seconds). Shorter than actual expiry to give signing buffer. */
+const FRONTEND_TIMER_SECS = 120;
+/** Interval between signature poll requests (ms). */
+const POLL_SIGNATURE_INTERVAL_MS = 2000;
+/** Interval between fulfillment poll requests (ms). */
+const POLL_FULFILLMENT_INTERVAL_MS = 5000;
+/** Delay before starting requirement checks (ms). */
+const POLL_REQUIREMENTS_INTERVAL_MS = 3000;
+/** Delay before first fulfillment poll to let solver pick up intent (ms). */
+const POLL_FULFILLMENT_INITIAL_DELAY_MS = 3000;
+/** Timer display update interval (ms). */
+const TIMER_UPDATE_INTERVAL_MS = 1000;
+/** Max signature poll attempts (attempts × POLL_SIGNATURE_INTERVAL_MS = total timeout). */
+const MAX_SIGNATURE_POLL_ATTEMPTS = 120;
+// ============================================================================
+// Fee Constants
+// ============================================================================
+
+/** Basis points denominator (10000 bps = 100%). */
+const BPS_DENOMINATOR = BigInt(10000);
+/** Rounding offset for ceiling division in bps fee calculation. */
+const BPS_ROUNDING_OFFSET = BigInt(9999);
 
 // ============================================================================
 // Hooks
@@ -79,6 +109,8 @@ function useTokenBalances(params: {
   const { offeredToken, desiredToken, resolveAddress, intentStatus } = params;
   const [offeredBalance, setOfferedBalance] = useState<TokenBalance | null>(null);
   const [desiredBalance, setDesiredBalance] = useState<TokenBalance | null>(null);
+  const [offeredBalanceError, setOfferedBalanceError] = useState<string | null>(null);
+  const [desiredBalanceError, setDesiredBalanceError] = useState<string | null>(null);
   const [loadingOfferedBalance, setLoadingOfferedBalance] = useState(false);
   const [loadingDesiredBalance, setLoadingDesiredBalance] = useState(false);
 
@@ -93,34 +125,46 @@ function useTokenBalances(params: {
       return;
     }
     setLoadingOfferedBalance(true);
+    setOfferedBalanceError(null);
     console.log('Fetching offered balance:', { address, token: offeredToken.symbol, chain: offeredToken.chain });
     fetchTokenBalance(address, offeredToken)
       .then((balance) => {
         console.log('Offered balance result:', balance);
         setOfferedBalance(balance);
       })
-      .catch(() => setOfferedBalance(null))
+      .catch((err: unknown) => {
+        console.error('Failed to fetch offered balance:', err);
+        setOfferedBalance(null);
+        setOfferedBalanceError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setLoadingOfferedBalance(false));
   }, [offeredToken, resolveAddress]);
 
   useEffect(() => {
     if (!desiredToken) {
       setDesiredBalance(null);
+      setDesiredBalanceError(null);
       return;
     }
     const address = resolveAddress(desiredToken.chain);
     if (!address) {
       setDesiredBalance(null);
+      setDesiredBalanceError(null);
       return;
     }
     setLoadingDesiredBalance(true);
+    setDesiredBalanceError(null);
     console.log('Fetching desired balance:', { address, token: desiredToken.symbol, chain: desiredToken.chain });
     fetchTokenBalance(address, desiredToken)
       .then((balance) => {
         console.log('Desired balance result:', balance);
         setDesiredBalance(balance);
       })
-      .catch(() => setDesiredBalance(null))
+      .catch((err: unknown) => {
+        console.error('Failed to fetch desired balance:', err);
+        setDesiredBalance(null);
+        setDesiredBalanceError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setLoadingDesiredBalance(false));
   }, [desiredToken, resolveAddress]);
 
@@ -132,9 +176,14 @@ function useTokenBalances(params: {
       const offeredAddress = resolveAddress(offeredToken.chain);
       if (offeredAddress) {
         setLoadingOfferedBalance(true);
+        setOfferedBalanceError(null);
         fetchTokenBalance(offeredAddress, offeredToken)
           .then(setOfferedBalance)
-          .catch(() => setOfferedBalance(null))
+          .catch((err: unknown) => {
+            console.error('Failed to fetch offered balance:', err);
+            setOfferedBalance(null);
+            setOfferedBalanceError(err instanceof Error ? err.message : String(err));
+          })
           .finally(() => setLoadingOfferedBalance(false));
       }
     }
@@ -142,9 +191,14 @@ function useTokenBalances(params: {
       const desiredAddress = resolveAddress(desiredToken.chain);
       if (desiredAddress) {
         setLoadingDesiredBalance(true);
+        setDesiredBalanceError(null);
         fetchTokenBalance(desiredAddress, desiredToken)
           .then(setDesiredBalance)
-          .catch(() => setDesiredBalance(null))
+          .catch((err: unknown) => {
+            console.error('Failed to fetch desired balance:', err);
+            setDesiredBalance(null);
+            setDesiredBalanceError(err instanceof Error ? err.message : String(err));
+          })
           .finally(() => setLoadingDesiredBalance(false));
       }
     }
@@ -153,6 +207,8 @@ function useTokenBalances(params: {
   return {
     offeredBalance,
     desiredBalance,
+    offeredBalanceError,
+    desiredBalanceError,
     loadingOfferedBalance,
     loadingDesiredBalance,
   };
@@ -374,6 +430,8 @@ export function IntentBuilder() {
   const {
     offeredBalance,
     desiredBalance,
+    offeredBalanceError,
+    desiredBalanceError,
     loadingOfferedBalance,
     loadingDesiredBalance,
   } = useTokenBalances({
@@ -383,33 +441,48 @@ export function IntentBuilder() {
     intentStatus,
   });
 
-  // Poll for GMP requirements delivery on EVM connected chain (inflow only).
+  // Poll for GMP requirements delivery on connected chain (inflow only).
   // The escrow contract rejects createEscrow until IntentRequirements arrive via GMP.
   useEffect(() => {
     if (!transactionHash || !savedDraftData || escrowHash) return;
-    // Only for inflow on EVM chains
     const isInflow = !isHubChainId(savedDraftData.offeredChainId);
     const chainKey = Object.entries(CHAIN_CONFIGS).find(
       ([, config]) => String(config.chainId) === savedDraftData.offeredChainId
     )?.[0] || null;
-    if (!isInflow || !chainKey || getChainType(chainKey) !== 'evm') {
-      setRequirementsDelivered(true); // SVM/MVM don't need this gate
+    if (!isInflow || !chainKey) {
+      setRequirementsDelivered(true);
+      return;
+    }
+
+    // Select the chain-specific requirements check function
+    const chainType = getChainType(chainKey);
+    let checkFn: ((ck: string, id: string) => Promise<boolean>) | null = null;
+    if (chainType === 'evm') {
+      checkFn = checkHasRequirements;
+    } else if (chainType === 'svm') {
+      checkFn = checkHasRequirementsSvm;
+    } else if (chainType === 'mvm') {
+      checkFn = checkHasRequirementsMvm;
+    }
+    if (!checkFn) {
+      setRequirementsDelivered(true);
       return;
     }
 
     let cancelled = false;
     setPollingRequirements(true);
     setRequirementsDelivered(false);
+    const checkRequirements = checkFn;
 
     const poll = async () => {
       let attempts = 0;
       const maxAttempts = 60; // 60 * 3s = 3 minutes
       while (!cancelled && attempts < maxAttempts) {
         try {
-          const delivered = await checkHasRequirements(chainKey, savedDraftData.intentId);
+          const delivered = await checkRequirements(chainKey, savedDraftData.intentId);
           if (delivered) {
             if (!cancelled) {
-              console.log('GMP requirements delivered to EVM chain');
+              console.log(`GMP requirements delivered to ${chainType} chain`);
               setRequirementsDelivered(true);
               setPollingRequirements(false);
             }
@@ -419,7 +492,7 @@ export function IntentBuilder() {
           console.warn('Error checking hasRequirements:', err);
         }
         attempts++;
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, POLL_REQUIREMENTS_INTERVAL_MS));
       }
       if (!cancelled) {
         setPollingRequirements(false);
@@ -478,7 +551,7 @@ export function IntentBuilder() {
   // This gives 60 seconds buffer after frontend timer expires
   useEffect(() => {
     if (draftCreatedAt) {
-      setFixedExpiryTime(Math.floor(draftCreatedAt / 1000) + 120); // Frontend timer: 120 seconds
+      setFixedExpiryTime(Math.floor(draftCreatedAt / 1000) + FRONTEND_TIMER_SECS);
     } else {
       setFixedExpiryTime(null);
     }
@@ -513,7 +586,7 @@ export function IntentBuilder() {
     updateTimer();
 
     // Update every second
-    const interval = setInterval(updateTimer, 1000);
+    const interval = setInterval(updateTimer, TIMER_UPDATE_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [fixedExpiryTime]); // Only depend on fixedExpiryTime, not draftCreatedAt or savedDraftData
@@ -577,7 +650,7 @@ export function IntentBuilder() {
     const pollSignature = async () => {
       pollingActiveRef.current = true;
       setPollingSignature(true);
-      const maxAttempts = 120; // 120 attempts * 2 seconds = 240 seconds max (longer than 180s expiry)
+      const maxAttempts = MAX_SIGNATURE_POLL_ATTEMPTS;
       let attempts = 0;
 
       const poll = async () => {
@@ -620,7 +693,7 @@ export function IntentBuilder() {
             (fixedExpiryTime === null || Math.floor(Date.now() / 1000) < fixedExpiryTime);
           
           if (shouldContinue) {
-            setTimeout(poll, 2000); // Poll every 2 seconds
+            setTimeout(poll, POLL_SIGNATURE_INTERVAL_MS);
           } else {
             console.log('Stopping signature polling:', { attempts, maxAttempts, fixedExpiryTime });
             setPollingSignature(false);
@@ -630,7 +703,7 @@ export function IntentBuilder() {
           console.error('Error polling signature:', error);
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 2000);
+            setTimeout(poll, POLL_SIGNATURE_INTERVAL_MS);
           } else {
             setPollingSignature(false);
             pollingActiveRef.current = false;
@@ -723,7 +796,7 @@ export function IntentBuilder() {
         const offeredAmountNum = parseFloat(offeredAmount);
         const offeredSmallest = BigInt(toSmallestUnits(offeredAmountNum, offeredToken.decimals).toString());
         const bpsFee = fee_bps > 0
-          ? (offeredSmallest * BigInt(fee_bps) + BigInt(9999)) / BigInt(10000)
+          ? (offeredSmallest * BigInt(fee_bps) + BPS_ROUNDING_OFFSET) / BPS_DENOMINATOR
           : BigInt(0);
         const totalFee = minFeeOffered + bpsFee;
         setFeeInfo({ minFee: Number(minFeeOffered), feeBps: fee_bps, totalFee });
@@ -742,10 +815,10 @@ export function IntentBuilder() {
         setDesiredAmount(desiredAmountNum.toFixed(desiredToken.decimals));
         setError(null); // Clear any previous errors
       } catch (err) {
-        // Exchange rate not available - show "not available yet" instead of error
-        setDesiredAmount('not available yet');
+        console.error('Failed to fetch exchange rate:', err);
+        setDesiredAmount('');
         setFeeInfo(null);
-        setError(null);
+        setError('Failed to fetch exchange rate. Please try again.');
       }
     };
 
@@ -778,7 +851,7 @@ export function IntentBuilder() {
             console.log('No intent ID yet, waiting...');
             attempts++;
             if (attempts < maxAttempts) {
-              setTimeout(poll, 5000);
+              setTimeout(poll, POLL_FULFILLMENT_INTERVAL_MS);
             } else {
               setPollingFulfillment(false);
               pollingFulfillmentRef.current = false;
@@ -822,7 +895,7 @@ export function IntentBuilder() {
               console.log('No solver address yet, waiting...');
               attempts++;
               if (attempts < maxAttempts) {
-                setTimeout(poll, 5000);
+                setTimeout(poll, POLL_FULFILLMENT_INTERVAL_MS);
               } else {
                 setPollingFulfillment(false);
                 pollingFulfillmentRef.current = false;
@@ -876,7 +949,7 @@ export function IntentBuilder() {
           
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 5000); // Poll every 5 seconds
+            setTimeout(poll, POLL_FULFILLMENT_INTERVAL_MS); // Poll every 5 seconds
           } else {
             setPollingFulfillment(false);
             pollingFulfillmentRef.current = false;
@@ -885,7 +958,7 @@ export function IntentBuilder() {
           console.error('Error polling fulfillment:', error);
           attempts++;
           if (attempts < maxAttempts) {
-            setTimeout(poll, 5000);
+            setTimeout(poll, POLL_FULFILLMENT_INTERVAL_MS);
           } else {
             setPollingFulfillment(false);
             pollingFulfillmentRef.current = false;
@@ -894,7 +967,7 @@ export function IntentBuilder() {
       };
       
       // Start polling after a short delay to let the solver pick up the intent
-      setTimeout(poll, 3000);
+      setTimeout(poll, POLL_FULFILLMENT_INITIAL_DELAY_MS);
     };
     
     pollFulfillment();
@@ -969,7 +1042,7 @@ export function IntentBuilder() {
 
     // Actual expiry is 180 seconds, but frontend timer shows 120 seconds
     // This gives 60 seconds buffer after frontend timer expires for user to sign
-    const expiryTime = Math.floor(Date.now() / 1000) + 180;
+    const expiryTime = Math.floor(Date.now() / 1000) + INTENT_EXPIRY_SECS;
 
     // Get chain IDs from config
     const offeredChainId = CHAIN_CONFIGS[offeredToken.chain].chainId;
@@ -1285,7 +1358,7 @@ export function IntentBuilder() {
             }
           }
         } catch (waitErr) {
-          console.warn('Could not wait for transaction:', waitErr);
+          console.error('Failed to wait for transaction confirmation:', waitErr);
         }
       } else {
         throw new Error('Transaction submitted but no hash returned');
@@ -1541,13 +1614,15 @@ export function IntentBuilder() {
             <div className="mt-2 text-xs">
               {loadingOfferedBalance ? (
                 <span className="text-gray-500">Loading balance...</span>
+              ) : offeredBalanceError ? (
+                <span className="text-red-400" title={offeredBalanceError}>
+                  Failed to fetch balance
+                </span>
               ) : offeredBalance ? (
                 <span className="text-gray-400">
                   Balance: {offeredBalance.formatted} {offeredBalance.symbol}
                 </span>
-              ) : (
-                <span className="text-gray-500">Balance unavailable</span>
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -1656,12 +1731,16 @@ export function IntentBuilder() {
               <div className="mt-2 text-xs">
                 {loadingDesiredBalance ? (
                   <span className="text-gray-500">Loading balance...</span>
+                ) : desiredBalanceError ? (
+                  <span className="text-red-400" title={desiredBalanceError}>
+                    Failed to fetch balance
+                  </span>
                 ) : desiredBalance ? (
                   <span className="text-gray-400">
                     Balance: {desiredBalance.formatted} {desiredBalance.symbol}
                   </span>
                 ) : (
-                  <span className="text-gray-500">Balance unavailable</span>
+                  null
                 )}
               </div>
             )}

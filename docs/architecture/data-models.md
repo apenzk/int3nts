@@ -146,7 +146,6 @@ The coordinator correlates events across chains using:
 1. **Intent Creation**: `IntentEvent` from hub chain with `intent_id`
 2. **Escrow Creation**: `EscrowEvent` from connected chain with matching `intent_id`
 3. **Fulfillment**: `FulfillmentEvent` from hub chain with matching `intent_id`
-4. **Readiness Tracking**: `IntentRequirementsReceived` event on connected chain sets `ready_on_connected_chain` flag
 
 ## Serialization Formats
 

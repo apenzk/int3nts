@@ -11,6 +11,8 @@ use anyhow::{Context, Result};
 use chain_clients_mvm::{normalize_hex_to_address, MvmClient};
 use std::process::Command;
 
+use super::tx_hash::extract_tx_hash;
+
 use crate::config::MvmChainConfig;
 
 /// Client for interacting with a connected Move VM chain
@@ -163,45 +165,8 @@ impl ConnectedMvmClient {
             );
         }
 
-        // Extract transaction hash from output
         let output_str = String::from_utf8_lossy(&output.stdout);
-
-        // Try to parse as JSON first (aptos CLI outputs JSON with Result wrapper)
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output_str) {
-            // Handle {"Result": {"transaction_hash": "0x...", ...}}
-            if let Some(hash) = json
-                .get("Result")
-                .and_then(|r| r.get("transaction_hash"))
-                .and_then(|h| h.as_str())
-            {
-                return Ok(hash.to_string());
-            }
-        }
-
-        // Fallback: line-based parsing for "Transaction hash: 0x..." format
-        if let Some(hash_line) = output_str
-            .lines()
-            .find(|l| l.contains("hash") || l.contains("Hash"))
-        {
-            // Try finding 0x directly or quoted "0x
-            if let Some(hash) = hash_line
-                .split_whitespace()
-                .find(|s| s.starts_with("0x"))
-            {
-                return Ok(hash.to_string());
-            }
-            // Handle quoted hash like "0x..."
-            if let Some(start) = hash_line.find("\"0x") {
-                if let Some(end) = hash_line[start + 1..].find('"') {
-                    return Ok(hash_line[start + 1..start + 1 + end].to_string());
-                }
-            }
-        }
-
-        anyhow::bail!(
-            "Could not extract transaction hash from output: {}",
-            output_str
-        )
+        extract_tx_hash(&output_str, "transfer_with_intent_id")
     }
 
     /// Fulfills an outflow intent via the GMP flow on the connected chain.
@@ -267,41 +232,7 @@ impl ConnectedMvmClient {
             );
         }
 
-        // Extract transaction hash from output
         let output_str = String::from_utf8_lossy(&output.stdout);
-
-        // Try to parse as JSON first (aptos CLI outputs JSON with Result wrapper)
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&output_str) {
-            if let Some(hash) = json
-                .get("Result")
-                .and_then(|r| r.get("transaction_hash"))
-                .and_then(|h| h.as_str())
-            {
-                return Ok(hash.to_string());
-            }
-        }
-
-        // Fallback: line-based parsing
-        if let Some(hash_line) = output_str
-            .lines()
-            .find(|l| l.contains("hash") || l.contains("Hash"))
-        {
-            if let Some(hash) = hash_line
-                .split_whitespace()
-                .find(|s| s.starts_with("0x"))
-            {
-                return Ok(hash.to_string());
-            }
-            if let Some(start) = hash_line.find("\"0x") {
-                if let Some(end) = hash_line[start + 1..].find('"') {
-                    return Ok(hash_line[start + 1..start + 1 + end].to_string());
-                }
-            }
-        }
-
-        anyhow::bail!(
-            "Could not extract transaction hash from output: {}",
-            output_str
-        )
+        extract_tx_hash(&output_str, "fulfill_outflow_via_gmp")
     }
 }

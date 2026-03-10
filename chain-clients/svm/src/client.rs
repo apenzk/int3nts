@@ -132,7 +132,6 @@ impl SvmClient {
             .context("Escrow account not found")?;
 
         let escrow = EscrowAccount::try_from_slice(&data)
-            .ok()
             .context("Failed to parse escrow account data")?;
 
         Ok(escrow.is_claimed)
@@ -248,13 +247,17 @@ impl SvmClient {
             return Err(anyhow::anyhow!("SVM RPC error: {}", error.message));
         }
 
-        let accounts = response.result.unwrap_or_default();
+        let accounts = response.result
+            .context("No result in getProgramAccounts response")?;
         let mut escrows = Vec::new();
 
         for account in accounts {
             let pubkey = Pubkey::from_str(&account.pubkey)
                 .context("Invalid pubkey in getProgramAccounts response")?;
-            if let Some(escrow) = parse_escrow_data(&account.account.data.0) {
+            // getProgramAccounts returns all accounts owned by the program,
+            // including non-escrow accounts (metadata PDAs, etc.). Skip accounts
+            // that don't deserialize as escrows.
+            if let Ok(escrow) = parse_escrow_data(&account.account.data.0) {
                 escrows.push(EscrowWithPubkey { pubkey, escrow });
             }
         }
@@ -275,7 +278,6 @@ impl SvmClient {
         };
 
         let escrow = EscrowAccount::try_from_slice(&data)
-            .ok()
             .context("Failed to parse escrow account data")?;
 
         Ok(Some(escrow))
@@ -312,7 +314,7 @@ impl SvmClient {
 
         let signatures = response
             .result
-            .unwrap_or_default()
+            .context("No result in getSignaturesForAddress response")?
             .into_iter()
             .map(|sig_info| sig_info.signature)
             .collect();
@@ -349,9 +351,11 @@ impl SvmClient {
             return Err(anyhow::anyhow!("SVM RPC error: {}", error.message));
         }
 
-        let logs = response
+        let transaction = response
             .result
-            .and_then(|r| r.meta)
+            .context("No result in getTransaction response")?;
+        let logs = transaction
+            .meta
             .and_then(|m| m.log_messages)
             .unwrap_or_default();
 
@@ -403,11 +407,11 @@ pub fn pubkey_from_hex(value: &str) -> Result<Pubkey> {
 }
 
 /// Parses escrow account data from base64-encoded Borsh bytes.
-///
-/// Returns None if the data is invalid or unparsable.
-pub fn parse_escrow_data(data_base64: &str) -> Option<EscrowAccount> {
-    let data = STANDARD.decode(data_base64).ok()?;
-    EscrowAccount::try_from_slice(&data).ok()
+pub fn parse_escrow_data(data_base64: &str) -> Result<EscrowAccount> {
+    let data = STANDARD.decode(data_base64)
+        .context("Failed to decode base64 escrow account data")?;
+    EscrowAccount::try_from_slice(&data)
+        .context("Failed to deserialize escrow account from Borsh bytes")
 }
 
 /// Parse a 0x hex intent id into a 32-byte array.

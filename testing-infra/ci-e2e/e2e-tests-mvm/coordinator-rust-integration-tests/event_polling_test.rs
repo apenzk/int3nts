@@ -1,6 +1,6 @@
 //! Tests for Aptos Event Polling
 //!
-//! These tests verify event polling functionality for both chains.
+//! These tests verify event polling functionality for the hub chain.
 //! They require the Aptos chains to be running with deployed contracts.
 
 use chain_clients_mvm::MvmClient;
@@ -75,33 +75,6 @@ async fn test_poll_hub_events_api() {
     }
 }
 
-/// Test event polling API connectivity for escrow events  
-/// Why: Verify that poll_connected_events() API calls work (does not verify parsing of real events yet)
-/// Note: This only tests API connectivity. For full event parsing test, escrows must exist on-chain.
-#[tokio::test]
-async fn test_poll_connected_events_api() {
-    // This test requires chains to be running with deployed contracts
-    let config = coordinator::config::Config::load()
-        .expect("Failed to load coordinator config");
-    
-    // Create a temporary monitor to test polling
-    let monitor = coordinator::monitor::EventMonitor::new(&config).await
-        .expect("Failed to create monitor");
-    
-    // Poll for events - this only tests API connectivity, not parsing of real events
-    let result = monitor.poll_connected_events().await;
-    
-    // This test just verifies the API call doesn't crash
-    match result {
-        Ok(events) => {
-            println!("API call successful, found {} escrow events (may be 0)", events.len());
-        }
-        Err(e) => {
-            // Fail if API call itself fails (connection error, etc)
-            panic!("Poll API call failed: {:?}", e);
-        }
-    }
-}
 
 // Test event polling with a real intent created on-chain
 // Why: Verify that poll_hub_events() can parse real intent events from the blockchain

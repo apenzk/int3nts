@@ -167,16 +167,15 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                         intent_addr: data.intent_addr.clone(),
                         solver_hub_addr: data.solver_addr.clone(),
                         provided_metadata: serde_json::to_string(&data.provided_metadata)
-                            .unwrap_or_default(),
+                            .context("Failed to serialize fulfillment provided_metadata")?,
                         provided_amount: parse_amount_with_u64_limit(&data.provided_amount, "Fulfillment provided_amount")?,
                         timestamp: event_timestamp,
                     };
 
                     // Cache the fulfillment event
-                    let is_new_fulfillment = {
+                    {
                         let intent_id = fulfillment_event.intent_id.clone();
                         let mut fulfillment_cache = monitor.fulfillment_cache.write().await;
-                        // Check if this intent_id already exists in the cache (normalize for comparison)
                         let normalized_intent_id =
                             crate::monitor::generic::normalize_intent_id(&intent_id);
                         if !fulfillment_cache.iter().any(|cached| {
@@ -188,15 +187,8 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                                 "Received fulfillment event for intent {} by solver {}",
                                 data.intent_id, data.solver_addr
                             );
-                            true
-                        } else {
-                            // Already cached, skip validation to avoid duplicate processing
-                            false
                         }
-                    };
-
-                    // Note: No validation in coordinator - just cache new events
-                    let _ = is_new_fulfillment; // Suppress unused variable warning
+                    }
                 }
             } else if event_type.contains("OracleLimitOrderEvent") {
                 // Outflow intents use OracleLimitOrderEvent (from fa_intent_with_oracle)
@@ -240,7 +232,10 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                 let connected_chain_id = if offered_chain_id != desired_chain_id {
                     Some(desired_chain_id) // For outflow, desired_chain_id is the connected chain
                 } else {
-                    None // Regular single-chain intent (shouldn't happen for outflow, but handle gracefully)
+                    anyhow::bail!(
+                        "Outflow intent {} has same offered_chain_id and desired_chain_id ({}). Outflow intents must be cross-chain.",
+                        data.intent_id, offered_chain_id
+                    );
                 };
 
                 // Convert Move event (OracleLimitOrderEvent) to coordinator's internal IntentEvent structure
@@ -252,13 +247,14 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                 let desired_metadata_str = if let Some(addr) = &data.desired_metadata_address {
                     format!(r#"{{"inner":"{}"}}"#, addr)
                 } else {
-                    serde_json::to_string(&data.desired_metadata).unwrap_or_default()
+                    serde_json::to_string(&data.desired_metadata)
+                        .context("Failed to serialize OracleLimitOrderEvent desired_metadata")?
                 };
-                
+
                 intent_events.push(IntentEvent {
                     intent_id: data.intent_id.clone(), // Use intent_id for cross-chain linking
                     offered_metadata: serde_json::to_string(&data.offered_metadata)
-                        .unwrap_or_default(),
+                        .context("Failed to serialize OracleLimitOrderEvent offered_metadata")?,
                     offered_amount: parse_amount_with_u64_limit(&data.offered_amount, "Request-intent offered_amount")?,
                     desired_metadata: desired_metadata_str,
                     desired_amount: parse_amount_with_u64_limit(&data.desired_amount, "Request-intent desired_amount")?,
@@ -274,7 +270,6 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                         .parse::<u64>()
                         .context("Failed to parse expiry_time")?,
                     timestamp,
-                    ready_on_connected_chain: false,
                 });
             } else if event_type.contains("LimitOrderEvent") && !event_type.contains("Fulfillment")
             {
@@ -309,15 +304,16 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                 let offered_metadata_str = if let Some(addr) = &data.offered_metadata_address {
                     format!(r#"{{"inner":"{}"}}"#, addr)
                 } else {
-                    serde_json::to_string(&data.offered_metadata).unwrap_or_default()
+                    serde_json::to_string(&data.offered_metadata)
+                        .context("Failed to serialize LimitOrderEvent offered_metadata")?
                 };
-                
+
                 intent_events.push(IntentEvent {
                     intent_id: data.intent_id.clone(), // Use intent_id for cross-chain linking
                     offered_metadata: offered_metadata_str,
                     offered_amount: parse_amount_with_u64_limit(&data.offered_amount, "Request-intent offered_amount")?,
                     desired_metadata: serde_json::to_string(&data.desired_metadata)
-                        .unwrap_or_default(),
+                        .context("Failed to serialize LimitOrderEvent desired_metadata")?,
                     desired_amount: parse_amount_with_u64_limit(&data.desired_amount, "Request-intent desired_amount")?,
                     revocable: data.revocable,
                     requester_addr: data.requester_addr.clone(),
@@ -329,7 +325,6 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                         .parse::<u64>()
                         .context("Failed to parse expiry_time")?,
                     timestamp,
-                    ready_on_connected_chain: false,
                 });
             } else if event_type.contains("OracleLimitOrderEvent") {
                 // Outflow intents use OracleLimitOrderEvent (from fa_intent_with_oracle)
@@ -373,7 +368,10 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                 let connected_chain_id = if offered_chain_id != desired_chain_id {
                     Some(desired_chain_id) // For outflow, desired_chain_id is the connected chain
                 } else {
-                    None // Regular single-chain intent (shouldn't happen for outflow, but handle gracefully)
+                    anyhow::bail!(
+                        "Outflow intent {} has same offered_chain_id and desired_chain_id ({}). Outflow intents must be cross-chain.",
+                        data.intent_id, offered_chain_id
+                    );
                 };
 
                 // Convert Move event (OracleLimitOrderEvent) to coordinator's internal IntentEvent structure
@@ -385,13 +383,14 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                 let desired_metadata_str = if let Some(addr) = &data.desired_metadata_address {
                     format!(r#"{{"inner":"{}"}}"#, addr)
                 } else {
-                    serde_json::to_string(&data.desired_metadata).unwrap_or_default()
+                    serde_json::to_string(&data.desired_metadata)
+                        .context("Failed to serialize OracleLimitOrderEvent desired_metadata")?
                 };
-                
+
                 intent_events.push(IntentEvent {
                     intent_id: data.intent_id.clone(), // Use intent_id for cross-chain linking
                     offered_metadata: serde_json::to_string(&data.offered_metadata)
-                        .unwrap_or_default(),
+                        .context("Failed to serialize OracleLimitOrderEvent offered_metadata")?,
                     offered_amount: parse_amount_with_u64_limit(&data.offered_amount, "Request-intent offered_amount")?,
                     desired_metadata: desired_metadata_str,
                     desired_amount: parse_amount_with_u64_limit(&data.desired_amount, "Request-intent desired_amount")?,
@@ -407,7 +406,6 @@ pub async fn poll_hub_events(monitor: &EventMonitor) -> Result<Vec<IntentEvent>>
                         .parse::<u64>()
                         .context("Failed to parse expiry_time")?,
                     timestamp,
-                    ready_on_connected_chain: false,
                 });
             }
         }

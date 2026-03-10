@@ -9,6 +9,8 @@ use anyhow::{Context, Result};
 use sha3::{Digest, Keccak256};
 use std::process::Command;
 
+use super::tx_hash::extract_tx_hash;
+
 use chain_clients_evm::EvmClient;
 
 use crate::config::EvmChainConfig;
@@ -116,7 +118,8 @@ impl ConnectedEvmClient {
             format!("0x{}", intent_id)
         };
 
-        let solver_private_key = std::env::var(&self.private_key_env).unwrap_or_default();
+        let solver_private_key = std::env::var(&self.private_key_env)
+            .with_context(|| format!("Missing required env var {} for EVM private key", self.private_key_env))?;
         let nix_dir = project_root.join("nix");
         let output = Command::new("nix")
             .args(&[
@@ -151,19 +154,7 @@ impl ConnectedEvmClient {
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        if let Some(hash_line) = output_str
-            .lines()
-            .find(|l| l.contains("hash") || l.contains("Hash"))
-        {
-            if let Some(hash) = hash_line.split_whitespace().find(|s| s.starts_with("0x")) {
-                return Ok(hash.to_string());
-            }
-        }
-
-        anyhow::bail!(
-            "Could not extract transaction hash from Hardhat output: {}",
-            output_str
-        )
+        extract_tx_hash(&output_str, "transfer-with-intent-id")
     }
 
     /// Checks if an inflow escrow has been auto-released (via Hardhat script).
@@ -278,7 +269,8 @@ impl ConnectedEvmClient {
             );
         }
 
-        let result = response.result.unwrap_or_else(|| "0x".to_string());
+        let result = response.result
+            .context("eth_call hasRequirements returned no result")?;
 
         // ABI bool: 32 bytes, last byte is 0x01 (true) or 0x00 (false)
         let clean = result.strip_prefix("0x").unwrap_or(&result);
@@ -313,7 +305,8 @@ impl ConnectedEvmClient {
             );
         }
 
-        let solver_private_key = std::env::var(&self.private_key_env).unwrap_or_default();
+        let solver_private_key = std::env::var(&self.private_key_env)
+            .with_context(|| format!("Missing required env var {} for EVM private key", self.private_key_env))?;
         let nix_dir = project_root.join("nix");
         let output = Command::new("nix")
             .args(&[
@@ -347,18 +340,6 @@ impl ConnectedEvmClient {
         }
 
         let output_str = String::from_utf8_lossy(&output.stdout);
-        if let Some(hash_line) = output_str
-            .lines()
-            .find(|l| l.contains("hash") || l.contains("Hash"))
-        {
-            if let Some(hash) = hash_line.split_whitespace().find(|s| s.starts_with("0x")) {
-                return Ok(hash.to_string());
-            }
-        }
-
-        anyhow::bail!(
-            "Could not extract transaction hash from fulfill-outflow-intent output: {}",
-            output_str
-        )
+        extract_tx_hash(&output_str, "fulfill-outflow-intent")
     }
 }

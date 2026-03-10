@@ -70,7 +70,12 @@ async function main() {
     try {
       const parsed = escrowGmp.interface.parseLog(log);
       return parsed && parsed.name === "EscrowCreated";
-    } catch {
+    } catch (err) {
+      // parseLog throws for logs from other contracts (non-matching selectors) - expected
+      // Log unexpected errors that aren't simple "no matching event" failures
+      if (err.reason !== "no matching event" && !err.message?.includes("no matching event")) {
+        console.error("Unexpected error parsing log:", err);
+      }
       return false;
     }
   });

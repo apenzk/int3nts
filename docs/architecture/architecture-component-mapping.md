@@ -279,20 +279,13 @@ Two services work together in this domain:
 
 - **`coordinator/src/monitor/`**
   - **`mod.rs`**: Main monitor module with `EventMonitor` struct, shared types, and generic monitoring logic
-  - **`inflow_mvm.rs`**: Move VM-specific escrow event polling (`poll_mvm_escrow_events()`)
-  - **`inflow_evm.rs`**: EVM-specific escrow event polling (`poll_evm_escrow_events()`)
-  - **`outflow_mvm.rs`**: MVM readiness monitoring (`poll_mvm_outflow_readiness()`)
-  - **`outflow_evm.rs`**: EVM readiness monitoring (`poll_evm_outflow_readiness()`)
-  - **`outflow_svm.rs`**: SVM readiness monitoring (`poll_svm_outflow_readiness()`)
-  - **Purpose**: Monitors blockchain events from hub and connected chains (MVM, EVM, SVM)
-  - **Key Structures**: `RequestIntentEvent`, `EscrowEvent`, `FulfillmentEvent`, `EventMonitor`
-  - **Key Functions**: `poll_hub_events()`, `poll_connected_events()`, `poll_evm_events()`, `monitor_hub_chain()`, `monitor_connected_chain()`, `monitor_evm_chain()`, `get_cached_events()`
+  - **`hub_mvm.rs`**: Move VM-specific hub chain event parsing
+  - **Purpose**: Monitors hub chain events (intent creation, fulfillment)
+  - **Key Structures**: `IntentEvent`, `FulfillmentEvent`, `EventMonitor`
+  - **Key Functions**: `poll_hub_events()`, `monitor_hub_chain()`, `get_cached_events()`, `get_cached_fulfillment_events()`
   - **Responsibilities**:
-    - Event polling from multiple chains
-    - Event caching (MVM, EVM, SVM escrows)
-    - Cross-chain event correlation
-    - **Readiness tracking**: Monitors IntentRequirementsReceived events on connected chains, sets `ready_on_connected_chain` flag when requirements arrive
-    - Enables frontend to know when intents can proceed without polling connected chains directly
+    - Hub chain event polling
+    - Event caching (intents, fulfillments)
 
 #### GMP Message Relay (Integrated GMP)
 
@@ -445,7 +438,6 @@ This section documents comprehensive communication patterns between domains, inc
 **Validation Domain → Intent Management** (Layer 2 → Foundation):
 
 - **Event Monitoring**: Coordinator polls `LimitOrderEvent` and `LimitOrderFulfillmentEvent` via blockchain RPC
-- **Readiness Tracking**: Coordinator monitors IntentRequirementsReceived events on connected chains, sets `ready_on_connected_chain` flag for outflow intents
 - **GMP Message Relay**: Integrated GMP watches `MessageSent` events (which carry IntentRequirements, FulfillmentProof, etc.) and delivers them to destination chains; all validation of these messages happens on-chain
 
 **Validation Domain → Escrow** (Layer 2 → Layer 1):
@@ -537,4 +529,4 @@ This table provides a concise overview of domain boundaries, listing the primary
 | **Intent Management** | `intent.move`, `fa_intent.move`, `fa_intent_with_oracle.move`, `fa_intent_cross_chain.move`, `intent_reservation.move` | Intent lifecycle, creation, validation, event emission |
 | **Escrow** | `intent_escrow.move`, `intent_escrow_entry.move`, `intent_inflow_escrow.move`, `IntentInflowEscrow.sol` | Asset custody, fund locking, GMP message-based validation and auto-release |
 | **Settlement** | Functions in `fa_intent.move`, `intent_escrow.move`, `IntentInflowEscrow.sol` | Intent fulfillment, escrow completion, asset transfers |
-| **Validation (Coordinator + Integrated GMP)** | Coordinator: `monitor/`, `api/`, `config/`, `mvm_client.rs`, `svm_client.rs`, `storage/`; Integrated GMP: `integrated_gmp_relay.rs`, `config/`, `mvm_client.rs`, `evm_client.rs`, `svm_client.rs` | Coordinator: event monitoring (hub, MVM, EVM, SVM), readiness tracking (IntentRequirementsReceived), caching, negotiation routing; Integrated GMP: GMP message relay (watches `MessageSent`, delivers messages to destination chains) |
+| **Validation (Coordinator + Integrated GMP)** | Coordinator: `monitor/`, `api/`, `config/`, `mvm_client.rs`, `svm_client.rs`, `storage/`; Integrated GMP: `integrated_gmp_relay.rs`, `config/`, `mvm_client.rs`, `evm_client.rs`, `svm_client.rs` | Coordinator: event monitoring (hub, MVM, EVM, SVM), caching, negotiation routing; Integrated GMP: GMP message relay (watches `MessageSent`, delivers messages to destination chains) |

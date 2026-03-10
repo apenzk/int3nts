@@ -463,16 +463,16 @@ fn test_escrow_account_borsh_roundtrip() {
     assert_eq!(parsed.bump, escrow.bump);
 }
 
-/// 28. Test: parse_escrow_data returns None for invalid base64
-/// Verifies that invalid base64 input is handled gracefully.
-/// Why: Corrupt or non-escrow accounts should be skipped, not crash.
+/// 28. Test: parse_escrow_data returns Err for invalid base64
+/// Verifies that invalid base64 input produces an error.
+/// Why: Corrupt or non-escrow accounts must fail explicitly, not silently succeed.
 #[test]
 fn test_escrow_account_invalid_base64() {
     let result = parse_escrow_data("not-valid-base64!!!");
-    assert!(result.is_none());
+    assert!(result.is_err());
 
     // Valid base64 but too short for EscrowAccount
     let too_short = base64::engine::general_purpose::STANDARD.encode(b"short");
     let result = parse_escrow_data(&too_short);
-    assert!(result.is_none());
+    assert!(result.is_err());
 }

@@ -18,7 +18,7 @@ The cross-chain intent protocol enables secure asset transfers between chains us
 2. **Connected Chain**: Escrows lock funds and validate requirements delivered via GMP (see [Intent Frameworks](intent-frameworks/README.md))
 3. **GMP Layer**: Cross-chain message passing for IntentRequirements, EscrowConfirmation, and FulfillmentProof messages (see [Intent GMP](intent-frameworks/README.md))
 4. **Validation Contracts**: On-chain contracts on connected chains validate and execute fulfillments (see [IntentOutflowValidator](intent-frameworks/evm/contracts/IntentOutflowValidator.sol))
-5. **Coordinator Service**: Monitors all chains, provides event caching, readiness tracking, and negotiation routing (see [Coordinator](coordinator/README.md))
+5. **Coordinator Service**: Monitors all chains, provides event caching and negotiation routing (see [Coordinator](coordinator/README.md))
 
 The protocol links these components using `intent_id` to correlate events and GMP messages across chains.
 
@@ -54,13 +54,9 @@ graph LR
     style Solver fill:#f0f0f0,stroke:#888
 ```
 
-### Coordinator Readiness Tracking
-
-For outflow intents (GMP-based), the coordinator monitors `IntentRequirementsReceived` events on connected chains (MVM, EVM, SVM) and provides a `ready_on_connected_chain` flag. This enables frontends and solvers to query the coordinator API to know when intent requirements have been delivered via GMP, without needing to poll connected chains directly. See [Coordinator API](coordinator/README.md) for details.
-
 ## Cross-Chain Flow
 
-The intent framework enables cross-chain escrow operations where intents are created on a hub chain and escrows are created on connected chains. GMP handles cross-chain message delivery (IntentRequirements, EscrowConfirmation, FulfillmentProof). The coordinator monitors all chains, caches events, and tracks readiness status.
+The intent framework enables cross-chain escrow operations where intents are created on a hub chain and escrows are created on connected chains. GMP handles cross-chain message delivery (IntentRequirements, EscrowConfirmation, FulfillmentProof). The coordinator monitors all chains and caches events.
 
 ### Inflow Flow
 
@@ -97,11 +93,9 @@ sequenceDiagram
     GMP->>Connected: Deliver IntentRequirements
     Connected->>Connected: Store IntentRequirements
     Connected->>Connected: Emit IntentRequirementsReceived event
-    Coordinator->>Coordinator: Monitor IntentRequirementsReceived<br/>(set ready_on_connected_chain = true)
 
     Note over Requester,Solver: Phase 2: Escrow Creation on Connected Chain
-    Requester->>Coordinator: GET /events<br/>(check ready_on_connected_chain flag)
-    Coordinator->>Requester: ready_on_connected_chain = true
+    Requester->>Connected: Check requirements delivered<br/>(checkHasRequirements on connected chain)
     alt MVM Chain
         Requester->>Connected: create_escrow_from_fa_gmp(<br/>intent_id, reserved_solver, expiry_time)
     else EVM Chain
@@ -149,9 +143,8 @@ sequenceDiagram
 3. **GMP Delivery to Connected Chain**: GMP layer delivers `IntentRequirements` message to the connected chain. The connected chain:
    - Stores the IntentRequirements on-chain
    - Emits `IntentRequirementsReceived` event
-   - Coordinator monitors this event and sets `ready_on_connected_chain = true`
 
-4. **Escrow Creation on Connected Chain**: Requester queries coordinator (`GET /events`) to check `ready_on_connected_chain` flag, then creates escrow using `create_escrow_from_fa_gmp()` (MVM), `createEscrow()` (EVM), or `create_escrow()` (SVM) with `intent_id` and **reserved solver address**. The escrow contract:
+4. **Escrow Creation on Connected Chain**: Requester (frontend) checks the connected chain directly for requirements delivery (e.g., `checkHasRequirements()` on EVM), then creates escrow using `create_escrow_from_fa_gmp()` (MVM), `createEscrow()` (EVM), or `create_escrow()` (SVM) with `intent_id` and **reserved solver address**. The escrow contract:
    - Validates that stored IntentRequirements match the intent_id
    - Locks assets in escrow
    - Emits `EscrowCreated` event
@@ -206,11 +199,9 @@ sequenceDiagram
     GMP->>Connected: Deliver IntentRequirements
     Connected->>Connected: Store IntentRequirements
     Connected->>Connected: Emit IntentRequirementsReceived event
-    Coordinator->>Coordinator: Monitor IntentRequirementsReceived<br/>(set ready_on_connected_chain = true)
 
     Note over Requester,Solver: Phase 2: Solver Calls Validation Contract on Connected Chain
-    Solver->>Coordinator: GET /events<br/>(check ready_on_connected_chain flag)
-    Coordinator->>Solver: ready_on_connected_chain = true
+    Solver->>Connected: Check requirements delivered<br/>(has_outflow_requirements on connected chain)
     alt MVM Chain
         Solver->>Connected: validate_and_fulfill_outflow(<br/>intent_id, token, amount, recipient)
     else EVM Chain
@@ -249,9 +240,8 @@ sequenceDiagram
 3. **GMP Delivery to Connected Chain**: GMP layer delivers `IntentRequirements` message to the connected chain. The connected chain:
    - Stores the IntentRequirements on-chain
    - Emits `IntentRequirementsReceived` event
-   - Coordinator monitors this event and sets `ready_on_connected_chain = true`
 
-4. **Solver Calls Validation Contract**: Solver queries coordinator (`GET /events`) to check `ready_on_connected_chain` flag, then calls the validation contract on the connected chain (`validate_and_fulfill_outflow()` for MVM, `validateAndFulfill()` for EVM, `validate_and_fulfill()` for SVM). The validation contract:
+4. **Solver Calls Validation Contract**: Solver checks the connected chain directly for requirements delivery via `has_outflow_requirements(intent_id)`, then calls the validation contract on the connected chain (`validate_and_fulfill_outflow()` for MVM, `validateAndFulfill()` for EVM, `validate_and_fulfill()` for SVM). The validation contract:
    - Validates that stored IntentRequirements match the parameters
    - Pulls tokens from the solver's account
    - Transfers tokens to `requester_addr_connected_chain`
@@ -319,7 +309,7 @@ Hub Chain: EscrowConfirmation.intent_id / FulfillmentProof.intent_id
 
 1. Hub emits `IntentCreated` event → sends `IntentRequirements` via GMP with `intent_id`
 2. Connected chain receives GMP message → emits `IntentRequirementsReceived` with `intent_id`
-3. Coordinator monitors `IntentRequirementsReceived` → sets `ready_on_connected_chain = true`
+3. Solver/frontend checks connected chain directly for requirements delivery
 4. Escrow/Validation contract validates against stored requirements using `intent_id`
 5. Connected chain sends confirmation/proof via GMP back to hub with same `intent_id`
 

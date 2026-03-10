@@ -120,14 +120,14 @@ display_balances_connected_evm() {
 }
 
 # Check if IntentRequirements have been delivered via GMP (for IntentInflowEscrow.sol)
-# Usage: has_requirements_evm <escrow_gmp_addr> <intent_id_evm>
+# Usage: has_requirements <escrow_gmp_addr> <intent_id_evm>
 # Returns: "true" if requirements exist, "false" if not, exits with error if check fails
-has_requirements_evm() {
+has_requirements() {
     local escrow_gmp_addr="$1"
     local intent_id_evm="$2"
 
     if [ -z "$escrow_gmp_addr" ] || [ -z "$intent_id_evm" ]; then
-        echo "❌ PANIC: has_requirements_evm requires escrow_gmp_addr and intent_id_evm" >&2
+        echo "❌ PANIC: has_requirements requires escrow_gmp_addr and intent_id_evm" >&2
         exit 1
     fi
 
@@ -143,7 +143,7 @@ has_requirements_evm() {
     elif echo "$output" | grep -q "hasRequirements: false"; then
         echo "false"
     else
-        echo "❌ PANIC: has_requirements_evm failed to get requirements status" >&2
+        echo "❌ PANIC: has_requirements failed to get requirements status" >&2
         echo "   escrow_gmp_addr: $escrow_gmp_addr, intent_id_evm: $intent_id_evm" >&2
         echo "   output: $output" >&2
         exit 1

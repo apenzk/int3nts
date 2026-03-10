@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use super::generic::{EventMonitor, FulfillmentEvent, IntentEvent};
 use super::hub_mvm;
@@ -47,82 +47,33 @@ pub async fn monitor_hub_chain(monitor: &EventMonitor) -> Result<()> {
                         .unwrap()
                         .as_secs();
                     if event.expiry_time < current_time {
-                        // Don't log every expired intent on every poll - just skip silently
+                        trace!("Skipping expired intent {} (expired at {}, current {})", event.intent_id, event.expiry_time, current_time);
                         continue;
                     }
 
                     // Cache the event for API access (only non-revocable, non-expired events)
                     // Only log new events (not already in cache)
-                    let is_new_intent = {
+                    {
                         let intent_id = event.intent_id.clone();
                         let mut cache = monitor.event_cache.write().await;
-                        // Check if this intent_id already exists in the cache (normalize for comparison)
                         let normalized_intent_id =
                             crate::monitor::generic::normalize_intent_id(&intent_id);
                         if !cache.iter().any(|cached| {
                             crate::monitor::generic::normalize_intent_id(&cached.intent_id)
                                 == normalized_intent_id
                         }) {
-                            // Only log new events
                             info!("New intent event: {} from {}", event.intent_id, event.requester_addr);
                             info!(
                                 "Request-intent {} is non-revocable - safe for escrow",
                                 event.intent_id
                             );
                             cache.push(event.clone());
-                            true
-                        } else {
-                            false
                         }
-                    };
-
-                    // Note: No validation in coordinator - just cache new events
-                    let _ = is_new_intent; // Suppress unused variable warning
+                    }
                 }
             }
             Err(e) => {
                 error!("Error polling hub events: {}", e);
-            }
-        }
-
-        // Poll connected chains for IntentRequirementsReceived events
-        // This marks intents as ready when requirements are delivered to connected chains
-        if monitor.config.connected_chain_mvm.is_some() {
-            match super::outflow_mvm::poll_mvm_requirements_received(monitor).await {
-                Ok(count) => {
-                    if count > 0 {
-                        info!("Marked {} MVM intent(s) as ready", count);
-                    }
-                }
-                Err(e) => {
-                    error!("Error polling MVM requirements: {}", e);
-                }
-            }
-        }
-
-        if monitor.config.connected_chain_evm.is_some() {
-            match super::outflow_evm::poll_evm_requirements_received(monitor).await {
-                Ok(count) => {
-                    if count > 0 {
-                        info!("Marked {} EVM intent(s) as ready", count);
-                    }
-                }
-                Err(e) => {
-                    error!("Error polling EVM requirements: {}", e);
-                }
-            }
-        }
-
-        if monitor.config.connected_chain_svm.is_some() {
-            match super::outflow_svm::poll_svm_requirements_received(monitor).await {
-                Ok(count) => {
-                    if count > 0 {
-                        info!("Marked {} SVM intent(s) as ready", count);
-                    }
-                }
-                Err(e) => {
-                    error!("Error polling SVM requirements: {}", e);
-                }
             }
         }
 

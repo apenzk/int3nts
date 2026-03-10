@@ -36,7 +36,7 @@ generate_solver_config_svm() {
         exit 1
     fi
     if [ -z "$SVM_PROGRAM_ID" ] || [ -z "$SVM_GMP_ENDPOINT_ID" ] || [ -z "$SVM_OUTFLOW_VALIDATOR_ID" ]; then
-        log_and_echo "❌ ERROR: SVM program IDs not found. Run chain-connected-svm/deploy-contract.sh first."
+        log_and_echo "❌ ERROR: SVM program IDs not found. Run chain-connected-svm/deploy-contracts.sh first."
         exit 1
     fi
 

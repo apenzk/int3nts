@@ -1,8 +1,8 @@
 //! Event Monitoring Module
 //!
-//! This module handles monitoring blockchain events from both hub and connected chains.
-//! It listens for intent creation events on the hub chain and escrow deposit events
-//! on the connected chain, providing real-time event processing and caching.
+//! This module handles monitoring blockchain events from the hub chain.
+//! It listens for intent creation and fulfillment events on the hub chain,
+//! providing real-time event processing and caching.
 //!
 //! ## Security Requirements
 //!
@@ -13,21 +13,14 @@
 mod generic;
 
 // Flow-specific modules (chain-agnostic)
-mod inflow_generic;
 mod outflow_generic;
 
 // Flow + chain specific modules
 mod hub_mvm;
-mod inflow_mvm;
-mod inflow_svm;
-mod outflow_mvm;
-mod outflow_evm;
-mod outflow_svm;
 
 // Re-export public types and functions
-#[allow(unused_imports)] // ChainType is used by external consumers (tests, lib re-export)
 pub use generic::{
-    ChainType, EscrowEvent, EventMonitor, FulfillmentEvent, IntentEvent,
+    EventMonitor, FulfillmentEvent, IntentEvent,
 };
 
 // Re-export utility functions (used in tests and API handlers)
@@ -44,13 +37,3 @@ pub use outflow_generic::poll_hub_events;
 #[allow(unused_imports)] // Only used in tests
 pub use hub_mvm::parse_amount_with_u64_limit;
 
-// Re-export outflow monitoring functions for testing
-#[doc(hidden)]
-#[allow(unused_imports)] // Only used in tests
-pub use outflow_mvm::poll_mvm_requirements_received;
-#[doc(hidden)]
-#[allow(unused_imports)] // Only used in tests
-pub use outflow_evm::poll_evm_requirements_received;
-#[doc(hidden)]
-#[allow(unused_imports)] // Only used in tests
-pub use outflow_svm::poll_svm_requirements_received;

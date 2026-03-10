@@ -24,7 +24,9 @@
 
 use anyhow::{Context, Result};
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_request::RpcError;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     instruction::{AccountMeta, Instruction},
@@ -225,7 +227,8 @@ impl ConnectedSvmClient {
 
         match self.rpc_client.get_account(&requirements_pda) {
             Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Err(err) if is_account_not_found(&err) => Ok(false),
+            Err(err) => Err(err).context("Failed to query requirements PDA account"),
         }
     }
 
@@ -536,5 +539,13 @@ fn system_program_id() -> Result<Pubkey> {
 fn associated_token_program_id() -> Result<Pubkey> {
     Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM_ID)
         .context("Invalid associated token program id")
+}
+
+/// Returns true if the RPC error indicates the account was not found.
+fn is_account_not_found(err: &ClientError) -> bool {
+    matches!(
+        err.kind(),
+        ClientErrorKind::RpcError(RpcError::ForUser(msg)) if msg.contains("could not find account")
+    )
 }
 

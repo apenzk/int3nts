@@ -23,12 +23,20 @@ module mvmt_intent::gmp_endpoints {
     // Accessors (Move constants are module-private; expose via functions)
     // =========================================================================
 
+    /// Returns the Solana mainnet endpoint ID.
     public fun solana_mainnet_eid(): u32 { SOLANA_MAINNET_EID }
+    /// Returns the Solana devnet endpoint ID.
     public fun solana_devnet_eid(): u32 { SOLANA_DEVNET_EID }
+    /// Returns the Movement mainnet endpoint ID.
     public fun movement_mainnet_eid(): u32 { MOVEMENT_MAINNET_EID }
+    /// Returns the Movement testnet endpoint ID.
     public fun movement_testnet_eid(): u32 { MOVEMENT_TESTNET_EID }
+    /// Returns the Ethereum mainnet endpoint ID.
     public fun ethereum_mainnet_eid(): u32 { ETHEREUM_MAINNET_EID }
+    /// Returns the Ethereum Sepolia testnet endpoint ID.
     public fun ethereum_sepolia_eid(): u32 { ETHEREUM_SEPOLIA_EID }
+    /// Returns the Base mainnet endpoint ID.
     public fun base_mainnet_eid(): u32 { BASE_MAINNET_EID }
+    /// Returns the Base Sepolia testnet endpoint ID.
     public fun base_sepolia_eid(): u32 { BASE_SEPOLIA_EID }
 }

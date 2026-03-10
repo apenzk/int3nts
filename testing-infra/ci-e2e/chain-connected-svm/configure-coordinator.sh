@@ -23,7 +23,7 @@ if [ -f "$CHAIN_INFO" ]; then
 fi
 
 if [ -z "$SVM_PROGRAM_ID" ]; then
-    log_and_echo "   ERROR: SVM_PROGRAM_ID not found. Run chain-connected-svm/deploy-contract.sh first."
+    log_and_echo "   ERROR: SVM_PROGRAM_ID not found. Run chain-connected-svm/deploy-contracts.sh first."
     exit 1
 fi
 

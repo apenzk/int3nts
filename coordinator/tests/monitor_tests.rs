@@ -10,7 +10,7 @@ use coordinator::monitor::{EventMonitor, IntentEvent};
 #[path = "mod.rs"]
 mod test_helpers;
 use test_helpers::{
-    build_test_config_with_mvm, create_default_escrow_event,
+    build_test_config_with_mvm,
     create_default_intent_mvm,
 };
 
@@ -53,56 +53,6 @@ fn test_revocable_intent_rejection() {
 // ============================================================================
 // CACHE BEHAVIOR TESTS
 // ============================================================================
-
-/// Test that duplicate escrow events are rejected (not added to cache)
-/// Why: Verify that the monitor correctly detects and rejects duplicate escrow events
-#[tokio::test]
-async fn test_duplicate_escrow_event_rejection() {
-    let _ = tracing_subscriber::fmt::try_init();
-    let config = build_test_config_with_mvm();
-    let monitor = EventMonitor::new(&config)
-        .await
-        .expect("Failed to create monitor");
-
-    let escrow = create_default_escrow_event();
-
-    // Add escrow to cache (first time)
-    {
-        let mut escrow_cache = monitor.escrow_cache.write().await;
-        // Simulate duplicate detection logic from monitor_connected_chain
-        if !escrow_cache.iter().any(|cached| {
-            cached.escrow_id == escrow.escrow_id && cached.chain_id == escrow.chain_id
-        }) {
-            escrow_cache.push(escrow.clone());
-        }
-    }
-
-    // Verify escrow was added
-    let escrow_cache = monitor.escrow_cache.read().await;
-    assert_eq!(escrow_cache.len(), 1, "Escrow should be in cache");
-    assert_eq!(escrow_cache[0].escrow_id, escrow.escrow_id);
-    drop(escrow_cache);
-
-    // Try to add the same escrow again (duplicate)
-    {
-        let mut escrow_cache = monitor.escrow_cache.write().await;
-        // Simulate duplicate detection logic from monitor_connected_chain
-        if !escrow_cache.iter().any(|cached| {
-            cached.escrow_id == escrow.escrow_id && cached.chain_id == escrow.chain_id
-        }) {
-            escrow_cache.push(escrow.clone());
-        }
-    }
-
-    // Verify duplicate was not added
-    let escrow_cache = monitor.escrow_cache.read().await;
-    assert_eq!(
-        escrow_cache.len(),
-        1,
-        "Duplicate escrow should not be added to cache"
-    );
-    assert_eq!(escrow_cache[0].escrow_id, escrow.escrow_id);
-}
 
 /// Test that duplicate intent events are rejected (not added to cache)
 /// Why: Verify that the monitor correctly detects and rejects duplicate intent events
@@ -170,10 +120,6 @@ async fn test_monitor_initialization_and_basic_ops() {
     let intent_cache = monitor.event_cache.read().await;
     assert!(intent_cache.is_empty(), "Intent cache should be empty initially");
     drop(intent_cache);
-
-    let escrow_cache = monitor.escrow_cache.read().await;
-    assert!(escrow_cache.is_empty(), "Escrow cache should be empty initially");
-    drop(escrow_cache);
 
     // Add an intent
     let intent = create_default_intent_mvm();

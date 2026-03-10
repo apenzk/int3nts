@@ -49,7 +49,7 @@ log "   Solver EVM (connected): $SOLVER_EVM_ADDR"
 
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
-DESIRED_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals, on EVM connected chain)
+DESIRED_AMOUNT="985000"   # 0.985 USDcon = (offered - fee) * rate = (1000000 - 15000) * 1.0
 HUB_CHAIN_ID=1
 FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 
@@ -58,7 +58,7 @@ log " Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Offered amount: $OFFERED_AMOUNT 10e-6.USDhub (1 USDhub on hub)"
-log "   Desired amount: $DESIRED_AMOUNT 10e-6.USDcon (1 USDcon on EVM connected chain)"
+log "   Desired amount: $DESIRED_AMOUNT 10e-6.USDcon (0.985 USDcon on EVM, fee-adjusted)"
 
 log ""
 log "   - Getting USD token metadata addresses..."

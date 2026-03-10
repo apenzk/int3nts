@@ -7,6 +7,7 @@ pub mod hub;
 pub mod connected_mvm_client;
 pub mod connected_evm_client;
 pub mod connected_svm_client;
+pub mod tx_hash;
 
 // Re-export for convenience
 pub use hub::{HubChainClient, IntentCreatedEvent};

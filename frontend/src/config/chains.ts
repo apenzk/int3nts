@@ -14,6 +14,7 @@ export interface ChainConfig {
   intentContractAddress?: string; // Intent contract address (for Movement hub chain)
   escrowContractAddress?: string; // Escrow contract address (for EVM chains)
   outflowValidatorAddress?: string; // Outflow validator contract address (for EVM chains)
+  mvmEscrowModuleAddress?: string; // Escrow module address (for MVM connected chains)
   svmProgramId?: string; // Escrow program ID (for SVM chains)
   svmOutflowProgramId?: string; // Outflow validator program ID (for SVM chains)
   svmGmpEndpointId?: string; // GMP endpoint program ID (for SVM chains)
@@ -136,6 +137,17 @@ export function getOutflowValidatorAddress(chainId: string): string {
     throw new Error(`Outflow validator address not configured for chain: ${chainId}`);
   }
   return chainConfig.outflowValidatorAddress;
+}
+
+/**
+ * Get the MVM escrow module address for an MVM connected chain.
+ */
+export function getMvmEscrowModuleAddress(chainId: string): string {
+  const chainConfig = CHAIN_CONFIGS[chainId];
+  if (!chainConfig?.mvmEscrowModuleAddress) {
+    throw new Error(`MVM escrow module address not configured for chain: ${chainId}`);
+  }
+  return chainConfig.mvmEscrowModuleAddress;
 }
 
 /**

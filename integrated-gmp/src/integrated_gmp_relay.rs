@@ -991,7 +991,7 @@ impl NativeGmpRelay {
         let tx_hash = extract_transaction_hash(output_str);
 
         // Verify VM execution succeeded (CLI exit code 0 doesn't guarantee VM success)
-        let vm_success = check_vm_status_success(output_str);
+        let vm_success = check_vm_status_success(output_str)?;
         if !vm_success {
             error!(
                 "MVM {} deliver_message VM execution failed: nonce={}, tx_hash={:?}, stdout={}",
@@ -1190,8 +1190,13 @@ impl NativeGmpRelay {
 
         // topics[1] = dstChainId (uint32, padded to 32 bytes)
         let dst_chain_id_hex = log.topics[1].strip_prefix("0x").unwrap_or(&log.topics[1]);
-        let dst_chain_id = u32::from_str_radix(dst_chain_id_hex.trim_start_matches('0'), 16)
-            .unwrap_or(0);
+        let dst_chain_id = match u32::from_str_radix(dst_chain_id_hex.trim_start_matches('0'), 16) {
+            Ok(id) => id,
+            Err(e) => {
+                warn!("Failed to parse EVM MessageSent dstChainId hex '{}': {}", dst_chain_id_hex, e);
+                return None;
+            }
+        };
 
         // Parse non-indexed data: (bytes32 dstAddr, bytes payload, uint64 nonce)
         let data = log.data.strip_prefix("0x").unwrap_or(&log.data);
@@ -1207,15 +1212,26 @@ impl NativeGmpRelay {
 
         // Word 1 (64..128): offset to payload data (should be 96 = 0x60)
         let payload_offset_hex = &data[64..128];
-        let payload_offset = usize::from_str_radix(
+        let payload_offset = match usize::from_str_radix(
             payload_offset_hex.trim_start_matches('0'),
             16,
-        )
-        .unwrap_or(96);
+        ) {
+            Ok(offset) => offset,
+            Err(e) => {
+                warn!("Failed to parse EVM MessageSent payload offset hex '{}': {}", payload_offset_hex, e);
+                return None;
+            }
+        };
 
         // Word 2 (128..192): nonce (uint64)
         let nonce_hex = &data[128..192];
-        let nonce = u64::from_str_radix(nonce_hex.trim_start_matches('0'), 16).unwrap_or(0);
+        let nonce = match u64::from_str_radix(nonce_hex.trim_start_matches('0'), 16) {
+            Ok(n) => n,
+            Err(e) => {
+                warn!("Failed to parse EVM MessageSent nonce hex '{}': {}", nonce_hex, e);
+                return None;
+            }
+        };
 
         // Payload at offset (in bytes, so offset*2 in hex chars from start of data)
         let payload_start = payload_offset * 2;
@@ -1226,11 +1242,16 @@ impl NativeGmpRelay {
 
         // Payload length
         let payload_len_hex = &data[payload_start..payload_start + 64];
-        let payload_len = usize::from_str_radix(
+        let payload_len = match usize::from_str_radix(
             payload_len_hex.trim_start_matches('0'),
             16,
-        )
-        .unwrap_or(0);
+        ) {
+            Ok(len) => len,
+            Err(e) => {
+                warn!("Failed to parse EVM MessageSent payload length hex '{}': {}", payload_len_hex, e);
+                return None;
+            }
+        };
 
         // Payload data
         let payload_data_start = payload_start + 64;
@@ -1963,32 +1984,42 @@ pub fn normalize_address(addr: &str) -> String {
 ///
 /// The Aptos CLI returns JSON with `"success": true/false` and `"vm_status"` fields.
 /// CLI exit code 0 alone doesn't guarantee VM execution success on all networks.
-pub fn check_vm_status_success(output: &str) -> bool {
+pub fn check_vm_status_success(output: &str) -> Result<bool, anyhow::Error> {
     // Try to parse as JSON
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(output) {
         // Check "Result"."success" (standard Aptos CLI format)
         if let Some(result) = json.get("Result") {
             if let Some(success) = result.get("success") {
-                return success.as_bool().unwrap_or(false);
+                return success.as_bool().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "VM status 'success' field is not a boolean: {:?}",
+                        success
+                    )
+                });
             }
         }
         // Check top-level "success"
         if let Some(success) = json.get("success") {
-            return success.as_bool().unwrap_or(false);
+            return success.as_bool().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "VM status 'success' field is not a boolean: {:?}",
+                    success
+                )
+            });
         }
     }
 
     // If we can't parse JSON, check for string indicators
     if output.contains("\"success\": true") || output.contains("\"success\":true") {
-        return true;
+        return Ok(true);
     }
     if output.contains("\"success\": false") || output.contains("\"success\":false") {
-        return false;
+        return Ok(false);
     }
 
     // If no success field found at all, assume CLI exit code was sufficient
     // (conservative: don't break on unknown output formats)
-    true
+    Ok(true)
 }
 
 /// Extract transaction hash from CLI output (handles both traditional and JSON formats).

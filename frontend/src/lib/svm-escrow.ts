@@ -191,6 +191,29 @@ export function parseEscrowAccount(data: Buffer): EscrowAccount {
 }
 
 /**
+ * Check if IntentRequirements have been delivered via GMP for an intent on SVM.
+ *
+ * Derives the requirements PDA and checks if the account exists on-chain.
+ * Returns true once the GMP relay has delivered requirements.
+ *
+ * @param chainKey - Chain config key (e.g. 'svm-devnet')
+ * @param intentId - 32-byte hex intent ID (with 0x prefix)
+ */
+export async function checkHasRequirementsSvm(
+  chainKey: string,
+  intentId: string,
+): Promise<boolean> {
+  const programId = new PublicKey(getSvmProgramId(chainKey));
+  const rpcUrl = getRpcUrl(chainKey);
+  const connection = new Connection(rpcUrl);
+
+  const [requirementsPda] = getRequirementsPda(intentId, programId);
+  const accountInfo = await connection.getAccountInfo(requirementsPda);
+
+  return accountInfo !== null;
+}
+
+/**
  * Check if an outflow intent has been fulfilled on the SVM connected chain.
  *
  * Reads the outflow validator's requirements PDA and checks the `fulfilled` field.

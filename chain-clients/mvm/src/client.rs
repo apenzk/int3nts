@@ -129,17 +129,17 @@ impl MvmClient {
                     let event_type = event_json
                         .get("type")
                         .and_then(|t| t.as_str())
-                        .unwrap_or("")
+                        .context("Event missing 'type' field")?
                         .to_string();
                     let event_data = event_json
                         .get("data")
                         .cloned()
-                        .unwrap_or(serde_json::Value::Null);
+                        .context("Event missing 'data' field")?;
 
                     let sequence_number = event_json
                         .get("sequence_number")
                         .and_then(|s| s.as_str())
-                        .unwrap_or("0")
+                        .context("Event missing 'sequence_number' field")?
                         .to_string();
 
                     let guid = event_json
@@ -909,8 +909,15 @@ impl MvmClient {
                 }
                 (0..hex_clean.len())
                     .step_by(2)
-                    .filter_map(|i| u8::from_str_radix(&hex_clean[i..i + 2], 16).ok())
-                    .collect()
+                    .map(|i| {
+                        u8::from_str_radix(&hex_clean[i..i + 2], 16).map_err(|e| {
+                            anyhow::anyhow!(
+                                "Invalid hex byte '{}' at offset {} in {} address for solver '{}': {}",
+                                &hex_clean[i..i + 2], i, chain_label, solver_addr, e
+                            )
+                        })
+                    })
+                    .collect::<Result<Vec<u8>>>()?
             } else {
                 let vec0_json = serde_json::to_string(bytes_val)
                     .unwrap_or_else(|_| "failed to serialize".to_string());
@@ -992,7 +999,8 @@ impl MvmClient {
 
         let status = response.status();
         if !status.is_success() {
-            let error_body = response.text().await.unwrap_or_default();
+            let error_body = response.text().await
+                .unwrap_or_else(|_| "<failed to read error body>".to_string());
             return Err(anyhow::anyhow!(
                 "View function request failed with status {}: {}",
                 status,
@@ -1033,7 +1041,7 @@ impl MvmClient {
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect()
             })
-            .unwrap_or_default();
+            .context("Unexpected response format from get_active_requesters view function")?;
 
         Ok(addresses)
     }
@@ -1063,7 +1071,7 @@ impl MvmClient {
                     .filter_map(|v| v.as_str().map(|s| s.to_string()))
                     .collect()
             })
-            .unwrap_or_default();
+            .context("Unexpected response format from list_all_solver_addresses view function")?;
 
         Ok(addresses)
     }

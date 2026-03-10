@@ -226,17 +226,14 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 **Public Functions** (Rust):
 
 - `EventMonitor::poll_hub_events()` - Poll hub chain for intent events
-- `EventMonitor::poll_connected_events()` - Poll Move VM connected chain for escrow events
-- `EventMonitor::poll_evm_events()` - Poll EVM connected chain for escrow events
 - `EventMonitor::monitor_hub_chain()` - Monitor hub chain continuously
-- `EventMonitor::monitor_connected_chain()` - Monitor Move VM connected chain continuously
-- `EventMonitor::monitor_evm_chain()` - Monitor EVM connected chain continuously
-- `EventMonitor::get_cached_events()` - Get cached events
+- `EventMonitor::get_cached_events()` - Get cached intent events
+- `EventMonitor::get_cached_fulfillment_events()` - Get cached fulfillment events
 
 **Data Structures Exported**:
 
-- `RequestIntentEvent` - Normalized request-intent event structure
-- `EscrowEvent` - Normalized escrow event structure with `chain_type` field (Mvm, Evm, Svm) set by coordinator based on monitor that discovered it
+- `IntentEvent` - Normalized intent event structure
+- `FulfillmentEvent` - Normalized fulfillment event structure
 - `FulfillmentEvent` - Normalized fulfillment event structure
 
 ### Coordinator: Internal Components

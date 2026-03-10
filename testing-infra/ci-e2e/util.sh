@@ -371,22 +371,14 @@ display_service_logs() {
     local events_response
     events_response=$(curl -s "${coordinator_url}/events" 2>/dev/null)
     if [ $? -eq 0 ]; then
-        local escrow_count fulfillment_count intent_count
-        escrow_count=$(echo "$events_response" | jq -r '.data.escrow_events | length' 2>/dev/null || echo "0")
+        local fulfillment_count intent_count
         fulfillment_count=$(echo "$events_response" | jq -r '.data.fulfillment_events | length' 2>/dev/null || echo "0")
         intent_count=$(echo "$events_response" | jq -r '.data.intent_events | length' 2>/dev/null || echo "0")
 
         log_and_echo ""
         log_and_echo " Coordinator events:"
         log_and_echo "   Intent events: $intent_count"
-        log_and_echo "   Escrow events: $escrow_count"
         log_and_echo "   Fulfillment events: $fulfillment_count"
-
-        if [ "$escrow_count" != "0" ]; then
-            log_and_echo ""
-            log_and_echo "   Escrow details:"
-            echo "$events_response" | jq -r '.data.escrow_events[] | "      \(.intent_id) - amount: \(.offered_amount)"' 2>/dev/null || log_and_echo "      (parse error)"
-        fi
     fi
 
     log_and_echo ""
@@ -1438,6 +1430,24 @@ assert_solver_rejects_draft() {
         log_and_echo "❌ ERROR: assert_solver_rejects_draft() requires requester_addr, draft_data_json, and expiry_time"
         exit 1
     fi
+
+    # Describe what we're testing (token/chain varies by flow direction)
+    local chain_upper
+    chain_upper=$(echo "$E2E_CHAIN" | tr '[:lower:]' '[:upper:]')
+    local token_desc
+    if [ "$E2E_FLOW" = "inflow" ]; then
+        token_desc="USDhub on hub"
+    else
+        token_desc="USDcon on connected ${chain_upper}"
+    fi
+
+    log_and_echo ""
+    log_and_echo " Verify solver rejects intent when liquidity is insufficient..."
+    log_and_echo "=========================================================================="
+    log_and_echo "   Solver started with 2,000,000 ${token_desc}, spent 985,000 fulfilling intent 1."
+    log_and_echo "   Remaining: 1,015,000. Second intent requests 1,015,000 desired."
+    log_and_echo "   Liquidity check: available >= requested + min_balance => 1,015,000 >= 1,015,000 + 1 => false."
+    log_and_echo "   Solver must reject: not enough to cover the request AND retain the min_balance threshold."
 
     local solver_log_file="${LOG_DIR:-$PROJECT_ROOT/.tmp/e2e-tests}/solver.log"
 

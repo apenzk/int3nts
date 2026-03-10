@@ -33,9 +33,8 @@ Tokens locked on hub, solver fulfills on connected chain.
 ### Steps
 
 1. **Poll coordinator** for pending outflow intents (`GET /events`)
-2. **Check readiness** -- use coordinator's `ready_on_connected_chain` flag
+2. **Check readiness** -- poll connected chain directly via `has_outflow_requirements(intent_id)`
    - IntentRequirements must arrive on connected chain before solver can act
-   - Alternatively, poll connected chain `has_outflow_requirements(intent_id)` directly
 3. **Fulfill on connected chain** -- call the validation contract:
    - MVM: `fulfill_intent(solver, intent_id, token_metadata)`
    - EVM: `fulfillIntent(intentId, token)`
@@ -95,4 +94,4 @@ No integrated-gmp URL is needed. The solver never calls the relay directly.
 | `GET /events?intent_id=0x...` | Get events for specific intent |
 | `POST /negotiate` | Submit negotiation offers |
 
-The `ready_on_connected_chain` flag in event responses indicates whether GMP has delivered IntentRequirements to the connected chain.
+To check whether GMP has delivered IntentRequirements to the connected chain, solvers query the connected chain directly via `has_outflow_requirements(intent_id)`.

@@ -10,7 +10,7 @@
 use coordinator::config::{
     ApiConfig, ChainConfig, Config, CoordinatorConfig, EvmChainConfig, SvmChainConfig,
 };
-use coordinator::monitor::{ChainType, EscrowEvent, FulfillmentEvent, IntentEvent};
+use coordinator::monitor::{FulfillmentEvent, IntentEvent};
 use chain_clients_mvm::MvmTransaction;
 
 // ============================================================================
@@ -23,9 +23,6 @@ use chain_clients_mvm::MvmTransaction;
 pub const DUMMY_INTENT_ID: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000001";
 
-/// Dummy escrow ID (Move VM format, 64 hex characters)
-pub const DUMMY_ESCROW_ID_MVM: &str =
-    "0x0000000000000000000000000000000000000000000000000000000000000002";
 
 /// Dummy intent ID for normalization tests (64 hex chars, full format)
 /// Used in svm_tests.rs, config_tests.rs, and signature_test.rs
@@ -54,8 +51,6 @@ pub const DUMMY_SOLVER_ADDR_HUB: &str =
 pub const DUMMY_SOLVER_ADDR_MVMCON: &str =
     "0x0000000000000000000000000000000000000000000000000000000000000008";
 
-/// Dummy solver address (EVM format, 20 bytes)
-pub const DUMMY_SOLVER_ADDR_EVM: &str = "0x0000000000000000000000000000000000000009";
 
 /// Dummy requester address (SVM format, 32 bytes)
 #[allow(dead_code)]
@@ -229,7 +224,6 @@ pub fn create_default_intent_mvm() -> IntentEvent {
         connected_chain_id: Some(2),
         expiry_time: 0, // Should be set explicitly in tests
         timestamp: 0,
-        ready_on_connected_chain: false,
     }
 }
 
@@ -288,58 +282,6 @@ pub fn create_default_fulfillment() -> FulfillmentEvent {
         solver_hub_addr: DUMMY_SOLVER_ADDR_MVMCON.to_string(),
         provided_metadata: "{}".to_string(),
         provided_amount: 0,
-        timestamp: 0, // Should be set explicitly in tests
-    }
-}
-
-/// Create a default escrow event with test values for Move VM connected chain.
-/// This can be customized using Rust's struct update syntax:
-/// ```
-/// let escrow = create_default_escrow_event();
-/// let custom_escrow = EscrowEvent {
-///     escrow_id: "0xescrow_id".to_string(),
-///     intent_id: "0xintent_id".to_string(),
-///     offered_amount: 1000,
-///     ..escrow
-/// };
-/// ```
-#[allow(dead_code)]
-pub fn create_default_escrow_event() -> EscrowEvent {
-    EscrowEvent {
-        escrow_id: DUMMY_ESCROW_ID_MVM.to_string(),
-        intent_id: DUMMY_INTENT_ID.to_string(),
-        offered_metadata: "{\"inner\":\"offered_meta\"}".to_string(),
-        offered_amount: 1000,
-        desired_metadata: "{\"inner\":\"desired_meta\"}".to_string(),
-        desired_amount: 0, // Escrow desired_amount must be 0 (validation requirement)
-        revocable: false,
-        requester_addr: DUMMY_REQUESTER_ADDR_MVMCON.to_string(), // EscrowEvent.requester_addr is the requester who created the escrow and locked funds (for inflow escrows on connected chain)
-        reserved_solver_addr: Some(DUMMY_SOLVER_ADDR_HUB.to_string()),
-        chain_id: 2,
-        chain_type: ChainType::Mvm,
-        expiry_time: 0,    // Should be set explicitly in tests
-        timestamp: 0, // Should be set explicitly in tests
-    }
-}
-
-/// Create a default escrow event with test values for EVM connected chain.
-/// This reflects real EVM escrow behavior where desired_metadata is always empty
-/// because the EVM IntentEscrow contract doesn't store this field.
-#[allow(dead_code)]
-pub fn create_default_escrow_event_evm() -> EscrowEvent {
-    EscrowEvent {
-        escrow_id: DUMMY_INTENT_ID.to_string(), // For EVM, escrow_id = intent_id
-        intent_id: DUMMY_INTENT_ID.to_string(),
-        offered_metadata: format!("{{\"token\":\"{}\"}}", DUMMY_TOKEN_ADDR_EVM), // Token address in JSON
-        offered_amount: 1000,
-        desired_metadata: "{}".to_string(), // EVM escrows don't store desired_metadata on-chain
-        desired_amount: 0, // Not used for EVM inflow escrows
-        revocable: false,
-        requester_addr: DUMMY_REQUESTER_ADDR_EVM.to_string(), // EVM address format (20 bytes)
-        reserved_solver_addr: Some(DUMMY_SOLVER_ADDR_EVM.to_string()), // EVM address format (20 bytes)
-        chain_id: 31337, // Matches build_test_config_with_evm
-        chain_type: ChainType::Evm,
-        expiry_time: 0,    // Should be set explicitly in tests
         timestamp: 0, // Should be set explicitly in tests
     }
 }

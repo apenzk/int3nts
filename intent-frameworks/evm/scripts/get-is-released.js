@@ -3,6 +3,7 @@
 //! This script checks if an escrow has been auto-released via FulfillmentProof.
 
 const hre = require("hardhat");
+const { requireEnvVars, toBytes32, runMain } = require("./helpers");
 
 /// Checks if escrow is released for an intent
 ///
@@ -13,40 +14,17 @@ const hre = require("hardhat");
 /// # Returns
 /// Outputs "isReleased: true" or "isReleased: false" on success.
 async function main() {
-  const escrowGmpAddress = process.env.ESCROW_GMP_ADDR;
-  const intentIdHex = process.env.INTENT_ID_EVM;
-
-  if (!escrowGmpAddress || !intentIdHex) {
-    const error = new Error("Missing required environment variables: ESCROW_GMP_ADDR, INTENT_ID_EVM");
-    console.error("Error:", error.message);
-    if (require.main === module) {
-      process.exit(1);
-    }
-    throw error;
-  }
+  const env = requireEnvVars(["ESCROW_GMP_ADDR", "INTENT_ID_EVM"]);
 
   const IntentInflowEscrow = await hre.ethers.getContractFactory("IntentInflowEscrow");
-  const escrowGmp = IntentInflowEscrow.attach(escrowGmpAddress);
+  const escrowGmp = IntentInflowEscrow.attach(env.ESCROW_GMP_ADDR);
 
-  // Ensure intentIdHex is properly formatted as bytes32
-  let intentId = intentIdHex;
-  if (!intentId.startsWith("0x")) {
-    intentId = "0x" + intentId;
-  }
-  // Pad to 64 hex characters (32 bytes)
-  intentId = "0x" + intentId.slice(2).padStart(64, '0');
+  const intentId = toBytes32(env.INTENT_ID_EVM);
 
   const isReleased = await escrowGmp.isReleased(intentId);
   console.log(`isReleased: ${isReleased}`);
 }
 
-if (require.main === module) {
-  main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-      console.error("Error:", error.message);
-      process.exit(1);
-    });
-}
+runMain(main, module);
 
 module.exports = { main };

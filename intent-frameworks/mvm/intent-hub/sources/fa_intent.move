@@ -46,7 +46,7 @@ module mvmt_intent::fa_intent {
         intent_id: Option<address>, // Optional cross-chain intent_id for linking (None for regular intents)
         offered_chain_id: u64,
         desired_chain_id: u64,
-        fee_in_offered_token: u64 // Fee embedded in exchange rate (reduces desired_amount)
+        fee_in_offered_token: u64 // Fee in offered token units (embedded in amounts by frontend, tracked for transparency)
     }
 
     /// Getter for desired_metadata to allow access from other modules
@@ -181,7 +181,7 @@ module mvmt_intent::fa_intent {
         revocable: bool,
         intent_id: Option<address>, // Optional cross-chain intent_id (None for regular intents)
         requester_addr_connected_chain: Option<address>, // Optional requester address on connected chain (for inflow intents)
-        fee_in_offered_token: u64 // Fee embedded in exchange rate (reduces desired_amount)
+        fee_in_offered_token: u64 // Fee in offered token units (embedded in amounts by frontend, tracked for transparency)
     ): Object<Intent<FungibleStoreManager, FALimitOrder>> acquires ChainInfo {
         // Capture metadata before depositing
         let offered_metadata = fungible_asset::asset_metadata(&offered_fungible_asset);

@@ -123,7 +123,7 @@ extract_escrow_contract_address() {
 
     local contract_addr=""
 
-    # First, try to get from chain-info.env (set by deploy-contract.sh)
+    # First, try to get from chain-info.env (set by deploy-contracts.sh)
     local chain_info_file="$PROJECT_ROOT/.tmp/chain-info.env"
     if [ -f "$chain_info_file" ]; then
         contract_addr=$(grep "^ESCROW_GMP_ADDR=" "$chain_info_file" 2>/dev/null | cut -d'=' -f2 | tr -d '\n')

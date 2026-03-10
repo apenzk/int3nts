@@ -92,28 +92,10 @@ export interface IntentEvent {
   connected_chain_id: number | null;
   expiry_time: number;
   timestamp: number;
-  ready_on_connected_chain: boolean;
-}
-
-export interface EscrowEvent {
-  escrow_id: string;
-  intent_id: string;
-  offered_metadata: { inner: string };
-  offered_amount: number;
-  desired_metadata: { inner: string };
-  desired_amount: number;
-  revocable: boolean;
-  requester_addr: string;
-  reserved_solver_addr: string | null;
-  chain_id: number;
-  chain_type: 'Mvm' | 'Evm' | 'Svm';
-  expiry_time: number;
-  timestamp: number;
 }
 
 export interface EventsResponse {
   intent_events: IntentEvent[];
-  escrow_events: EscrowEvent[];
   fulfillment_events: any[];
 }
 

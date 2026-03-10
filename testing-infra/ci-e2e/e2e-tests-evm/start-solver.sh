@@ -192,6 +192,12 @@ if [ -z "$SOLVER_EVM_ADDR" ]; then
 fi
 log "   Exported SOLVER_EVM_ADDR=$SOLVER_EVM_ADDR"
 
+# Export solver's EVM private key for outflow fulfillment transactions
+# The solver config references this via private_key_env = "SOLVER_EVM_PRIVATE_KEY"
+# Hardhat account #2 well-known private key (from default mnemonic)
+export SOLVER_EVM_PRIVATE_KEY="0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+log "   Exported SOLVER_EVM_PRIVATE_KEY (Hardhat account #2)"
+
 # Unset testnet keys to prevent accidental use (E2E tests use profiles only)
 unset MOVEMENT_SOLVER_PRIVATE_KEY
 log "   Unset MOVEMENT_SOLVER_PRIVATE_KEY (E2E tests use profile keys only)"

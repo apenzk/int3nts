@@ -683,7 +683,12 @@ fn process_deliver_message(
     // Check if routing config exists and is valid
     let (routing_pda, _) = Pubkey::find_program_address(&[seeds::ROUTING_SEED], program_id);
     let routing_config = if routing_account.key == &routing_pda && !routing_account.data_is_empty() {
-        RoutingConfig::try_from_slice(&routing_account.data.borrow()).ok()
+        // Fail explicitly if routing PDA exists with data but can't be deserialized —
+        // this indicates corrupted state, not a missing config.
+        Some(
+            RoutingConfig::try_from_slice(&routing_account.data.borrow())
+                .map_err(|_| GmpError::AccountNotInitialized)?
+        )
     } else {
         None
     };

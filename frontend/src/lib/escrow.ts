@@ -62,7 +62,7 @@ export function intentIdToEvmBytes32(intentId: string): `0x${string}` {
   return `0x${hex.padStart(64, '0')}` as `0x${string}`;
 }
 
-import { getEscrowContractAddress as getEscrowFromChains, getOutflowValidatorAddress, getRpcUrl } from '@/config/chains';
+import { getEscrowContractAddress as getEscrowFromChains, getMvmEscrowModuleAddress, getOutflowValidatorAddress, getRpcUrl } from '@/config/chains';
 
 /**
  * Get escrow contract address from chain configuration
@@ -115,6 +115,45 @@ export async function checkHasRequirements(
   // ABI bool: 32 bytes, last byte 0x01 = true
   const result: string = json.result || '0x';
   return result.endsWith('1');
+}
+
+/**
+ * Check if IntentRequirements have been delivered via GMP for an intent on MVM.
+ *
+ * Calls the `has_requirements(vector<u8>)` view function on the MVM connected
+ * chain's `intent_inflow_escrow` module. Returns true once the GMP relay has
+ * delivered requirements.
+ *
+ * @param chainKey - Chain config key (e.g. 'movement-connected')
+ * @param intentId - 32-byte hex intent ID (with 0x prefix)
+ */
+export async function checkHasRequirementsMvm(
+  chainKey: string,
+  intentId: string,
+): Promise<boolean> {
+  const rpcUrl = getRpcUrl(chainKey);
+  const moduleAddr = getMvmEscrowModuleAddress(chainKey);
+
+  const intentHex = intentId.startsWith('0x') ? intentId.slice(2) : intentId;
+  const intentPadded = intentHex.padStart(64, '0');
+
+  const response = await fetch(`${rpcUrl}/view`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      function: `${moduleAddr}::intent_inflow_escrow::has_requirements`,
+      type_arguments: [],
+      arguments: [`0x${intentPadded}`],
+    }),
+  });
+
+  const json = await response.json();
+  if (json.error_code || json.message) {
+    throw new Error(`MVM has_requirements view call failed: ${json.message || JSON.stringify(json)}`);
+  }
+
+  // Response is a bare array like [true] or [false]
+  return Array.isArray(json) && json[0] === true;
 }
 
 /**

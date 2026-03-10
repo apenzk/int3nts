@@ -46,7 +46,7 @@ log "   Solver SVM (hex):                      $SOLVER_SVM_ADDR"
 
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 OFFERED_AMOUNT="1000000"
-DESIRED_AMOUNT="1000000"
+DESIRED_AMOUNT="985000"   # (offered - fee) * rate = (1000000 - 15000) * 1.0
 FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 
 log ""
@@ -54,7 +54,7 @@ log " Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Offered amount: $OFFERED_AMOUNT (1 USDcon on connected SVM)"
-log "   Desired amount: $DESIRED_AMOUNT (1 USDhub on hub)"
+log "   Desired amount: $DESIRED_AMOUNT (0.985 USDhub on hub, fee-adjusted)"
 
 log ""
 log "   - Getting USD token metadata addresses..."

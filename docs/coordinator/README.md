@@ -1,33 +1,19 @@
 # Coordinator Service
 
-A read-only service that monitors blockchain events, caches them for querying, and provides negotiation routing for solvers.
+A read-only service that monitors hub chain events, caches them for querying, and provides negotiation routing for solvers.
 
-The coordinator monitors intent and escrow events across hub and connected chains:
+The coordinator monitors the hub chain only:
 
 - Monitors intent events on the hub chain (intent creation, fulfillment)
-- Monitors escrow events on connected chains (MVM, EVM, and SVM)
-- Monitors IntentRequirementsReceived events on connected chains (for readiness tracking)
 - Caches events for efficient querying
-
-Supports monitoring multiple connected chains simultaneously. MVM chains monitor `OracleLimitOrderEvent` and `IntentRequirementsReceived` events; EVM chains monitor `EscrowInitialized` and `IntentRequirementsReceived` events; SVM chains monitor escrow PDA accounts and `IntentRequirementsReceived` logs.
 
 ## Architecture
 
 ### Components
 
-- **Event Monitor**: Listens for intent and escrow events on hub and connected chains (MVM, EVM, and SVM)
-- **Readiness Tracker**: Monitors IntentRequirementsReceived events to mark intents as ready for fulfillment/escrow
+- **Event Monitor**: Listens for intent and fulfillment events on the hub chain
 - **Event Cache**: Stores discovered events for API querying
 - **Negotiation Router**: Coordinates draft intent submission and solver matching (FCFS)
-
-### Readiness Tracking
-
-The coordinator tracks when intent requirements have been delivered to connected chains (via GMP):
-
-- **Outflow intents**: Marks intent as `ready_on_connected_chain: true` when solver can fulfill on connected chain
-- **Inflow intents**: Marks intent as ready when requester can create/fill escrow on connected chain
-
-This allows frontend applications to know when to proceed with the next step in the intent lifecycle, without needing to directly query the connected chain or Integrated GMP service.
 
 ## Project Structure
 
@@ -35,7 +21,7 @@ This allows frontend applications to know when to proceed with the next step in 
 coordinator/
 ├── config/          # Configuration files (no private keys)
 ├── src/
-│   ├── monitor/     # Event monitoring (hub and connected chains)
+│   ├── monitor/     # Event monitoring (hub chain)
 │   ├── storage/     # Event caching and retrieval
 │   ├── api/         # REST API server (read-only + negotiation)
 │   └── config/      # Configuration loading

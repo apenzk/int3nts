@@ -47,7 +47,7 @@ log "   Solver MVM (connected):                $SOLVER_MVMCON_ADDR"
 EXPIRY_TIME=$(date -d "+1 hour" +%s)
 # Token amounts: 1 USDhub / 1 USDcon (6 decimals = 1_000_000)
 OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
-DESIRED_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals, on connected MVM chain)
+DESIRED_AMOUNT="985000"   # 0.985 USDcon = (offered - fee) * rate = (1000000 - 15000) * 1.0
 HUB_CHAIN_ID=1
 FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 EVM_ADDR="0x0000000000000000000000000000000000000001"
@@ -57,7 +57,7 @@ log " Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Offered amount: $OFFERED_AMOUNT (1 USDhub on hub chain)"
-log "   Desired amount: $DESIRED_AMOUNT (1 USDcon on connected MVM chain)"
+log "   Desired amount: $DESIRED_AMOUNT (0.985 USDcon on connected MVM, fee-adjusted)"
 
 # Get test tokens addresses from profiles
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")

@@ -57,7 +57,7 @@ EXPIRY_TIME=$(date -d "+1 hour" +%s)
 # Generate solver signature using helper function
 # For cross-chain intents: offered tokens are on connected chain, desired tokens are on hub
 OFFERED_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals, on EVM connected chain)
-DESIRED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
+DESIRED_AMOUNT="985000"   # 0.985 USDhub = (offered - fee) * rate = (1000000 - 15000) * 1.0
 HUB_CHAIN_ID=1
 FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000
 EVM_ADDR="0x0000000000000000000000000000000000000001"
@@ -67,7 +67,7 @@ log " Configuration:"
 log "   Intent ID: $INTENT_ID"
 log "   Expiry time: $EXPIRY_TIME"
 log "   Offered amount: $OFFERED_AMOUNT (1 USDcon on connected EVM chain, Chain 3)"
-log "   Desired amount: $DESIRED_AMOUNT (1 USDhub on hub)"
+log "   Desired amount: $DESIRED_AMOUNT (0.985 USDhub on hub, fee-adjusted)"
 
 # Check and display initial balances using common function
 log ""

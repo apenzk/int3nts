@@ -34,7 +34,7 @@ SOLVER_EVM_ADDR=$(get_hardhat_account_address "2")
 
 if [ -z "$ESCROW_GMP_ADDR" ]; then
     log_and_echo "❌ ERROR: ESCROW_GMP_ADDR not found. Please ensure GMP contracts are deployed."
-    log_and_echo "   Run: ./testing-infra/ci-e2e/chain-connected-evm/deploy-contract.sh"
+    log_and_echo "   Run: ./testing-infra/ci-e2e/chain-connected-evm/deploy-contracts.sh"
     exit 1
 fi
 
@@ -80,7 +80,7 @@ log "   Intent ID (EVM): $INTENT_ID_EVM"
 
 GMP_DELIVERED=0
 for attempt in $(seq 1 30); do
-    HAS_REQ=$(has_requirements_evm "$ESCROW_GMP_ADDR" "$INTENT_ID_EVM" 2>/dev/null || echo "false")
+    HAS_REQ=$(has_requirements "$ESCROW_GMP_ADDR" "$INTENT_ID_EVM" 2>/dev/null || echo "false")
     if [ "$HAS_REQ" = "true" ]; then
         log "   ✅ IntentRequirements delivered via GMP (attempt $attempt)"
         GMP_DELIVERED=1

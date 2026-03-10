@@ -45,8 +45,7 @@ Response (abbreviated)
         "reserved_solver_addr": "0x...",
         "connected_chain_id": null,
         "expiry_time": 2000000,
-        "timestamp": 1000000,
-        "ready_on_connected_chain": false
+        "timestamp": 1000000
       }
     ],
     "escrow_events": [
@@ -70,17 +69,6 @@ Response (abbreviated)
   }
 }
 ```
-
-### Intent Readiness Tracking
-
-The `ready_on_connected_chain` field in intent events indicates whether the intent requirements have been delivered to the connected chain and are ready for fulfillment or escrow creation:
-
-- **`false`** (default): Intent created on hub chain, but requirements not yet delivered to connected chain via GMP
-- **`true`**: IntentRequirementsReceived event observed on connected chain - intent is ready for:
-  - **Outflow intents**: Solver can fulfill the intent on the connected chain
-  - **Inflow intents**: Requester can create/fill escrow on the connected chain
-
-The coordinator monitors `IntentRequirementsReceived` events from connected chain outflow validators to update this status. Frontend applications can poll the `/events` endpoint and check this field to determine when to proceed with the next step in the intent lifecycle.
 
 ## Negotiation Routing Endpoints
 

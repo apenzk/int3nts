@@ -20,7 +20,7 @@ fi
 source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 
 if [ -z "$USD_SVM_MINT_ADDR" ] || [ -z "$REQUESTER_SVM_TOKEN_ACCOUNT" ] || [ -z "$SOLVER_SVM_PUBKEY" ] || [ -z "$SVM_PROGRAM_ID" ]; then
-    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh and deploy-contract.sh first."
+    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh and deploy-contracts.sh first."
     exit 1
 fi
 
@@ -39,7 +39,7 @@ SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}"
 
 GMP_DELIVERED=0
 for attempt in $(seq 1 30); do
-    HAS_REQ=$("$CLI_BIN" check-requirements \
+    HAS_REQ=$("$CLI_BIN" has-requirements \
         --program-id "$SVM_PROGRAM_ID" --intent-id "$INTENT_ID" --rpc "$SVM_RPC_URL" 2>/dev/null \
         | grep -Eo 'HasRequirements: (true|false)' | awk '{print $2}' | tail -1 | tr -d '\n')
     if [ "$HAS_REQ" = "true" ]; then
