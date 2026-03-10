@@ -146,11 +146,25 @@ impl OutflowService {
         info!("Found {} pending outflow intent(s)", pending_intents.len());
         let mut executed_transfers = Vec::new();
 
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         for intent in pending_intents {
             if intent.outflow_attempted {
                 warn!(
-                    "Skipping outflow intent {}: transfer already attempted",
+                    "Skipping outflow intent {}: transfer already succeeded",
                     intent.intent_id
+                );
+                continue;
+            }
+
+            // Skip intents in backoff period
+            if intent.next_retry_after > current_time {
+                tracing::debug!(
+                    "Skipping outflow intent {}: in backoff (retry after {}, now {})",
+                    intent.intent_id, intent.next_retry_after, current_time
                 );
                 continue;
             }
@@ -168,14 +182,23 @@ impl OutflowService {
             let tx_hash = match self.execute_connected_transfer(&intent, &requester_addr_connected_chain).await {
                 Ok(hash) => hash,
                 Err(e) => {
-                    error!("Failed to execute fulfillment for intent {}: {}", intent.intent_id, e);
-                    // Don't mark as attempted - allow retry on next poll
+                    let error_msg = format!("{:#}", e);
+                    error!(
+                        "Failed to execute fulfillment for intent {} (attempt {}/{}): {}",
+                        intent.intent_id,
+                        intent.outflow_attempt_count + 1,
+                        crate::service::tracker::MAX_OUTFLOW_RETRIES,
+                        error_msg
+                    );
+                    // Record failure — increments retry count, sets backoff, or transitions to Failed
+                    if let Err(record_err) = self.tracker.record_outflow_failure(&intent.intent_id, &error_msg).await {
+                        error!("Failed to record outflow failure for intent {}: {}", intent.intent_id, record_err);
+                    }
                     continue;
                 }
             };
 
             // Mark as attempted only AFTER successful transfer to prevent duplicate transfers
-            // but allow retries if the transfer failed (e.g., requirements not yet delivered via GMP)
             if let Err(e) = self.tracker.mark_outflow_attempted(&intent.intent_id).await {
                 error!(
                     "Failed to mark outflow intent {} as attempted: {}",

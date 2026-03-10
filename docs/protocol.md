@@ -14,11 +14,11 @@ This document specifies the cross-chain intent protocol: how intents, escrows, c
 
 The cross-chain intent protocol enables secure asset transfers between chains using GMP (Generic Message Passing) for cross-chain communication:
 
-1. **Hub Chain**: Intents are created and fulfilled (see [MVM Intent Framework](intent-frameworks/mvm/README.md))
-2. **Connected Chain**: Escrows lock funds and validate requirements delivered via GMP (see [Intent Frameworks](intent-frameworks/README.md))
-3. **GMP Layer**: Cross-chain message passing for IntentRequirements, EscrowConfirmation, and FulfillmentProof messages (see [Intent GMP](intent-frameworks/README.md))
-4. **Validation Contracts**: On-chain contracts on connected chains validate and execute fulfillments (see [IntentOutflowValidator](intent-frameworks/evm/contracts/IntentOutflowValidator.sol))
-5. **Coordinator Service**: Monitors all chains, provides event caching and negotiation routing (see [Coordinator](coordinator/README.md))
+1. **Hub Chain**: Intents are created and fulfilled (see [MVM Intent Framework](../intent-frameworks/mvm/README.md))
+2. **Connected Chain**: Escrows lock funds and validate requirements delivered via GMP (see [Intent Frameworks](../intent-frameworks/README.md))
+3. **GMP Layer**: Cross-chain message passing for IntentRequirements, EscrowConfirmation, and FulfillmentProof messages (see [Intent GMP](../intent-frameworks/README.md))
+4. **Validation Contracts**: On-chain contracts on connected chains validate and execute fulfillments (see [IntentOutflowValidator](../intent-frameworks/evm/contracts/IntentOutflowValidator.sol))
+5. **Coordinator Service**: Monitors all chains, provides event caching and negotiation routing (see [Coordinator](../coordinator/README.md))
 
 The protocol links these components using `intent_id` to correlate events and GMP messages across chains.
 
@@ -138,7 +138,7 @@ sequenceDiagram
    - Creates a reserved intent (emits `IntentCreated` event)
    - Sends `IntentRequirements` message via GMP to the connected chain
 
-   **Note**: The solver must be registered in the solver registry before calling this function. The registry stores the solver's Ed25519 public key (for signature verification) and connected chain addresses. See the [Solver Registry API](../docs/intent-frameworks/mvm/api-reference.md#solver-registry-api) for registration details.
+   **Note**: The solver must be registered in the solver registry before calling this function. The registry stores the solver's Ed25519 public key (for signature verification) and connected chain addresses. See the [Solver Registry API](intent-frameworks/mvm/api-reference.md#solver-registry-api) for registration details.
 
 3. **GMP Delivery to Connected Chain**: GMP layer delivers `IntentRequirements` message to the connected chain. The connected chain:
    - Stores the IntentRequirements on-chain
@@ -417,7 +417,7 @@ All validation happens on-chain using stored IntentRequirements. No off-chain si
 **MVM (Movement)**:
 - Module: `intent_outflow_validator`
 - Function: `validate_and_fulfill_outflow()`
-- Location: `intent-frameworks/mvm/sources/intent_outflow_validator.move`
+- Location: `intent-frameworks/mvm/intent-connected/sources/gmp/intent_outflow_validator.move`
 
 **EVM (Ethereum)**:
 - Contract: `IntentOutflowValidator.sol`
@@ -429,4 +429,4 @@ All validation happens on-chain using stored IntentRequirements. No off-chain si
 - Instruction: `validate_and_fulfill`
 - Location: `intent-frameworks/svm/programs/intent-outflow-validator/src/lib.rs`
 
-For detailed implementation, see [Intent Frameworks](intent-frameworks/README.md).
+For detailed implementation, see [Intent Frameworks](../intent-frameworks/README.md).

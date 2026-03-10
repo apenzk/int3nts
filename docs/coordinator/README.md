@@ -30,7 +30,7 @@ coordinator/
 
 ## Quick Start
 
-See the [component README](../../coordinator/README.md) for quick start commands.
+See the [coordinator crate README](../../coordinator/README.md) for quick start commands.
 
 ## API Endpoints
 
@@ -38,6 +38,7 @@ See the [component README](../../coordinator/README.md) for quick start commands
 
 - `GET /health` - Health check
 - `GET /events` - Get cached intent events
+- `GET /acceptance` - Get exchange rate and fee info for a token pair
 
 ### Negotiation Routing Endpoints
 

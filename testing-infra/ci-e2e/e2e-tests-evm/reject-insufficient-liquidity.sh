@@ -27,7 +27,7 @@ EVM_TOKEN_ADDR_NO_PREFIX="${USD_EVM_ADDR#0x}"
 EVM_TOKEN_ADDR_LOWER=$(echo "$EVM_TOKEN_ADDR_NO_PREFIX" | tr '[:upper:]' '[:lower:]')
 EVM_TOKEN_METADATA="0x000000000000000000000000${EVM_TOKEN_ADDR_LOWER}"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
 
 if [ "$E2E_FLOW" = "inflow" ]; then

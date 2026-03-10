@@ -24,7 +24,7 @@ curl -s http://127.0.0.1:3333/health
 
 ## GET /events
 
-Returns cached events observed by the monitor (intent, escrow, fulfillment).
+Returns cached events observed by the monitor (intent, fulfillment).
 
 Response (abbreviated)
 
@@ -35,9 +35,9 @@ Response (abbreviated)
     "intent_events": [
       {
         "intent_id": "0x...",
-        "offered_metadata": {"inner":"0xa"},
+        "offered_metadata": "0x1::test::Token",
         "offered_amount": 0,
-        "desired_metadata": {"inner":"0xa"},
+        "desired_metadata": "0x1::test::Token",
         "desired_amount": 1000000,
         "revocable": false,
         "requester_addr": "0x...",
@@ -48,26 +48,43 @@ Response (abbreviated)
         "timestamp": 1000000
       }
     ],
-    "escrow_events": [
-      {
-        "escrow_id": "0x...",
-        "intent_id": "0x...",
-        "offered_metadata": {"inner":"0xa"},
-        "offered_amount": 1000,
-        "desired_metadata": {"inner":"0xa"},
-        "desired_amount": 0,
-        "revocable": false,
-        "requester_addr": "0x...",
-        "reserved_solver_addr": "0x...",
-        "chain_id": 2,
-        "chain_type": "Mvm",
-        "expiry_time": 2000000,
-        "timestamp": 1000000
-      }
-    ],
     "fulfillment_events": [ { ... } ]
   }
 }
+```
+
+## GET /acceptance
+
+Returns the exchange rate and fee information for a given token pair. The coordinator looks up the pair in its configured acceptance criteria, then fetches the live exchange rate from the solver.
+
+Query parameters:
+
+- `offered_chain_id` (required) — Chain ID of the offered token
+- `offered_token` (required) — Metadata address of the offered token
+- `desired_chain_id` (optional) — Chain ID of the desired token (if omitted, returns first match)
+- `desired_token` (optional) — Metadata address of the desired token (if omitted, returns first match)
+
+**Response** (200 OK)
+
+```json
+{
+  "success": true,
+  "data": {
+    "desired_token": "0x1::test::Token",
+    "desired_chain_id": 2,
+    "exchange_rate": 1.0,
+    "base_fee_in_move": 1000,
+    "move_rate": 1.0,
+    "fee_bps": 50
+  },
+  "error": null
+}
+```
+
+**Example**
+
+```bash
+curl "http://127.0.0.1:3333/acceptance?offered_chain_id=1&offered_token=0x1::test::Token&desired_chain_id=2&desired_token=0x1::test::Token"
 ```
 
 ## Negotiation Routing Endpoints
@@ -132,7 +149,7 @@ Get the status of a specific draft intent.
   "data": {
     "draft_id": "11111111-1111-1111-1111-111111111111",
     "status": "pending",
-    "requester_address": "0x123...",
+    "requester_addr": "0x123...",
     "timestamp": 1000000,
     "expiry_time": 2000000
   },
@@ -160,7 +177,7 @@ Get all pending drafts. All solvers see all pending drafts (no filtering). This 
   "data": [
     {
       "draft_id": "11111111-1111-1111-1111-111111111111",
-      "requester_address": "0x123...",
+      "requester_addr": "0x123...",
       "draft_data": {...},
       "timestamp": 1000000,
       "expiry_time": 2000000
@@ -243,11 +260,15 @@ Poll for the signature of a draft intent. Returns the first signature received (
   "data": {
     "signature": "0x" + "a".repeat(128),
     "solver_hub_addr": "0xabc...",
+    "solver_evm_addr": "0xdef...",
+    "solver_svm_addr": "So1ver...",
     "timestamp": 1000000
   },
   "error": null
 }
 ```
+
+`solver_evm_addr` and `solver_svm_addr` are optional fields looked up from the on-chain solver registry. They are `null` if the solver has not registered an address for that chain.
 
 **Response** (202 Accepted - pending)
 

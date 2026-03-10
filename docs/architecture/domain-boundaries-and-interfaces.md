@@ -26,8 +26,10 @@ This document provides precise definitions of domain boundaries, external interf
 
 - `create_fa_to_fa_intent_entry()` - Create fungible asset intent
 - `create_cross_chain_request_intent_entry()` - Create cross-chain request-intent
-- `fulfill_cross_chain_request_intent()` - Fulfill cross-chain intent
-- `create_reserved_intent()` - Create reserved intent with solver signature
+- `create_inflow_intent_entry()` - Create inflow cross-chain intent
+- `create_outflow_intent_entry()` - Create outflow cross-chain intent
+- `fulfill_inflow_intent()` - Fulfill inflow cross-chain intent
+- `fulfill_outflow_intent()` - Fulfill outflow cross-chain intent
 
 **Public Functions** (Move):
 
@@ -89,36 +91,32 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 ### Escrow: External Interfaces
 
-**Public Entry Functions** (Move):
+**Public Functions** (Move, connected chain — `intent_inflow_escrow.move`):
 
-- `create_escrow_from_fa()` - Create escrow from fungible asset
-- `complete_escrow_from_fa()` - Complete escrow
+- Escrow creation with GMP requirements validation
+- Auto-release on FulfillmentProof receipt via GMP
 
-**Public Functions** (Move):
+**Public Functions** (Solidity — `IntentInflowEscrow.sol`):
 
-- `create_escrow()` - Create escrow with GMP requirements
-- `start_escrow_session()` - Start escrow session (solver takes escrowed assets)
-- `complete_escrow()` - Complete escrow
-
-**Public Functions** (Solidity):
-
-- `createEscrow(uint256 intentId, address token, uint256 amount, address reservedSolver)` - Create and deposit escrow
-- `deposit(uint256 intentId, address token, uint256 amount)` - Additional deposit to escrow
-- `claim(uint256 intentId, bytes signature)` - Claim escrow
-- `cancel(uint256 intentId)` - Cancel escrow after expiry
+- `createEscrowWithValidation(bytes32 intentId, address token, uint64 amount)` - Create escrow validated against stored IntentRequirements
+- `cancel(bytes32 intentId)` - Cancel escrow after expiry (admin only)
+- `receiveFulfillmentProof(uint32 srcChainId, bytes32 remoteGmpEndpointAddr, bytes payload)` - Receive FulfillmentProof and auto-release escrow (called by GMP endpoint)
+- `getEscrow(bytes32 intentId) returns (StoredEscrow memory)` - Get escrow details
 
 **Events Emitted**:
 
-- `OracleLimitOrderEvent` - Escrow creation event (Move)
-- `EscrowInitialized` - Escrow creation event (EVM)
-- `DepositMade` - Additional deposit event (EVM)
-- `EscrowClaimed` - Escrow claim event (EVM)
+- `OracleLimitOrderEvent` - Escrow creation event (Move connected chain)
+- `EscrowCreated` - Escrow creation event (EVM)
+- `EscrowReleased` - Escrow release to solver event (EVM)
 - `EscrowCancelled` - Escrow cancellation event (EVM)
+- `IntentRequirementsReceived` - Requirements received from hub event (EVM)
+- `FulfillmentProofReceived` - Fulfillment proof received event (EVM)
+- `EscrowConfirmationSent` - Confirmation sent to hub event (EVM)
 
 **Data Structures Exported**:
 
-- `EscrowConfig` - Escrow configuration (Move)
-- `Escrow` struct - Escrow data structure (EVM)
+- `StoredEscrow` - Escrow data structure (EVM)
+- `StoredRequirements` - Stored requirements from hub (EVM)
 
 ### Escrow: Internal Components
 
@@ -162,18 +160,13 @@ For comprehensive inter-domain interaction patterns, see [Inter-Domain Interacti
 
 **Public Entry Functions** (Move):
 
-- `fulfill_cross_chain_request_intent()` - Fulfill cross-chain intent (in fa_intent.move)
-- `complete_escrow_from_fa()` - Complete escrow (in intent_escrow_entry.move)
-
-**Public Functions** (Move):
-
-- `finish_fa_intent_session()` - Complete FA intent session (in fa_intent.move)
-- `complete_escrow()` - Complete escrow (in intent_escrow.move)
+- `fulfill_inflow_intent()` - Fulfill inflow cross-chain intent (in fa_intent_inflow.move)
+- `fulfill_outflow_intent()` - Fulfill outflow intent after FulfillmentProof receipt (in fa_intent_outflow.move)
 
 **Public Functions** (Solidity):
 
-- `claim(uint256 intentId, bytes signature)` - Claim escrow (in IntentInflowEscrow.sol)
-- `cancel(uint256 intentId)` - Cancel escrow after expiry (in IntentInflowEscrow.sol)
+- `receiveFulfillmentProof(uint32 srcChainId, bytes32 remoteGmpEndpointAddr, bytes payload)` - Auto-release escrow on fulfillment proof (in IntentInflowEscrow.sol, called by GMP)
+- `cancel(bytes32 intentId)` - Cancel escrow after expiry (in IntentInflowEscrow.sol)
 
 ### Settlement: Internal Components
 

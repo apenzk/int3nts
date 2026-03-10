@@ -164,7 +164,7 @@ View function failures during polling are usually transient (RPC issues). The re
 
 ## Debugging Checklist
 
-1. **Is the relay running?** Check `/health` endpoint
+1. **Is the relay running?** Check process status and relay logs for polling activity
 2. **Is the relay authorized?** Check startup logs for authorization checks
 3. **Is the relay funded?** Check operator wallet balance on each chain
 4. **Are remote endpoints configured?** Check each chain's GMP contract configuration

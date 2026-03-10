@@ -7,7 +7,7 @@ The Integrated GMP service is a pure **message relay** that delivers GMP (Generi
 - **Relay only** -- no off-chain validation, no approval signatures
 - **Operator wallet keys** for gas payment on each chain (not approval authority)
 - **GMP interfaces** for cross-chain message sending and receiving
-- **Single `/health` endpoint** for operational monitoring; no external API
+- **No external API** -- operational monitoring via process status and logs
 
 ## Documentation
 

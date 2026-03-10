@@ -47,7 +47,7 @@ log "   Solver Hub:                   $SOLVER_HUB_ADDR"
 log "   Requester EVM (connected): $REQUESTER_EVM_ADDR"
 log "   Solver EVM (connected): $SOLVER_EVM_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 OFFERED_AMOUNT="1000000"  # 1 USDhub = 1_000_000 (6 decimals, on hub)
 DESIRED_AMOUNT="985000"   # 0.985 USDcon = (offered - fee) * rate = (1000000 - 15000) * 1.0
 HUB_CHAIN_ID=1

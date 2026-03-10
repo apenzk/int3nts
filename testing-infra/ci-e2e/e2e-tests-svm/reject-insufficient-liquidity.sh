@@ -24,7 +24,7 @@ USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
 source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 SVM_TOKEN_HEX=$(svm_pubkey_to_hex "$USD_SVM_MINT_ADDR")
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
 
 if [ "$E2E_FLOW" = "inflow" ]; then

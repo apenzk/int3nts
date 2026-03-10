@@ -14,8 +14,9 @@ use solana_sdk::signature::Keypair;
 use std::str::FromStr;
 use integrated_gmp::integrated_gmp_relay::{
     bytes_array_to_hex, ed25519_seed_to_keypair_bytes, extract_transaction_hash, hex_to_bytes,
-    normalize_address, parse_32_byte_address, parse_svm_pubkey, NativeGmpRelayConfig,
+    normalize_address, parse_32_byte_address, parse_svm_pubkey, DeliveryAttempt, NativeGmpRelayConfig,
 };
+use integrated_gmp::MAX_DELIVERY_RETRIES;
 
 // ============================================================================
 // ADDRESS PARSING TESTS
@@ -572,6 +573,10 @@ fn test_ata_derivation_is_deterministic() {
     assert_eq!(bump1, bump2, "Bump should be deterministic");
 }
 
+// ============================================================================
+// DELIVERY RETRY TRACKING TESTS
+// ============================================================================
+
 /// 29. Test: ATA Differs By Owner
 /// Verifies that different owners produce different ATA addresses for the same token mint.
 /// Why: Each owner must have a unique ATA for the same token.
@@ -596,4 +601,58 @@ fn test_ata_differs_by_owner() {
     );
 
     assert_ne!(ata1, ata2, "Different owners should have different ATAs");
+}
+
+/// 30. Test: DeliveryAttempt record_failure increments count and sets backoff
+/// Why: First failure must not be terminal — relay must retry with backoff
+#[test]
+fn test_delivery_attempt_first_failure_sets_backoff() {
+    let mut attempt = DeliveryAttempt { count: 0, next_retry_after: 0 };
+    let exhausted = attempt.record_failure();
+
+    assert!(!exhausted, "First failure should not exhaust retries");
+    assert_eq!(attempt.count, 1);
+    assert!(attempt.next_retry_after > 0, "Backoff should be set");
+}
+
+/// 31. Test: DeliveryAttempt transitions to exhausted after MAX_DELIVERY_RETRIES
+/// Why: After max retries, message must be permanently skipped
+#[test]
+fn test_delivery_attempt_exhausted_after_max_retries() {
+    let mut attempt = DeliveryAttempt { count: 0, next_retry_after: 0 };
+
+    for i in 0..MAX_DELIVERY_RETRIES {
+        let exhausted = attempt.record_failure();
+        if i + 1 < MAX_DELIVERY_RETRIES {
+            assert!(!exhausted, "Attempt {} should not exhaust retries", i + 1);
+        } else {
+            assert!(exhausted, "Attempt {} should exhaust retries", i + 1);
+        }
+    }
+
+    assert_eq!(attempt.count, MAX_DELIVERY_RETRIES);
+    assert!(attempt.is_exhausted());
+}
+
+/// 32. Test: DeliveryAttempt backoff increases with each retry
+/// Why: Backoff must increase to avoid hammering a failing chain
+#[test]
+fn test_delivery_attempt_backoff_increases() {
+    let mut attempt = DeliveryAttempt { count: 0, next_retry_after: 0 };
+
+    attempt.record_failure();
+    let first_retry_after = attempt.next_retry_after;
+
+    attempt.record_failure();
+    let second_retry_after = attempt.next_retry_after;
+
+    assert!(second_retry_after > first_retry_after, "Backoff should increase with each retry");
+}
+
+/// 33. Test: DeliveryAttempt is_exhausted returns false when under limit
+/// Why: Should only be true after max retries
+#[test]
+fn test_delivery_attempt_not_exhausted_under_limit() {
+    let attempt = DeliveryAttempt { count: MAX_DELIVERY_RETRIES - 1, next_retry_after: 0 };
+    assert!(!attempt.is_exhausted());
 }

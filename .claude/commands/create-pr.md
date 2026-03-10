@@ -94,23 +94,27 @@ Once the user approves:
 2. Extract the title from the first `#` heading line
 3. Use everything after the title line as the PR body
 
+**IMPORTANT: Use `gh api` directly.** The `gh pr edit` and `gh pr create` commands fail on this repo due to a GitHub Projects Classic deprecation issue. Always use the REST API instead.
+
 **If a PR already exists** (detected in Step 1), update it:
 
 ```bash
-gh pr edit <PR_NUMBER> --title "<title>" --body "$(cat <<'EOF'
-<body content>
-EOF
-)"
+gh api repos/{owner}/{repo}/pulls/<PR_NUMBER> -X PATCH \
+  -f title="<title>" \
+  -f body="$(tail -n +2 pr.md)"
 ```
 
 **If no PR exists**, create one:
 
 ```bash
-gh pr create --title "<title>" --base <base-branch> --body "$(cat <<'EOF'
-<body content>
-EOF
-)"
+gh api repos/{owner}/{repo}/pulls -X POST \
+  -f title="<title>" \
+  -f head="$(git branch --show-current)" \
+  -f base="<base-branch>" \
+  -f body="$(tail -n +2 pr.md)"
 ```
+
+Get the `{owner}/{repo}` from the remote: `gh repo view --json nameWithOwner -q .nameWithOwner`
 
 ## Step 7: Clean Up and Report
 

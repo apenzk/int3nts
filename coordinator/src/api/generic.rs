@@ -358,6 +358,16 @@ impl ApiServer {
             self.config.api.host, self.config.api.port
         );
 
+        // Start background draft expiry cleanup (runs every 10 seconds)
+        let cleanup_store = self.draft_store.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                let store = cleanup_store.read().await;
+                store.cleanup_expired().await;
+            }
+        });
+
         // Create and configure all API routes
         let routes = self.create_routes();
 

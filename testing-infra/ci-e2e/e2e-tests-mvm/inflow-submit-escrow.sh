@@ -38,7 +38,7 @@ log "   Solver Hub:                  $SOLVER_HUB_ADDR"
 log "   Requester MVM (connected):             $REQUESTER_MVMCON_ADDR"
 log "   Solver MVM (connected):                $SOLVER_MVMCON_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 CONNECTED_CHAIN_ID=2
 HUB_CHAIN_ID=1
 

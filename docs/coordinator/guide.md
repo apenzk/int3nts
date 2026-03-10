@@ -109,7 +109,7 @@ The coordinator uses different mechanisms to discover events on each chain:
   - Escrow PDA account state — escrow creation (intent_id, requester, token_mint, reserved_solver)
 - **Linking**
   - Shared `intent_id` across chains links hub intents to escrows on connected chains
-  - Each `EscrowEvent` includes a `chain_type` field (Mvm, Evm, Svm) set by the coordinator based on which monitor discovered the event
+  - Each `IntentEvent` includes a `connected_chain_id` field and each `FulfillmentEvent` includes chain context, set by the coordinator based on which monitor discovered the event
 
 ## Negotiation Routing
 

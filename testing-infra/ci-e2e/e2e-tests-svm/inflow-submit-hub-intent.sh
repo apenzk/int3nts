@@ -44,7 +44,7 @@ log "   Solver Hub:                            $SOLVER_HUB_ADDR"
 log "   Requester SVM (hex):                   $REQUESTER_SVM_ADDR"
 log "   Solver SVM (hex):                      $SOLVER_SVM_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 OFFERED_AMOUNT="1000000"
 DESIRED_AMOUNT="985000"   # (offered - fee) * rate = (1000000 - 15000) * 1.0
 FEE_IN_OFFERED_TOKEN="15000"  # base_fee(ceil(1000000 * 0.01) = 10000) + bps_fee(ceil(1000000 * 50 / 10000) = 5000) = 15000

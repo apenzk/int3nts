@@ -21,7 +21,7 @@ USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
 USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "2")
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 
 SECOND_INTENT_ID="0x$(openssl rand -hex 32)"
 

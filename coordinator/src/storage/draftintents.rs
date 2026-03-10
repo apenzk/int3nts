@@ -203,13 +203,16 @@ impl DraftintentStore {
     /// Remove expired drafts (cleanup).
     ///
     /// Marks drafts as expired if their expiry_time has passed.
-    #[allow(dead_code)] // Will be used in Task 2 (periodic cleanup task)
     pub async fn cleanup_expired(&self) {
         let mut drafts = self.drafts.write().await;
         let current_time = Self::current_timestamp();
 
         for draft in drafts.values_mut() {
             if draft.status == DraftintentStatus::Pending && draft.expiry_time <= current_time {
+                tracing::info!(
+                    "Draft expired: draft_id={}, requester={}, expiry_time={}",
+                    draft.draft_id, draft.requester_addr, draft.expiry_time
+                );
                 draft.status = DraftintentStatus::Expired;
             }
         }

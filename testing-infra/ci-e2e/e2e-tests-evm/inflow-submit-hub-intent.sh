@@ -52,7 +52,7 @@ log "   Requester Hub:                  $REQUESTER_HUB_ADDR"
 log "   Solver Hub:                     $SOLVER_HUB_ADDR"
 log "   Requester EVM (connected):      $REQUESTER_EVM_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 
 # Generate solver signature using helper function
 # For cross-chain intents: offered tokens are on connected chain, desired tokens are on hub

@@ -104,7 +104,7 @@ The coordinator normalizes blockchain events from different chains into common R
 **Key Normalization Patterns**:
 
 - **RequestIntentEvent** (`coordinator/src/monitor/mod.rs`) - Normalizes `LimitOrderEvent` from Move hub chain
-- **EscrowEvent** (`coordinator/src/monitor/mod.rs`) - Normalizes `OracleLimitOrderEvent` (Move) and `EscrowInitialized` (EVM) from connected chains
+- **EscrowEvent** (`coordinator/src/monitor/mod.rs`) - Normalizes `OracleLimitOrderEvent` (Move) and `EscrowCreated` (EVM) from connected chains
 - **FulfillmentEvent** (`coordinator/src/monitor/mod.rs`) - Normalizes `LimitOrderFulfillmentEvent` from hub chain
 - **ChainType** (`coordinator/src/monitor/mod.rs`) - Enum representing blockchain type (`Mvm`, `Evm`, `Svm`) for escrow events
 

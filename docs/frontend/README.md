@@ -25,14 +25,14 @@ The frontend is built with:
 
 ### Key Components
 
-- `app/layout.tsx` - Root layout with wallet providers (Nightly + wagmi + Phantom)
-- `app/page.tsx` - Main intent creation page
-- `components/intent/IntentBuilder.tsx` - Intent creation form and status tracking
-- `components/wallet/` - Wallet connection UI components
-- `lib/coordinator.ts` - Coordinator API client with polling
-- `lib/types.ts` - Protocol types (DraftIntent, IntentStatus, etc.)
-- `config/chains.ts` - Chain configurations and contract addresses
-- `config/tokens.ts` - Supported token definitions
+- `frontend/app/layout.tsx` - Root layout with wallet providers (Nightly + wagmi + Phantom)
+- `frontend/app/page.tsx` - Main intent creation page
+- `frontend/src/components/intent/IntentBuilder.tsx` - Intent creation form and status tracking
+- `frontend/src/components/wallet/` - Wallet connection UI components
+- `frontend/src/lib/coordinator.ts` - Coordinator API client with polling
+- `frontend/src/lib/types.ts` - Protocol types (DraftIntent, IntentStatus, etc.)
+- `frontend/src/config/chains.ts` - Chain configurations and contract addresses
+- `frontend/src/config/tokens.ts` - Supported token definitions
 
 ## User Flows
 
@@ -70,7 +70,10 @@ See the [component README](../../frontend/README.md) for installation and develo
 
 ```bash
 NEXT_PUBLIC_COORDINATOR_URL=http://localhost:3333
-NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz/v1
+NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS=0x<your-movement-module-address>
+NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS=0x<your-base-escrow-address>
+NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz
+NEXT_PUBLIC_EVM_RPC=https://...
 NEXT_PUBLIC_SVM_RPC_URL=https://api.devnet.solana.com
 NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
 ```

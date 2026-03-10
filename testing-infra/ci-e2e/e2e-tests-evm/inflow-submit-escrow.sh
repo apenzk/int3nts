@@ -50,7 +50,7 @@ log "   Intent ID:              $INTENT_ID"
 log "   Requester EVM:          $REQUESTER_EVM_ADDR"
 log "   Solver EVM:             $SOLVER_EVM_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 
 log ""
 log " Configuration:"

@@ -144,9 +144,11 @@ private_key_env = "INTEGRATED_GMP_PRIVATE_KEY"
 public_key_env = "INTEGRATED_GMP_PUBLIC_KEY"
 polling_interval_ms = 2000
 
-[api]
-host = "127.0.0.1"
-port = 3334
+# [api] section is parsed by config but not currently used by the relay.
+# Retained for forward compatibility.
+# [api]
+# host = "127.0.0.1"
+# port = 3334
 ```
 
 ### Configuration Loading Priority
@@ -165,20 +167,6 @@ The relay uses a single Ed25519 keypair from which it derives addresses for all 
 - **SVM**: Ed25519 public key as Solana address
 
 Keys are loaded from environment variables specified in config (`private_key_env`, `public_key_env`), stored as Base64-encoded Ed25519 bytes.
-
-## Testnet Deployment
-
-Current testnet addresses (from `config/integrated-gmp_testnet.toml`):
-
-| Chain | Component | Address |
-| ----- | --------- | ------- |
-| MVM (Hub) | Intent module | `0x84061212c25b0371e8f358bcf9bf6cd919c7dc1e2ac553c7229f059d9b520caf` |
-| MVM (Hub) | RPC | `https://testnet.movementnetwork.xyz/v1` |
-| EVM (Base Sepolia) | IntentGmp | `0x673e3F207d41d09e019D9e68116561A3392a6512` |
-| EVM (Base Sepolia) | IntentInflowEscrow | `0x7011b77326635f41Fe1Ed8C6fb85c3198287B18A` |
-| SVM (Devnet) | GMP program | `fXyBzUDtsDX8FQXcefoX6ahBqs8nptjxoqVM8n4PeJq` |
-| SVM (Devnet) | Escrow program | `98W9iZ6rUSFBHWri7q5EmvNqdUCbq2KENbvGqrV5ZYH1` |
-| SVM (Devnet) | Outflow program | `DTzkzw4fU2e1F1hsiK6Qu2ZBJ8ntjPv4QvkoinT77Jbx` |
 
 ## Security Model
 

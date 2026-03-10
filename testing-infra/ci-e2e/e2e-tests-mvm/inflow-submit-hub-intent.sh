@@ -44,7 +44,7 @@ log "   Solver Hub:                  $SOLVER_HUB_ADDR"
 log "   Requester MVM (connected):             $REQUESTER_MVMCON_ADDR"
 log "   Solver MVM (connected):                $SOLVER_MVMCON_ADDR"
 
-EXPIRY_TIME=$(date -d "+1 hour" +%s)
+EXPIRY_TIME=$(date -d "+180 seconds" +%s)
 # Requester and Solver get funded with 1 USDhub / 1 USDcon each (6 decimals = 1_000_000)
 OFFERED_AMOUNT="1000000"  # 1 USDcon (connected chain, 6 decimals = 1_000_000)
 DESIRED_AMOUNT="985000"   # 0.985 USDhub = (offered - fee) * rate = (1000000 - 15000) * 1.0

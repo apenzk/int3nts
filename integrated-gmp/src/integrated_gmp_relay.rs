@@ -196,8 +196,59 @@ pub struct MvmMessageSentEvent {
 }
 
 // ============================================================================
+// DELIVERY RETRY CONFIGURATION
+// ============================================================================
+
+/// Maximum number of delivery attempts per message before permanently skipping
+pub const MAX_DELIVERY_RETRIES: u32 = 3;
+
+/// Initial backoff duration in seconds after first delivery failure (doubles each retry)
+const INITIAL_DELIVERY_BACKOFF_SECS: u64 = 5;
+
+// ============================================================================
 // RELAY STATE
 // ============================================================================
+
+/// Tracks delivery attempts for a single message.
+#[derive(Debug, Clone)]
+pub struct DeliveryAttempt {
+    /// Number of failed delivery attempts
+    pub count: u32,
+    /// Earliest time the next retry is allowed (Unix timestamp)
+    pub next_retry_after: u64,
+}
+
+impl DeliveryAttempt {
+    /// Check if max retries have been exhausted.
+    pub fn is_exhausted(&self) -> bool {
+        self.count >= MAX_DELIVERY_RETRIES
+    }
+
+    /// Check if this attempt is currently in backoff.
+    pub fn is_in_backoff(&self) -> bool {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.next_retry_after > current_time
+    }
+
+    /// Record a failure, returning true if max retries are now exhausted.
+    pub fn record_failure(&mut self) -> bool {
+        self.count += 1;
+        if self.count >= MAX_DELIVERY_RETRIES {
+            return true;
+        }
+        // Exponential backoff: INITIAL_DELIVERY_BACKOFF_SECS * 2^(attempt-1)
+        let backoff_secs = INITIAL_DELIVERY_BACKOFF_SECS * 2u64.pow(self.count - 1);
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        self.next_retry_after = current_time + backoff_secs;
+        false
+    }
+}
 
 /// Internal state for tracking processed messages.
 #[derive(Debug, Default)]
@@ -213,6 +264,11 @@ struct RelayState {
     svm_next_nonce: std::collections::HashMap<u32, u64>,
     /// Last polled EVM block number
     evm_last_block: u64,
+    /// Per-message delivery attempt tracking: (src_chain_id, nonce) -> DeliveryAttempt
+    delivery_attempts: std::collections::HashMap<(u32, u64), DeliveryAttempt>,
+    /// Per-chain poll failure tracking: chain_name -> DeliveryAttempt
+    /// When a poll fails (RPC unreachable), the chain enters backoff before retrying.
+    chain_poll_failures: std::collections::HashMap<String, DeliveryAttempt>,
 }
 
 // ============================================================================
@@ -446,6 +502,100 @@ impl NativeGmpRelay {
         }
     }
 
+    // ========================================================================
+    // FAILURE TRACKING
+    // ========================================================================
+
+    /// Check if a message should be skipped (max retries exhausted or in backoff).
+    /// Returns true if the message should be delivered, false if it should be skipped.
+    async fn should_attempt_delivery(&self, src_chain_id: u32, nonce: u64) -> bool {
+        let state = self.state.read().await;
+        let key = (src_chain_id, nonce);
+        if let Some(attempt) = state.delivery_attempts.get(&key) {
+            if attempt.count >= MAX_DELIVERY_RETRIES {
+                return false; // Already permanently skipped
+            }
+            let current_time = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            if attempt.next_retry_after > current_time {
+                debug!(
+                    "Skipping delivery for ({}, nonce={}): in backoff (retry after {}, now {})",
+                    src_chain_id, nonce, attempt.next_retry_after, current_time
+                );
+                return false; // In backoff period
+            }
+        }
+        true
+    }
+
+    /// Record a transient delivery failure. Returns true if max retries now exhausted.
+    async fn record_delivery_failure(&self, message: &GmpMessage, error: &str) -> bool {
+        let mut state = self.state.write().await;
+        let key = (message.src_chain_id, message.nonce);
+        let attempt = state.delivery_attempts.entry(key).or_insert(DeliveryAttempt {
+            count: 0,
+            next_retry_after: 0,
+        });
+
+        let exhausted = attempt.record_failure();
+
+        if exhausted {
+            error!(
+                "Message permanently failed after {} attempts: src_chain={}, nonce={}, dst_chain={}, payload_len={}. Last error: {}",
+                attempt.count, message.src_chain_id, message.nonce,
+                message.dst_chain_id, message.payload.len(), error
+            );
+        } else {
+            let backoff_secs = INITIAL_DELIVERY_BACKOFF_SECS * 2u64.pow(attempt.count - 1);
+            warn!(
+                "Delivery attempt {}/{} failed for src_chain={}, nonce={}. Next retry after {}s. Error: {}",
+                attempt.count, MAX_DELIVERY_RETRIES,
+                message.src_chain_id, message.nonce, backoff_secs, error
+            );
+        }
+
+        exhausted
+    }
+
+    /// Check if a chain's poll should be skipped due to recent failures.
+    /// Returns true if the chain is ready to be polled.
+    async fn should_poll_chain(&self, chain_name: &str) -> bool {
+        let state = self.state.read().await;
+        if let Some(attempt) = state.chain_poll_failures.get(chain_name) {
+            if attempt.is_in_backoff() {
+                debug!(
+                    "Skipping {} poll: in backoff (retry after {})",
+                    chain_name, attempt.next_retry_after
+                );
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Record a chain poll failure with backoff. Resets on next successful poll.
+    async fn record_chain_poll_failure(&self, chain_name: &str, error: &str) {
+        let mut state = self.state.write().await;
+        let attempt = state.chain_poll_failures.entry(chain_name.to_string()).or_insert(DeliveryAttempt {
+            count: 0,
+            next_retry_after: 0,
+        });
+        attempt.record_failure();
+        let backoff_secs = INITIAL_DELIVERY_BACKOFF_SECS * 2u64.pow(attempt.count.saturating_sub(1));
+        warn!(
+            "{} poll failed (attempt {}). Next poll after {}s. Error: {}",
+            chain_name, attempt.count, backoff_secs, error
+        );
+    }
+
+    /// Clear chain poll failure tracking after a successful poll.
+    async fn clear_chain_poll_failure(&self, chain_name: &str) {
+        let mut state = self.state.write().await;
+        state.chain_poll_failures.remove(chain_name);
+    }
+
     /// Start the relay service (blocking).
     pub async fn run(&self) -> Result<()> {
         info!(
@@ -472,28 +622,34 @@ impl NativeGmpRelay {
 
         loop {
             // Poll MVM hub for MessageSent events
-            if let Err(e) = self.poll_mvm_events().await {
-                error!("Error polling MVM hub events: {}", e);
+            if self.should_poll_chain("mvm_hub").await {
+                match self.poll_mvm_events().await {
+                    Ok(()) => self.clear_chain_poll_failure("mvm_hub").await,
+                    Err(e) => self.record_chain_poll_failure("mvm_hub", &format!("{:#}", e)).await,
+                }
             }
 
             // Poll MVM connected chain for MessageSent events (if configured)
-            if self.mvm_connected_client.is_some() {
-                if let Err(e) = self.poll_mvm_connected_events().await {
-                    error!("Error polling MVM connected chain events: {}", e);
+            if self.mvm_connected_client.is_some() && self.should_poll_chain("mvm_connected").await {
+                match self.poll_mvm_connected_events().await {
+                    Ok(()) => self.clear_chain_poll_failure("mvm_connected").await,
+                    Err(e) => self.record_chain_poll_failure("mvm_connected", &format!("{:#}", e)).await,
                 }
             }
 
             // Poll SVM for outbound messages (if configured)
-            if self.config.svm_rpc_url.is_some() {
-                if let Err(e) = self.poll_svm_events().await {
-                    error!("Error polling SVM events: {}", e);
+            if self.config.svm_rpc_url.is_some() && self.should_poll_chain("svm").await {
+                match self.poll_svm_events().await {
+                    Ok(()) => self.clear_chain_poll_failure("svm").await,
+                    Err(e) => self.record_chain_poll_failure("svm", &format!("{:#}", e)).await,
                 }
             }
 
             // Poll EVM for MessageSent events (if configured)
-            if self.config.evm_rpc_url.is_some() {
-                if let Err(e) = self.poll_evm_events().await {
-                    error!("Error polling EVM events: {}", e);
+            if self.config.evm_rpc_url.is_some() && self.should_poll_chain("evm").await {
+                match self.poll_evm_events().await {
+                    Ok(()) => self.clear_chain_poll_failure("evm").await,
+                    Err(e) => self.record_chain_poll_failure("evm", &format!("{:#}", e)).await,
                 }
             }
 
@@ -681,6 +837,12 @@ impl NativeGmpRelay {
                 chain_name, nonce, message.remote_gmp_endpoint_addr, message.dst_chain_id
             );
 
+            // Check if this message should be attempted (not in backoff / not exhausted)
+            if !self.should_attempt_delivery(src_chain_id, nonce).await {
+                new_last = nonce;
+                continue;
+            }
+
             if let Err(e) = self.deliver_message(&message).await {
                 let err_str = format!("{:#}", e);
                 // Permanent errors: skip and advance past the message
@@ -697,9 +859,16 @@ impl NativeGmpRelay {
                     new_last = nonce;
                     continue;
                 }
-                error!("Failed to deliver MVM {} message nonce={}: {}", chain_name, nonce, err_str);
-                // Don't advance past transient failures
-                break;
+                // Transient failure: record attempt with backoff
+                let exhausted = self.record_delivery_failure(&message, &err_str).await;
+                if exhausted {
+                    // Max retries exhausted — skip this message permanently
+                    new_last = nonce;
+                    continue;
+                }
+                // Still has retries left — skip for now, continue to next message
+                new_last = nonce;
+                continue;
             }
 
             new_last = nonce;
@@ -794,6 +963,12 @@ impl NativeGmpRelay {
                     nonce, message.remote_gmp_endpoint_addr, message.dst_chain_id
                 );
 
+                // Check if this message should be attempted (not in backoff / not exhausted)
+                if !self.should_attempt_delivery(svm_chain_id, nonce).await {
+                    self.state.write().await.svm_next_nonce.insert(dst_chain_id, nonce + 1);
+                    continue;
+                }
+
                 if let Err(e) = self.deliver_message(&message).await {
                     let err_str = format!("{:#}", e);
                     // Permanent errors: skip and advance past the message
@@ -808,9 +983,14 @@ impl NativeGmpRelay {
                         self.state.write().await.svm_next_nonce.insert(dst_chain_id, nonce + 1);
                         continue;
                     }
-                    error!("Failed to deliver SVM message nonce={}: {}", nonce, err_str);
-                    // Don't advance past transient failures
-                    break;
+                    // Transient failure: record attempt with backoff
+                    let exhausted = self.record_delivery_failure(&message, &err_str).await;
+                    // Advance past this nonce regardless — it will be retried via delivery_attempts tracking
+                    self.state.write().await.svm_next_nonce.insert(dst_chain_id, nonce + 1);
+                    if exhausted {
+                        continue;
+                    }
+                    continue;
                 }
 
                 self.state.write().await.svm_next_nonce.insert(dst_chain_id, nonce + 1);
@@ -1153,8 +1333,31 @@ impl NativeGmpRelay {
                     }
                 }
 
+                // Check if this message should be attempted (not in backoff / not exhausted)
+                if !self.should_attempt_delivery(evm_chain_id, message.nonce).await {
+                    continue;
+                }
+
                 if let Err(e) = self.deliver_message(&message).await {
-                    error!("Failed to deliver EVM message nonce={}: {}", message.nonce, e);
+                    let err_str = format!("{:#}", e);
+                    // Permanent errors: skip and mark as processed
+                    if err_str.contains("E_UNKNOWN_REMOTE_GMP_ENDPOINT")
+                        || err_str.contains("E_ALREADY_DELIVERED")
+                        || err_str.contains("AlreadyDelivered")
+                        || err_str.contains("Already delivered")
+                        || err_str.contains("E_INTENT_NOT_FOUND")
+                    {
+                        warn!(
+                            "Permanent delivery failure for EVM nonce={}, skipping: {}",
+                            message.nonce, err_str
+                        );
+                        // Mark as processed so we don't retry
+                        let mut state = self.state.write().await;
+                        state.processed_nonces.entry(evm_chain_id).or_default().insert(message.nonce);
+                        continue;
+                    }
+                    // Transient failure: record attempt with backoff
+                    self.record_delivery_failure(&message, &err_str).await;
                     continue;
                 }
 

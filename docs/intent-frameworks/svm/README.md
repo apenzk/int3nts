@@ -44,11 +44,15 @@ Outflow flow:
 ### Instructions
 
 ```rust
-// Initialize program with GMP config
+// Initialize program with approver pubkey
 fn initialize(ctx: Context<Initialize>, approver: Pubkey) -> Result<()>
 
 // Receive GMP message (IntentRequirements or FulfillmentProof)
+// Routes based on message type byte in payload
 fn gmp_receive(src_chain_id: u32, remote_gmp_endpoint_addr: [u8; 32], payload: Vec<u8>)
+
+// Set or update GMP configuration for cross-chain messaging
+fn set_gmp_config(hub_chain_id: u32, hub_gmp_endpoint_addr: [u8; 32], gmp_endpoint: Pubkey)
 
 // Create escrow and deposit tokens atomically
 // Validates against stored IntentRequirements
@@ -57,7 +61,7 @@ fn create_escrow(ctx: Context<CreateEscrow>, intent_id: [u8; 32], amount: u64) -
 // Claim funds (after FulfillmentProof received via GMP, no signature required)
 fn claim(ctx: Context<Claim>, intent_id: [u8; 32]) -> Result<()>
 
-// Cancel escrow and reclaim funds (requester only, after expiry)
+// Cancel escrow and return funds to requester (admin only, after expiry)
 fn cancel(ctx: Context<Cancel>, intent_id: [u8; 32]) -> Result<()>
 ```
 
@@ -88,7 +92,7 @@ See the [component README](../../intent-frameworks/svm/README.md) for quick star
 - Remote endpoint verification: Source chain and address validated against stored config
 - Intent ID binding: Requirements keyed by intent_id prevent cross-escrow attacks
 - PDA authority: Escrow vault is controlled by escrow PDA
-- Access control: Only requester can cancel (after expiry)
+- Access control: Only admin can cancel (after expiry), funds return to original requester
 - Solver reservation: Required at creation, prevents unauthorized recipients
 - On-chain validation: All requirement matching happens on-chain
 

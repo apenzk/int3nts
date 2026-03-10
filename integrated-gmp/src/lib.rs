@@ -10,4 +10,4 @@ pub mod integrated_gmp_relay;
 // Re-export commonly used types
 pub use config::{ApiConfig, ChainConfig, Config, EvmChainConfig, SvmChainConfig, IntegratedGmpConfig};
 pub use crypto::CryptoService;
-pub use integrated_gmp_relay::{NativeGmpRelay, NativeGmpRelayConfig};
+pub use integrated_gmp_relay::{DeliveryAttempt, NativeGmpRelay, NativeGmpRelayConfig, MAX_DELIVERY_RETRIES};

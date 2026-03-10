@@ -2,7 +2,7 @@
 
 use solver::{
     acceptance::DraftintentData, service::tracker::IntentTracker,
-    IntentState,
+    IntentState, MAX_OUTFLOW_RETRIES,
 };
 
 #[path = "helpers.rs"]
@@ -11,6 +11,9 @@ use test_helpers::{
     create_default_solver_config, DUMMY_DRAFT_ID, DUMMY_EXPIRY, DUMMY_INTENT_ID,
     DUMMY_REQUESTER_ADDR_EVM, DUMMY_TOKEN_ADDR_MVMCON, DUMMY_TOKEN_ADDR_HUB,
 };
+
+/// Past expiry time (already expired)
+const PAST_EXPIRY: u64 = 1;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -366,5 +369,257 @@ async fn test_get_intents_ready_for_fulfillment_returns_only_created() {
     let intents = tracker.get_intents_ready_for_fulfillment(None).await;
     assert_eq!(intents.len(), 1);
     assert_eq!(intents[0].draft_id, "draft-2");
+}
+
+// ============================================================================
+// EXPIRY TESTS
+// ============================================================================
+
+/// What is tested: Created intents that have expired are transitioned to Expired state
+/// Why: Expired intents must not sit in memory forever — they need a terminal state
+#[tokio::test]
+async fn test_expired_created_intent_transitions_to_expired_state() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_inflow();
+
+    // Add intent with past expiry
+    tracker
+        .add_signed_intent(
+            "draft-expired".to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            PAST_EXPIRY,
+        )
+        .await
+        .unwrap();
+
+    // Manually set to Created (simulating on-chain creation)
+    tracker.set_intent_state("draft-expired", IntentState::Created).await.unwrap();
+
+    // Poll triggers cleanup_expired_intents
+    let _ = tracker.poll_for_created_intents().await;
+
+    // Intent should now be in Expired state
+    let tracked = tracker.get_intent("draft-expired").await.unwrap();
+    assert_eq!(tracked.state, IntentState::Expired);
+}
+
+/// What is tested: Expired Created intents are excluded from fulfillment
+/// Why: Solver must not attempt to fulfill expired intents
+#[tokio::test]
+async fn test_expired_created_intent_excluded_from_fulfillment() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_inflow();
+
+    // Add one expired and one active intent
+    tracker
+        .add_signed_intent(
+            "draft-expired".to_string(),
+            draft_data.clone(),
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            PAST_EXPIRY,
+        )
+        .await
+        .unwrap();
+
+    tracker
+        .add_signed_intent(
+            "draft-active".to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            DUMMY_EXPIRY,
+        )
+        .await
+        .unwrap();
+
+    // Set both to Created
+    tracker.set_intent_state("draft-expired", IntentState::Created).await.unwrap();
+    tracker.set_intent_state("draft-active", IntentState::Created).await.unwrap();
+
+    // Only active intent should be ready for fulfillment
+    let intents = tracker.get_intents_ready_for_fulfillment(None).await;
+    assert_eq!(intents.len(), 1);
+    assert_eq!(intents[0].draft_id, "draft-active");
+}
+
+/// What is tested: Expired Signed intents are removed from tracking entirely
+/// Why: Signed intents that expire never made it on-chain — no reason to keep them
+#[tokio::test]
+async fn test_expired_signed_intent_removed_from_tracking() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_inflow();
+
+    // Add intent with past expiry (stays in Signed state)
+    tracker
+        .add_signed_intent(
+            "draft-expired".to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            PAST_EXPIRY,
+        )
+        .await
+        .unwrap();
+
+    // Poll triggers cleanup
+    let _ = tracker.poll_for_created_intents().await;
+
+    // Intent should be gone entirely (removed, not transitioned)
+    let tracked = tracker.get_intent("draft-expired").await;
+    assert!(tracked.is_none());
+}
+
+// ============================================================================
+// SOLVER FAILURE RECOVERY TESTS
+// ============================================================================
+
+/// What is tested: record_outflow_failure() increments attempt count and sets backoff
+/// Why: First failure must not be terminal — solver must retry with backoff
+#[tokio::test]
+async fn test_record_outflow_failure_increments_count_and_sets_backoff() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_outflow();
+    tracker
+        .add_signed_intent(
+            DUMMY_DRAFT_ID.to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            DUMMY_EXPIRY,
+        )
+        .await
+        .unwrap();
+    tracker.set_intent_state(DUMMY_DRAFT_ID, IntentState::Created).await.unwrap();
+
+    // Record first failure
+    let state = tracker
+        .record_outflow_failure(DUMMY_INTENT_ID, "tx rejected")
+        .await
+        .unwrap();
+    assert_eq!(state, IntentState::Created);
+
+    let tracked = tracker.get_intent(DUMMY_DRAFT_ID).await.unwrap();
+    assert_eq!(tracked.outflow_attempt_count, 1);
+    assert!(tracked.next_retry_after > 0);
+}
+
+/// What is tested: record_outflow_failure() transitions to Failed after MAX_OUTFLOW_RETRIES
+/// Why: After max retries exhausted, intent must reach a terminal Failed state
+#[tokio::test]
+async fn test_record_outflow_failure_transitions_to_failed_after_max_retries() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_outflow();
+    tracker
+        .add_signed_intent(
+            DUMMY_DRAFT_ID.to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            DUMMY_EXPIRY,
+        )
+        .await
+        .unwrap();
+    tracker.set_intent_state(DUMMY_DRAFT_ID, IntentState::Created).await.unwrap();
+
+    // Exhaust all retries
+    for i in 0..MAX_OUTFLOW_RETRIES {
+        let state = tracker
+            .record_outflow_failure(DUMMY_INTENT_ID, &format!("failure {}", i + 1))
+            .await
+            .unwrap();
+
+        if i + 1 < MAX_OUTFLOW_RETRIES {
+            assert_eq!(state, IntentState::Created);
+        } else {
+            assert_eq!(state, IntentState::Failed);
+        }
+    }
+
+    let tracked = tracker.get_intent(DUMMY_DRAFT_ID).await.unwrap();
+    assert_eq!(tracked.state, IntentState::Failed);
+    assert_eq!(tracked.outflow_attempt_count, MAX_OUTFLOW_RETRIES);
+}
+
+/// What is tested: Failed intents are excluded from get_intents_ready_for_fulfillment()
+/// Why: Solver must not attempt to fulfill permanently failed intents
+#[tokio::test]
+async fn test_failed_intent_excluded_from_fulfillment() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_outflow();
+    tracker
+        .add_signed_intent(
+            DUMMY_DRAFT_ID.to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            DUMMY_EXPIRY,
+        )
+        .await
+        .unwrap();
+    tracker.set_intent_state(DUMMY_DRAFT_ID, IntentState::Created).await.unwrap();
+
+    // Verify it's returned before failure
+    let intents = tracker.get_intents_ready_for_fulfillment(Some(false)).await;
+    assert_eq!(intents.len(), 1);
+
+    // Transition to Failed
+    tracker.set_intent_state(DUMMY_DRAFT_ID, IntentState::Failed).await.unwrap();
+
+    // Should no longer be returned
+    let intents = tracker.get_intents_ready_for_fulfillment(Some(false)).await;
+    assert_eq!(intents.len(), 0);
+}
+
+/// What is tested: record_outflow_failure() errors on non-existent intent
+/// Why: Ensure error handling works correctly
+#[tokio::test]
+async fn test_record_outflow_failure_not_found() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let result = tracker.record_outflow_failure("non-existent", "error").await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("not found"));
+}
+
+/// What is tested: Exponential backoff doubles with each retry
+/// Why: Backoff must increase to avoid hammering a failing chain
+#[tokio::test]
+async fn test_outflow_failure_backoff_increases_exponentially() {
+    let config = create_default_solver_config();
+    let tracker = IntentTracker::new(&config).unwrap();
+
+    let draft_data = create_default_draft_data_outflow();
+    tracker
+        .add_signed_intent(
+            DUMMY_DRAFT_ID.to_string(),
+            draft_data,
+            DUMMY_REQUESTER_ADDR_EVM.to_string(),
+            DUMMY_EXPIRY,
+        )
+        .await
+        .unwrap();
+    tracker.set_intent_state(DUMMY_DRAFT_ID, IntentState::Created).await.unwrap();
+
+    // First failure — backoff = 5s
+    tracker.record_outflow_failure(DUMMY_INTENT_ID, "fail 1").await.unwrap();
+    let after_first = tracker.get_intent(DUMMY_DRAFT_ID).await.unwrap();
+    let first_retry_after = after_first.next_retry_after;
+
+    // Second failure — backoff = 10s (doubles)
+    tracker.record_outflow_failure(DUMMY_INTENT_ID, "fail 2").await.unwrap();
+    let after_second = tracker.get_intent(DUMMY_DRAFT_ID).await.unwrap();
+    let second_retry_after = after_second.next_retry_after;
+
+    // Second backoff should be further in the future than first
+    assert!(second_retry_after > first_retry_after);
 }
 

@@ -96,11 +96,11 @@ Contracts interact via address at runtime — no compile-time dependency.
 
 ### SVM Architecture
 
-The [integrated-gmp-endpoint](../../intent-frameworks/svm/programs/integrated-gmp-endpoint/) program handles send and deliver instructions. App programs like [intent-outflow-validator](../../intent-frameworks/svm/programs/intent-outflow-validator/) CPI into the endpoint to send and expose a `GmpReceive` handler for inbound messages.
+The [intent-gmp](../../intent-frameworks/svm/programs/intent-gmp/) program handles send and deliver instructions. App programs like [intent-outflow-validator](../../intent-frameworks/svm/programs/intent-outflow-validator/) CPI into the endpoint to send and expose a `GmpReceive` handler for inbound messages.
 
 ```text
 ┌───────────────────────────────┐     ┌─────────────────────────┐
-│   integrated-gmp-endpoint     │     │   outflow-validator     │
+│   intent-gmp                  │     │   outflow-validator     │
 │                               │     │                         │
 │   - Send instruction          │ ←── │  - CPI to Send          │
 │   - DeliverMsg instr          │ ──→ │  - GmpReceive handler   │

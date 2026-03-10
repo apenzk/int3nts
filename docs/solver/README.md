@@ -53,12 +53,13 @@ solver/
 │   │   ├── signing.rs    # Signing service loop (polls coordinator, signs drafts)
 │   │   ├── tracker.rs    # Intent tracker (monitors signed intents)
 │   │   ├── inflow.rs     # Inflow fulfillment service (monitors escrows, fulfills intents)
-│   │   └── outflow.rs    # Outflow fulfillment service (executes transfers, fulfills intents)
+│   │   ├── outflow.rs    # Outflow fulfillment service (executes transfers, fulfills intents)
+│   │   └── liquidity.rs  # Liquidity monitor (polls balances, tracks in-flight budget, enforces thresholds)
 │   ├── chains/            # Chain clients
 │   │   ├── hub.rs        # Hub chain client (Movement)
-│   │   ├── connected_mvm.rs  # Connected MVM chain client
-│   │   ├── connected_evm.rs   # Connected EVM chain client
-│   │   └── connected_svm.rs   # Connected SVM chain client
+│   │   ├── connected_mvm_client.rs  # Connected MVM chain client
+│   │   ├── connected_evm_client.rs   # Connected EVM chain client
+│   │   └── connected_svm_client.rs   # Connected SVM chain client
 │   ├── acceptance.rs      # Token pair acceptance logic
 │   ├── config.rs          # Configuration management
 │   ├── crypto/            # Cryptographic operations (hashing, signing)
@@ -128,9 +129,9 @@ The solver automatically fulfills **inflow intents** (tokens locked on connected
 
 ### Supported Chains (Inflow)
 
-- **MVM Chains**: Uses `complete_escrow_from_fa` entry function
-- **EVM Chains**: Uses `IntentInflowEscrow.claim()` via connected EVM chain client
-- **SVM Chains**: Uses Solana escrow program claim instruction
+- **MVM Chains**: Polls hub chain `is_escrow_confirmed()` (GMP EscrowConfirmation), then calls hub `fulfill_inflow_intent()`
+- **EVM Chains**: Queries `EscrowCreated` events via `get_escrow_events()`, then calls hub `fulfill_inflow_intent()`
+- **SVM Chains**: Queries escrow PDA accounts via `get_escrow_events()`, then calls hub `fulfill_inflow_intent()`
 
 **Note**: EVM escrow claiming currently uses Hardhat scripts. Future improvement: implement directly using Rust Ethereum libraries (`ethers-rs` or `alloy`) for better error handling and type safety.
 
@@ -250,21 +251,32 @@ The solver includes chain clients for interacting with different blockchain type
 - **Fulfill Inflow Intent**: `fulfill_inflow_intent()` - Calls `fulfill_inflow_intent` entry function
 - **Fulfill Outflow Intent**: `fulfill_outflow_intent()` - Calls `fulfill_outflow_intent` entry function
 
-### Connected MVM Client (`chains/connected_mvm.rs`)
+### Connected MVM Client (`chains/connected_mvm_client.rs`)
 
-- **Query Escrow Events**: `get_escrow_events()` - Queries connected MVM chain for escrow creation events
-- **Transfer with Intent ID**: `transfer_with_intent_id()` - Executes token transfer with embedded `intent_id`
-- **Complete Escrow**: `complete_escrow_from_fa()` - Releases escrow (auto-released via GMP FulfillmentProof)
+- **Token Balance**: `get_token_balance()` - Queries fungible asset balance on the connected MVM chain
+- **Escrow Released**: `is_escrow_released()` - Checks if an inflow escrow has been auto-released via GMP FulfillmentProof
+- **Outflow Requirements**: `has_outflow_requirements()` - Checks if GMP outflow requirements have been delivered
+- **Transfer with Intent ID**: `transfer_with_intent_id()` - Executes token transfer with embedded `intent_id` (outflow)
+- **Fulfill Outflow via GMP**: `fulfill_outflow_via_gmp()` - Calls `outflow_validator::fulfill_intent` to transfer tokens and send FulfillmentProof back to hub
 
-### Connected EVM Client (`chains/connected_evm.rs`)
+### Connected EVM Client (`chains/connected_evm_client.rs`)
 
-- **Query Escrow Events**: `get_escrow_events()` - Queries EVM chain for `EscrowInitialized` events via JSON-RPC
-- **Claim Escrow**: `claim_escrow()` - Claims escrow (calls `IntentInflowEscrow.claim()`)
-- **Transfer with Intent ID**: `transfer_with_intent_id()` - Placeholder for ERC20 transfer with embedded `intent_id` (requires Ethereum signing library)
+- **Block Number**: `get_block_number()` - Gets the current block number from the EVM chain
+- **Query Escrow Events**: `get_escrow_events()` - Queries EVM chain for `EscrowCreated` events via JSON-RPC
+- **Token Balance**: `get_token_balance()` - Queries ERC20 balance via `eth_call balanceOf`
+- **Native Balance**: `get_native_balance()` - Queries native ETH balance via `eth_getBalance`
+- **Escrow Released**: `is_escrow_released()` - Checks if an inflow escrow has been auto-released via GMP FulfillmentProof
+- **Outflow Requirements**: `has_outflow_requirements()` - Checks if IntentOutflowValidator has requirements for an intent
+- **Transfer with Intent ID**: `transfer_with_intent_id()` - Executes ERC20 transfer with `intent_id` appended in calldata (via Hardhat script)
+- **Fulfill Outflow via GMP**: `fulfill_outflow_via_gmp()` - Calls IntentOutflowValidator to transfer tokens and send FulfillmentProof back to hub (via Hardhat script)
 
-**Note**: EVM operations currently use Hardhat scripts for transaction execution. Future improvement: implement directly using Rust Ethereum libraries (`ethers-rs` or `alloy`) for better integration and error handling.
+**Note**: EVM transaction execution currently uses Hardhat scripts. Future improvement: implement directly using Rust Ethereum libraries (`ethers-rs` or `alloy`) for better integration and error handling.
 
-### Connected SVM Client (`chains/connected_svm.rs`)
+### Connected SVM Client (`chains/connected_svm_client.rs`)
 
 - **Query Escrow Events**: `get_escrow_events()` - Queries escrow PDA accounts via RPC
-- **Transfer with Intent ID**: `transfer_with_intent_id()` - Executes SPL `transferChecked` with memo `intent_id=0x...`
+- **Token Balance**: `get_token_balance()` - Queries SPL token balance for an owner's associated token account
+- **Native Balance**: `get_native_balance()` - Queries native SOL balance in lamports
+- **Escrow Released**: `is_escrow_released()` - Checks if an inflow escrow has been auto-released via GMP FulfillmentProof
+- **Outflow Requirements**: `has_outflow_requirements()` - Checks if GMP outflow requirements PDA exists for an intent
+- **Fulfill Outflow via GMP**: `fulfill_outflow_via_gmp()` - Builds and submits `outflow_validator::FulfillIntent` instruction to transfer tokens and send FulfillmentProof back to hub
