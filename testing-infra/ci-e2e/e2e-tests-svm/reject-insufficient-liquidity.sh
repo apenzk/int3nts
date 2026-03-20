@@ -2,6 +2,7 @@
 
 # Verify solver rejects a second draft intent due to insufficient liquidity.
 # Requires E2E_FLOW to be set (inflow | outflow) by the caller (e2e_init).
+# Respects SVM_INSTANCE env var for multi-instance testing.
 
 set -eo pipefail
 
@@ -9,19 +10,23 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_mvm.sh"
 source "$SCRIPT_DIR/../util_svm.sh"
+source "$SCRIPT_DIR/../chain-connected-svm/utils.sh"
 
 setup_project_root
 cd "$PROJECT_ROOT"
 
+# Load SVM instance vars
+svm_instance_vars "${SVM_INSTANCE:-2}"
+source "$SVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
 # Resolve chain addresses for the second draft
 HUB_CHAIN_ID=1
-CONNECTED_CHAIN_ID=901
+CONNECTED_CHAIN_ID=$SVM_CHAIN_ID
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
 
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 SVM_TOKEN_HEX=$(svm_pubkey_to_hex "$USD_SVM_MINT_ADDR")
 
 EXPIRY_TIME=$(date -d "+180 seconds" +%s)

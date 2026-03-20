@@ -9,8 +9,13 @@ source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "submit-outflow-hub-intent-evm"
 cd "$PROJECT_ROOT"
+
+# Load EVM instance vars
+evm_instance_vars "${EVM_INSTANCE:-2}"
+source "$EVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
+setup_logging "submit-outflow-hub-intent-evm${EVM_INSTANCE}"
 
 # Verify services are running before proceeding
 verify_coordinator_running
@@ -27,16 +32,15 @@ INTENT_ID="0x$(openssl rand -hex 32)"
 # ============================================================================
 # SECTION 2: GET ADDRES AND CONFIGURATION
 # ============================================================================
-CONNECTED_CHAIN_ID=31337
+CONNECTED_CHAIN_ID=$EVM_CHAIN_ID
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
 
-# Get EVM addresses and USDcon token
-REQUESTER_EVM_ADDR=$(get_hardhat_account_address "1")
-SOLVER_EVM_ADDR=$(get_hardhat_account_address "2")
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Get EVM addresses and USDcon token (chain-info loaded above)
+REQUESTER_EVM_ADDR=$(get_hardhat_account_address "1" "$EVM_NETWORK")
+SOLVER_EVM_ADDR=$(get_hardhat_account_address "2" "$EVM_NETWORK")
 USD_EVM_ADDR="${USD_EVM_ADDR:-}"
 
 log ""
@@ -207,7 +211,7 @@ if [ $? -eq 0 ]; then
 
     sleep 2
     log "     - Verifying intent stored on-chain..."
-    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
+    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:1000/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("OracleLimitOrderEvent")) | .data.intent_addr' | head -n 1)
 
     if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then

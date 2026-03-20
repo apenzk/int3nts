@@ -9,11 +9,12 @@
 //!    when FulfillmentProof is received via GMP - no manual release call needed)
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
-use crate::config::SolverConfig;
+use crate::config::{ConnectedChainConfig, SolverConfig};
 use chain_clients_common::normalize_intent_id;
 use crate::service::liquidity::LiquidityMonitor;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -26,12 +27,12 @@ pub struct InflowService {
     tracker: Arc<IntentTracker>,
     /// Hub chain client for querying escrow confirmation state
     hub_client: HubChainClient,
-    /// Optional connected MVM chain client
-    mvm_client: Option<ConnectedMvmClient>,
-    /// Optional connected EVM chain client
-    evm_client: Option<ConnectedEvmClient>,
-    /// Optional connected SVM chain client
-    svm_client: Option<ConnectedSvmClient>,
+    /// Connected MVM chain clients, keyed by chain ID
+    mvm_clients: HashMap<u64, ConnectedMvmClient>,
+    /// Connected EVM chain clients, keyed by chain ID
+    evm_clients: HashMap<u64, ConnectedEvmClient>,
+    /// Connected SVM chain clients, keyed by chain ID
+    svm_clients: HashMap<u64, ConnectedSvmClient>,
     /// Liquidity monitor for releasing budget after fulfillment
     liquidity_monitor: Arc<LiquidityMonitor>,
     /// Last poll summary (pending_count, escrow_count) — suppresses repeated identical logs
@@ -64,41 +65,34 @@ impl InflowService {
         let hub_client = HubChainClient::new(&config.hub_chain)?;
 
         // Create connected chain clients for all configured chains
-        let mvm_client = config
-            .get_mvm_config()
-            .map(|cfg| ConnectedMvmClient::new(cfg))
-            .transpose()?;
+        let mut mvm_clients = HashMap::new();
+        let mut evm_clients = HashMap::new();
+        let mut svm_clients = HashMap::new();
 
-        let evm_client = config
-            .get_evm_config()
-            .map(|cfg| ConnectedEvmClient::new(cfg))
-            .transpose()?;
-
-        let svm_client = config
-            .get_svm_config()
-            .map(|cfg| ConnectedSvmClient::new(cfg))
-            .transpose()?;
+        for chain in &config.connected_chain {
+            match chain {
+                ConnectedChainConfig::Mvm(cfg) => {
+                    mvm_clients.insert(cfg.chain_id, ConnectedMvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Evm(cfg) => {
+                    evm_clients.insert(cfg.chain_id, ConnectedEvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Svm(cfg) => {
+                    svm_clients.insert(cfg.chain_id, ConnectedSvmClient::new(cfg)?);
+                }
+            }
+        }
 
         Ok(Self {
             config,
             tracker,
             hub_client,
-            mvm_client,
-            evm_client,
-            svm_client,
+            mvm_clients,
+            evm_clients,
+            svm_clients,
             liquidity_monitor,
             last_poll_summary: Mutex::new(None),
         })
-    }
-
-    /// Gets the chain ID for a connected chain type
-    fn get_chain_id(&self, chain_type: &str) -> Option<u64> {
-        match chain_type {
-            "mvm" => self.config.get_mvm_config().map(|c| c.chain_id),
-            "evm" => self.config.get_evm_config().map(|c| c.chain_id),
-            "svm" => self.config.get_svm_config().map(|c| c.chain_id),
-            _ => None,
-        }
     }
 
     /// Polls for confirmed escrows matching tracked inflow intents.
@@ -137,42 +131,39 @@ impl InflowService {
         let mut matched_intents = Vec::new();
 
         // Check MVM intents via hub chain is_escrow_confirmed (GMP flow)
-        if self.mvm_client.is_some() {
-            let mvm_chain_id = self.get_chain_id("mvm");
-            for intent in &pending_intents {
-                if Some(intent.draft_data.offered_chain_id) != mvm_chain_id {
-                    continue;
+        for intent in &pending_intents {
+            if !self.mvm_clients.contains_key(&intent.draft_data.offered_chain_id) {
+                continue;
+            }
+            match self.hub_client.is_escrow_confirmed(&intent.intent_id).await {
+                Ok(true) => {
+                    info!(
+                        "Escrow confirmed on hub for MVM inflow intent {}",
+                        intent.intent_id
+                    );
+                    // Use intent_id as escrow_id for GMP flow
+                    matched_intents.push((intent.clone(), intent.intent_id.clone()));
                 }
-                match self.hub_client.is_escrow_confirmed(&intent.intent_id).await {
-                    Ok(true) => {
-                        info!(
-                            "Escrow confirmed on hub for MVM inflow intent {}",
-                            intent.intent_id
-                        );
-                        // Use intent_id as escrow_id for GMP flow
-                        matched_intents.push((intent.clone(), intent.intent_id.clone()));
-                    }
-                    Ok(false) => {
-                        // Not yet confirmed, skip
-                    }
-                    Err(e) => {
-                        error!(
-                            "Failed to check escrow confirmation for intent {}: {}",
-                            intent.intent_id, e
-                        );
-                        return Err(e.context(format!(
-                            "Failed to check escrow confirmation for intent {}",
-                            intent.intent_id
-                        )));
-                    }
+                Ok(false) => {
+                    // Not yet confirmed, skip
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to check escrow confirmation for intent {}: {}",
+                        intent.intent_id, e
+                    );
+                    return Err(e.context(format!(
+                        "Failed to check escrow confirmation for intent {}",
+                        intent.intent_id
+                    )));
                 }
             }
         }
 
-        // Query EVM chain for escrow events if configured
+        // Query all EVM chains for escrow events
         let mut evm_svm_escrow_events: Vec<EscrowMatch> = Vec::new();
 
-        if let Some(client) = &self.evm_client {
+        for (chain_id, client) in &self.evm_clients {
             match client.get_block_number().await {
                 Ok(current_block) => {
                     // Alchemy free tier limits eth_getLogs to 10-block range; cap to 9
@@ -186,8 +177,8 @@ impl InflowService {
                         Ok(events) => {
                             if !events.is_empty() {
                                 info!(
-                                    "Found {} EVM escrow events (from_block={}, current_block={})",
-                                    events.len(), from_block, current_block
+                                    "Found {} EVM escrow events on chain {} (from_block={}, current_block={})",
+                                    events.len(), chain_id, from_block, current_block
                                 );
                             }
                             evm_svm_escrow_events.extend(events.into_iter().map(|e| {
@@ -198,18 +189,18 @@ impl InflowService {
                             }));
                         }
                         Err(e) => {
-                            error!("Failed to query EVM escrow events: {}", e);
+                            error!("Failed to query EVM escrow events on chain {}: {}", chain_id, e);
                         }
                     }
                 }
                 Err(e) => {
-                    error!("Failed to get EVM block number: {}", e);
+                    error!("Failed to get EVM block number on chain {}: {}", chain_id, e);
                 }
             }
         }
 
-        // Query SVM chain for escrow events if configured
-        if let Some(client) = &self.svm_client {
+        // Query all SVM chains for escrow events
+        for (chain_id, client) in &self.svm_clients {
             match client.get_escrow_events().await {
                 Ok(events) => {
                     evm_svm_escrow_events.extend(events.into_iter().map(|e| EscrowMatch {
@@ -218,7 +209,7 @@ impl InflowService {
                     }));
                 }
                 Err(e) => {
-                    error!("Failed to query SVM escrow events: {}", e);
+                    error!("Failed to query SVM escrow events on chain {}: {}", chain_id, e);
                 }
             }
         }

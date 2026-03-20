@@ -432,10 +432,9 @@ fn process_send(
     let config = ConfigAccount::try_from_slice(&config_account.data.borrow())
         .map_err(|_| GmpError::AccountNotInitialized)?;
 
-    // Derive nonce PDA
-    let chain_id_bytes = dst_chain_id.to_le_bytes();
+    // Derive global nonce PDA (single sequence across all destinations)
     let (nonce_pda, nonce_bump) =
-        Pubkey::find_program_address(&[seeds::NONCE_OUT_SEED, &chain_id_bytes], program_id);
+        Pubkey::find_program_address(&[seeds::NONCE_OUT_SEED], program_id);
 
     if nonce_account.key != &nonce_pda {
         return Err(GmpError::InvalidPda.into());
@@ -456,10 +455,10 @@ fn process_send(
                 program_id,
             ),
             &[payer.clone(), nonce_account.clone(), system_program.clone()],
-            &[&[seeds::NONCE_OUT_SEED, &chain_id_bytes, &[nonce_bump]]],
+            &[&[seeds::NONCE_OUT_SEED, &[nonce_bump]]],
         )?;
 
-        let mut nonce_data = OutboundNonceAccount::new(dst_chain_id, nonce_bump);
+        let mut nonce_data = OutboundNonceAccount::new(nonce_bump);
         let nonce = nonce_data.increment();
         nonce_data.serialize(&mut &mut nonce_account.data.borrow_mut()[..])?;
         nonce
@@ -476,7 +475,7 @@ fn process_send(
     // scanning transaction logs via getSignaturesForAddress (rate-limited).
     let nonce_bytes = nonce.to_le_bytes();
     let (message_pda, message_bump) = Pubkey::find_program_address(
-        &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_bytes],
+        &[seeds::MESSAGE_SEED, &nonce_bytes],
         program_id,
     );
 
@@ -503,7 +502,6 @@ fn process_send(
         ],
         &[&[
             seeds::MESSAGE_SEED,
-            &chain_id_bytes,
             &nonce_bytes,
             &[message_bump],
         ]],

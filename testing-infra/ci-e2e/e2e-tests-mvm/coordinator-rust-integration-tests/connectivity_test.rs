@@ -9,7 +9,7 @@ use chain_clients_mvm::MvmClient;
 /// Why: Verify the client can communicate with running Aptos nodes
 #[tokio::test]
 async fn test_client_can_connect_to_chain1() {
-    let client = MvmClient::new("http://127.0.0.1:8080").unwrap();
+    let client = MvmClient::new("http://127.0.0.1:1000").unwrap();
     
     // Test health check
     let result = client.health_check().await;
@@ -20,7 +20,7 @@ async fn test_client_can_connect_to_chain1() {
 /// Why: Ensure the client works with both chain endpoints
 #[tokio::test]
 async fn test_client_can_connect_to_chain2() {
-    let client = MvmClient::new("http://127.0.0.1:8082").unwrap();
+    let client = MvmClient::new("http://127.0.0.1:2000").unwrap();
     
     // Test health check
     let result = client.health_check().await;

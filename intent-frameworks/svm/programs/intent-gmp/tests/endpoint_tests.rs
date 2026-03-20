@@ -308,7 +308,7 @@ fn test_remote_gmp_endpoint_account_serialization() {
 /// Why: Nonces must be unique per message. Incorrect increment logic would cause duplicate nonces or gaps.
 #[test]
 fn test_outbound_nonce_account() {
-    let mut nonce_account = OutboundNonceAccount::new(DUMMY_CHAIN_ID_MVM, 252);
+    let mut nonce_account = OutboundNonceAccount::new(252);
 
     assert_eq!(nonce_account.nonce, 0);
 
@@ -592,14 +592,13 @@ mod integration {
         current_nonce: u64,
     ) -> Instruction {
         let (config_pda, _) = Pubkey::find_program_address(&[seeds::CONFIG_SEED], &program_id);
-        let chain_id_bytes = dst_chain_id.to_le_bytes();
         let (nonce_pda, _) = Pubkey::find_program_address(
-            &[seeds::NONCE_OUT_SEED, &chain_id_bytes],
+            &[seeds::NONCE_OUT_SEED],
             &program_id,
         );
         let nonce_bytes = current_nonce.to_le_bytes();
         let (message_pda, _) = Pubkey::find_program_address(
-            &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_bytes],
+            &[seeds::MESSAGE_SEED, &nonce_bytes],
             &program_id,
         );
         Instruction {
@@ -767,17 +766,15 @@ mod integration {
         let send_ix = create_send_ix(program_id, admin.pubkey(), admin.pubkey(), CHAIN_ID_MVM, dst_addr, remote_gmp_endpoint_addr, payload1.clone(), 0);
         send_tx(&mut context, &admin, &[send_ix], &[]).await.unwrap();
 
-        // Verify nonce account created with nonce = 1 (after first send)
-        let chain_id_bytes = CHAIN_ID_MVM.to_le_bytes();
-        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_OUT_SEED, &chain_id_bytes], &program_id);
+        // Verify global nonce account created with nonce = 1 (after first send)
+        let (nonce_pda, _) = Pubkey::find_program_address(&[seeds::NONCE_OUT_SEED], &program_id);
         let nonce_account: OutboundNonceAccount = read_account(&mut context, nonce_pda).await;
         assert_eq!(nonce_account.nonce, 1, "Nonce should be 1 after first send (got {})", nonce_account.nonce);
-        assert_eq!(nonce_account.dst_chain_id, CHAIN_ID_MVM);
 
         // Verify message account was created for nonce=0
         let nonce_0_bytes = 0u64.to_le_bytes();
         let (message_pda, _) = Pubkey::find_program_address(
-            &[seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_0_bytes], &program_id);
+            &[seeds::MESSAGE_SEED, &nonce_0_bytes], &program_id);
         let message: MessageAccount = read_account(&mut context, message_pda).await;
         assert_eq!(message.discriminator, MessageAccount::DISCRIMINATOR);
         assert_eq!(message.src_chain_id, CHAIN_ID_SVM);

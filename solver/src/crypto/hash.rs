@@ -24,7 +24,7 @@ pub fn get_intent_hash(
     issuer: &str,
     solver: &str,
     fee_in_offered_token: u64,
-    chain_num: u8,
+    hub_rpc_url: &str,
     e2e_mode: bool,
 ) -> Result<Vec<u8>> {
     // Normalize metadata to Move address format (0x-hex).
@@ -43,15 +43,13 @@ pub fn get_intent_hash(
         ))?;
 
     // Determine CLI and RPC URL based on e2e_mode flag
+    // In E2E mode, the aptos profile already has the correct node URL configured,
+    // so we use the config-provided hub_rpc_url for REST queries only.
+    // In testnet mode, we use the movement CLI with the provided URL.
     let (cli, rpc_url) = if e2e_mode {
-        // E2E mode: use aptos CLI and local RPC
-        let rest_port = if chain_num == 1 { "8080" } else { "8082" };
-        ("aptos", format!("http://127.0.0.1:{}/v1", rest_port))
+        ("aptos", hub_rpc_url.to_string())
     } else {
-        // Testnet mode: use movement CLI and testnet RPC
-        let rpc = std::env::var("HUB_RPC_URL")
-            .unwrap_or_else(|_| "https://testnet.movementnetwork.xyz/v1".to_string());
-        ("movement", rpc)
+        ("movement", hub_rpc_url.to_string())
     };
 
     // Build command arguments
@@ -60,10 +58,10 @@ pub fn get_intent_hash(
         "move".to_string(),
         "run".to_string(),
     ];
-    
+
     // Add authentication based on e2e_mode flag
     if e2e_mode {
-        // Use profile for E2E tests
+        // Use profile for E2E tests (profile has node URL configured)
         args.extend(vec![
             "--profile".to_string(),
             profile.to_string(),

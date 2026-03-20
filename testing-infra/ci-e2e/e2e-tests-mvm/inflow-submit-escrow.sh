@@ -4,11 +4,16 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_mvm.sh"
+source "$SCRIPT_DIR/../chain-connected-mvm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "submit-escrow"
 cd "$PROJECT_ROOT"
+
+# Load MVM instance vars
+mvm_instance_vars "${MVM_INSTANCE:-2}"
+
+setup_logging "inflow-submit-escrow-mvm${MVM_INSTANCE}"
 
 # ============================================================================
 # SECTION 1: LOAD DEPENDENCIES
@@ -21,13 +26,13 @@ fi
 # SECTION 2: GET ADDRESSES AND CONFIGURATION
 # ============================================================================
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
-MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain2")
+MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain${MVM_INSTANCE}")
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
-USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
+USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain${MVM_INSTANCE}")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
-REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain2")
-SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain2")
+REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain${MVM_INSTANCE}")
+SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain${MVM_INSTANCE}")
 
 log ""
 log " Chain Information:"
@@ -39,7 +44,7 @@ log "   Requester MVM (connected):             $REQUESTER_MVMCON_ADDR"
 log "   Solver MVM (connected):                $SOLVER_MVMCON_ADDR"
 
 EXPIRY_TIME=$(date -d "+180 seconds" +%s)
-CONNECTED_CHAIN_ID=2
+CONNECTED_CHAIN_ID=$MVM_CHAIN_ID
 HUB_CHAIN_ID=1
 
 log ""
@@ -49,7 +54,7 @@ log "   Intent ID: $INTENT_ID"
 
 log ""
 log "   - Getting USDcon metadata on connected MVM..."
-USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "2")
+USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE")
 if [ -z "$USD_MVMCON_ADDR" ]; then
     log_and_echo "❌ Failed to get USDcon metadata on connected MVM"
     exit 1
@@ -62,7 +67,7 @@ OFFERED_METADATA_MVMCON="$USD_MVMCON_ADDR"
 # ============================================================================
 log ""
 display_balances_hub "0x$TEST_TOKENS_HUB"
-display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE"
 log_and_echo ""
 
 # ============================================================================
@@ -79,7 +84,7 @@ GMP_DELIVERED=0
 for attempt in $(seq 1 30); do
     # Use REST API (not CLI) to query view function — CLI wraps result in {"Result": [...]}
     # which breaks jq '.[0]' parsing. REST API returns bare array like [true].
-    HAS_REQ=$(curl -s "http://127.0.0.1:8082/v1/view" \
+    HAS_REQ=$(curl -s "http://127.0.0.1:${MVM_REST_PORT}/v1/view" \
         -H 'Content-Type: application/json' \
         -d "{
             \"function\": \"0x${MVMCON_MODULE_ADDR}::intent_inflow_escrow::has_requirements\",
@@ -113,14 +118,14 @@ log "   - Using intent_id from hub chain: $INTENT_ID"
 # DEBUG: Check requester balance BEFORE escrow creation
 log ""
 log "   DEBUG: Checking requester balance BEFORE escrow creation..."
-BEFORE_BALANCE=$(get_usdxyz_balance "requester-chain2" "2" "0x$USD_MVMCON_MODULE_ADDR")
+BEFORE_BALANCE=$(get_usdxyz_balance "requester-chain${MVM_INSTANCE}" "$MVM_INSTANCE" "0x$USD_MVMCON_MODULE_ADDR")
 log_and_echo "   DEBUG: Requester USDcon balance BEFORE escrow: $BEFORE_BALANCE"
 
 log "   - Creating escrow intent on connected MVM..."
 log "     Offered metadata: $OFFERED_METADATA_MVMCON"
 
 # Use GMP-based escrow: validates against IntentRequirements received from hub
-ESCROW_OUTPUT=$(aptos move run --profile requester-chain2 --assume-yes \
+ESCROW_OUTPUT=$(aptos move run --profile requester-chain${MVM_INSTANCE} --assume-yes \
     --function-id "0x${MVMCON_MODULE_ADDR}::intent_inflow_escrow::create_escrow_with_validation" \
     --args "hex:${INTENT_ID_HEX}" "address:${OFFERED_METADATA_MVMCON}" "u64:1000000" 2>&1)
 ESCROW_EXIT_CODE=$?
@@ -137,7 +142,7 @@ if [ $ESCROW_EXIT_CODE -eq 0 ]; then
     # DEBUG: Check requester balance AFTER escrow creation
     log ""
     log "   DEBUG: Checking requester balance AFTER escrow creation..."
-    AFTER_BALANCE=$(get_usdxyz_balance "requester-chain2" "2" "0x$USD_MVMCON_MODULE_ADDR")
+    AFTER_BALANCE=$(get_usdxyz_balance "requester-chain${MVM_INSTANCE}" "$MVM_INSTANCE" "0x$USD_MVMCON_MODULE_ADDR")
     log_and_echo "   DEBUG: Requester USDcon balance AFTER escrow: $AFTER_BALANCE"
 
     if [ "$BEFORE_BALANCE" = "$AFTER_BALANCE" ]; then
@@ -152,7 +157,7 @@ if [ $ESCROW_EXIT_CODE -eq 0 ]; then
     log "     - Verifying escrow stored on-chain..."
 
     # Get full transaction for debugging
-    FULL_TX=$(curl -s "http://127.0.0.1:8082/v1/accounts/${REQUESTER_MVMCON_ADDR}/transactions?limit=1")
+    FULL_TX=$(curl -s "http://127.0.0.1:${MVM_REST_PORT}/v1/accounts/${REQUESTER_MVMCON_ADDR}/transactions?limit=1")
 
     # GMP escrow emits EscrowCreated event (not OracleLimitOrderEvent)
     ESCROW_EVENT=$(echo "$FULL_TX" | jq '.[0].events[] | select(.type | contains("EscrowCreated"))' 2>/dev/null)
@@ -188,7 +193,7 @@ fi
 # ============================================================================
 log ""
 display_balances_hub "0x$TEST_TOKENS_HUB"
-display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE"
 log_and_echo ""
 
 log ""

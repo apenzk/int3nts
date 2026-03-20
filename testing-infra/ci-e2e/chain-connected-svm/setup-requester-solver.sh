@@ -1,34 +1,45 @@
 #!/bin/bash
 
 # Setup SVM requester/solver accounts and test mint
+# Accepts instance number as argument (default: 2).
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../util.sh"
-source "$SCRIPT_DIR/../util_svm.sh"
+source "$SCRIPT_DIR/utils.sh"
 
 setup_project_root
-setup_logging "setup-svm-requester-solver"
+
+# Accept instance number as argument
+svm_instance_vars "${1:-2}"
+
+setup_logging "setup-svm-requester-solver${SVM_INSTANCE}"
 cd "$PROJECT_ROOT"
 
-log " Requester and Solver Account Setup - SVM CHAIN"
+log " Requester and Solver Account Setup - SVM CHAIN (instance $SVM_INSTANCE)"
 log "================================================="
 log_and_echo " All output logged to: $LOG_FILE"
 
-SVM_RPC_URL="http://127.0.0.1:8899"
-E2E_DIR="$PROJECT_ROOT/.tmp/svm-e2e"
-mkdir -p "$E2E_DIR"
+mkdir -p "$SVM_E2E_DIR"
 
-PAYER_KEYPAIR="$E2E_DIR/payer.json"
-REQUESTER_KEYPAIR="$E2E_DIR/requester.json"
-SOLVER_KEYPAIR="$E2E_DIR/solver.json"
+PAYER_KEYPAIR="$SVM_E2E_DIR/payer.json"
+REQUESTER_KEYPAIR="$SVM_E2E_DIR/requester.json"
+SOLVER_KEYPAIR="$SVM_E2E_DIR/solver.json"
 
 log ""
 log " Creating keypairs..."
 ensure_svm_keypair "$PAYER_KEYPAIR"
 ensure_svm_keypair "$REQUESTER_KEYPAIR"
-ensure_svm_keypair "$SOLVER_KEYPAIR"
+
+# Use shared solver keypair if available (mirrors MVM shared-key pattern)
+SHARED_SOLVER_KEY="$PROJECT_ROOT/.tmp/solver-svm-shared-key.json"
+if [ -f "$SHARED_SOLVER_KEY" ]; then
+    cp "$SHARED_SOLVER_KEY" "$SOLVER_KEYPAIR"
+    log "   Using shared solver keypair"
+else
+    ensure_svm_keypair "$SOLVER_KEYPAIR"
+    log "   Generated new solver keypair (no shared key found)"
+fi
 
 PAYER_PUBKEY=$(get_svm_pubkey "$PAYER_KEYPAIR")
 REQUESTER_SVM_PUBKEY=$(get_svm_pubkey "$REQUESTER_KEYPAIR")
@@ -156,8 +167,7 @@ fi
 
 log ""
 log " Saving chain info..."
-CHAIN_INFO="$PROJECT_ROOT/.tmp/chain-info.env"
-cat >> "$CHAIN_INFO" << EOF
+cat >> "$SVM_CHAIN_INFO_FILE" << EOF
 SVM_RPC_URL=$SVM_RPC_URL
 SVM_PAYER_KEYPAIR=$PAYER_KEYPAIR
 SVM_REQUESTER_KEYPAIR=$REQUESTER_KEYPAIR
@@ -167,8 +177,8 @@ SOLVER_SVM_PUBKEY=$SOLVER_SVM_PUBKEY
 USD_SVM_MINT_ADDR=$MINT_ADDR
 REQUESTER_SVM_TOKEN_ACCOUNT=$REQUESTER_SVM_TOKEN_ACCOUNT
 SOLVER_SVM_TOKEN_ACCOUNT=$SOLVER_SVM_TOKEN_ACCOUNT
-SVM_CHAIN_ID=901
+SVM_CHAIN_ID=$SVM_CHAIN_ID
 EOF
 
 log ""
-log "✅ SVM requester/solver setup complete"
+log "✅ SVM requester/solver setup complete (instance $SVM_INSTANCE)"

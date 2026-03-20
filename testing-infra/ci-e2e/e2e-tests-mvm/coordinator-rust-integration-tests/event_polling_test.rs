@@ -9,7 +9,7 @@ use chain_clients_mvm::MvmClient;
 /// Why: Event polling is core functionality for monitoring blockchain activity
 #[tokio::test]
 async fn test_get_account_events_chain1() {
-    let client = MvmClient::new("http://127.0.0.1:8080").unwrap();
+    let client = MvmClient::new("http://127.0.0.1:1000").unwrap();
     
     // Query events for the system account (0x1 always exists)
     let address = "0x1";
@@ -30,7 +30,7 @@ async fn test_get_account_events_chain1() {
 /// Why: Event polling is core functionality for monitoring blockchain activity
 #[tokio::test]
 async fn test_get_account_events_chain2() {
-    let client = MvmClient::new("http://127.0.0.1:8082").unwrap();
+    let client = MvmClient::new("http://127.0.0.1:2000").unwrap();
     
     // Query events for the system account (0x1 always exists)
     let address = "0x1";

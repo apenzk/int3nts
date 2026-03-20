@@ -2,28 +2,29 @@
 
 # Configure Coordinator for Connected SVM Chain
 #
-# This script adds the [connected_chain_svm] section to coordinator-e2e-ci-testing.toml.
+# This script adds a [[connected_chain_svm]] entry to coordinator-e2e-ci-testing.toml.
 # Must be called AFTER chain-hub/configure-coordinator.sh which creates the base config.
+# Accepts instance number as argument (default: 2).
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/utils.sh"
 
 setup_project_root
-setup_logging "configure-coordinator-connected-svm"
+
+# Accept instance number as argument
+svm_instance_vars "${1:-2}"
+source "$SVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
+setup_logging "configure-coordinator-connected-svm${SVM_INSTANCE}"
 cd "$PROJECT_ROOT"
 
-log_and_echo "   Configuring coordinator for Connected SVM Chain..."
+log_and_echo "   Configuring coordinator for Connected SVM Chain (instance $SVM_INSTANCE)..."
 log_and_echo ""
 
-CHAIN_INFO="$PROJECT_ROOT/.tmp/chain-info.env"
-if [ -f "$CHAIN_INFO" ]; then
-    source "$CHAIN_INFO"
-fi
-
 if [ -z "$SVM_PROGRAM_ID" ]; then
-    log_and_echo "   ERROR: SVM_PROGRAM_ID not found. Run chain-connected-svm/deploy-contracts.sh first."
+    log_and_echo "   ERROR: SVM_PROGRAM_ID not found. Run chain-connected-svm/deploy-contracts.sh $SVM_INSTANCE first."
     exit 1
 fi
 
@@ -36,11 +37,11 @@ fi
 TEMP_FILE=$(mktemp)
 cat > "$TEMP_FILE" << EOF
 
-[connected_chain_svm]
-name = "Connected SVM Chain"
-rpc_url = "http://127.0.0.1:8899"
+[[connected_chain_svm]]
+name = "Connected SVM Chain $SVM_INSTANCE"
+rpc_url = "$SVM_RPC_URL"
 escrow_program_id = "$SVM_PROGRAM_ID"
-chain_id = 901
+chain_id = $SVM_CHAIN_ID
 EOF
 
 awk -v svm_section="$(cat $TEMP_FILE)" '
@@ -53,5 +54,5 @@ rm -f "$TEMP_FILE"
 
 export COORDINATOR_CONFIG_PATH="$COORDINATOR_E2E_CI_TESTING_CONFIG"
 
-log_and_echo "   Added Connected SVM Chain section to coordinator config"
+log_and_echo "   Added Connected SVM Chain $SVM_INSTANCE section to coordinator config"
 log_and_echo ""

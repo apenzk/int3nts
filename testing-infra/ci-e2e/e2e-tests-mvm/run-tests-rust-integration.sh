@@ -77,10 +77,19 @@ echo " Step 3: Setting up chains, deploying contracts, funding accounts"
 echo "===================================================================="
 ./testing-infra/ci-e2e/chain-hub/setup-chain.sh
 ./testing-infra/ci-e2e/chain-hub/setup-requester-solver.sh
-./testing-infra/ci-e2e/chain-connected-mvm/setup-chain.sh
-./testing-infra/ci-e2e/chain-connected-mvm/setup-requester-solver.sh
+
+# Generate shared solver key so both MVM instances use the same solver address
+mkdir -p "$PROJECT_ROOT/.tmp"
+openssl rand -hex 32 | sed 's/^/0x/' > "$PROJECT_ROOT/.tmp/solver-mvm-shared-key.hex"
+
+./testing-infra/ci-e2e/chain-connected-mvm/setup-chain.sh 2
+./testing-infra/ci-e2e/chain-connected-mvm/setup-requester-solver.sh 2
 ./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
-./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh
+./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh 2
+
+./testing-infra/ci-e2e/chain-connected-mvm/setup-chain.sh 3
+./testing-infra/ci-e2e/chain-connected-mvm/setup-requester-solver.sh 3
+./testing-infra/ci-e2e/chain-connected-mvm/deploy-contracts.sh 3
 
 echo ""
 echo " Step 4: Configuring and starting services..."

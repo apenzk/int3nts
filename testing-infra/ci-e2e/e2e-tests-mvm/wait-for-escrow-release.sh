@@ -3,25 +3,30 @@
 # Wait for escrow auto-release for MVM E2E tests
 # Polls the intent_inflow_escrow::is_released view function on connected MVM chain
 # to verify the escrow was auto-released to the solver when FulfillmentProof arrived.
+# Respects MVM_INSTANCE env var for multi-instance testing.
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_mvm.sh"
+source "$SCRIPT_DIR/../chain-connected-mvm/utils.sh"
 
 setup_project_root
+
+# Load MVM instance vars
+mvm_instance_vars "${MVM_INSTANCE:-2}"
 
 # Load intent info
 if ! load_intent_info "INTENT_ID"; then
     exit 1
 fi
 
-MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain2")
+MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain${MVM_INSTANCE}")
 
 # Format intent_id for view function call: strip 0x prefix, zero-pad to 64 hex chars
 INTENT_ID_HEX=$(echo "$INTENT_ID" | sed 's/^0x//')
 INTENT_ID_HEX=$(printf "%064s" "$INTENT_ID_HEX" | tr ' ' '0')
 
-log_and_echo "⏳ Waiting for escrow auto-release..."
+log_and_echo "⏳ Waiting for escrow auto-release (instance $MVM_INSTANCE)..."
 log "   Intent ID: $INTENT_ID"
 log "   Module: 0x${MVMCON_MODULE_ADDR}::intent_inflow_escrow::is_released"
 
@@ -31,7 +36,7 @@ ATTEMPT=1
 ESCROW_CLAIMED=false
 
 while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-    IS_RELEASED=$(curl -s "http://127.0.0.1:8082/v1/view" \
+    IS_RELEASED=$(curl -s "http://127.0.0.1:${MVM_REST_PORT}/v1/view" \
         -H 'Content-Type: application/json' \
         -d "{
             \"function\": \"0x${MVMCON_MODULE_ADDR}::intent_inflow_escrow::is_released\",

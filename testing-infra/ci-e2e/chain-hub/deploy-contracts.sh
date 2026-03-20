@@ -27,8 +27,8 @@ log "️  Configuring Aptos CLI for Hub..."
 log " Cleaning up existing CLI profile..."
 cleanup_aptos_profile "intent-account-chain1" "$LOG_FILE"
 
-# Configure Hub (port 8080)
-log "   - Configuring Hub (port 8080)..."
+# Configure Hub (port 1000)
+log "   - Configuring Hub (port 1000)..."
 init_aptos_profile "intent-account-chain1" "1" "$LOG_FILE"
 
 log ""

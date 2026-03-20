@@ -23,15 +23,15 @@ use std::str::FromStr;
 pub struct Config {
     /// Hub chain configuration (where intents are created)
     pub hub_chain: ChainConfig,
-    /// Connected Move VM chain configuration (optional, where escrow events occur on Move VM)
+    /// Connected Move VM chain configurations (supports multiple simultaneous MVM chains)
     #[serde(default)]
-    pub connected_chain_mvm: Option<ChainConfig>,
-    /// Connected EVM chain configuration (optional, for escrow on EVM)
+    pub connected_chain_mvm: Vec<ChainConfig>,
+    /// Connected EVM chain configurations (supports multiple simultaneous EVM chains)
     #[serde(default)]
-    pub connected_chain_evm: Option<EvmChainConfig>,
-    /// Connected Solana chain configuration (optional, for escrow on SVM)
+    pub connected_chain_evm: Vec<EvmChainConfig>,
+    /// Connected Solana chain configurations (supports multiple simultaneous SVM chains)
     #[serde(default)]
-    pub connected_chain_svm: Option<SvmChainConfig>,
+    pub connected_chain_svm: Vec<SvmChainConfig>,
     /// Coordinator-specific configuration (timing settings)
     pub coordinator: CoordinatorConfig,
     /// API server configuration (host, port, CORS settings)
@@ -173,63 +173,87 @@ impl Config {
     pub fn validate(&self) -> anyhow::Result<()> {
         let hub_chain_id = self.hub_chain.chain_id;
 
-        // Check hub vs connected_chain_mvm
-        if let Some(ref mvm_config) = self.connected_chain_mvm {
+        // Check all MVM chains against hub and each other
+        for mvm_config in &self.connected_chain_mvm {
             if hub_chain_id == mvm_config.chain_id {
                 return Err(anyhow::anyhow!(
-                    "Configuration error: Hub chain and connected MVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    hub_chain_id
+                    "Configuration error: Hub chain and connected MVM chain have the same chain ID {} (chain: '{}'). Each chain must have a unique chain ID.",
+                    hub_chain_id, mvm_config.name
                 ));
             }
         }
-
-        // Check hub vs connected_chain_evm
-        if let Some(ref evm_config) = self.connected_chain_evm {
-            if hub_chain_id == evm_config.chain_id {
-                return Err(anyhow::anyhow!(
-                    "Configuration error: Hub chain and connected EVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    hub_chain_id
-                ));
+        for i in 0..self.connected_chain_mvm.len() {
+            for j in (i + 1)..self.connected_chain_mvm.len() {
+                if self.connected_chain_mvm[i].chain_id == self.connected_chain_mvm[j].chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected MVM chains '{}' and '{}' have the same chain ID {}. Each chain must have a unique chain ID.",
+                        self.connected_chain_mvm[i].name, self.connected_chain_mvm[j].name, self.connected_chain_mvm[i].chain_id
+                    ));
+                }
             }
         }
 
-        // Check hub vs connected_chain_svm
-        if let Some(ref svm_config) = self.connected_chain_svm {
+        // Check all SVM chains against hub, MVM, and each other
+        for svm_config in &self.connected_chain_svm {
             if hub_chain_id == svm_config.chain_id {
                 return Err(anyhow::anyhow!(
-                    "Configuration error: Hub chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    hub_chain_id
+                    "Configuration error: Hub chain and connected SVM chain have the same chain ID {} (chain: '{}'). Each chain must have a unique chain ID.",
+                    hub_chain_id, svm_config.name
                 ));
+            }
+            for mvm_config in &self.connected_chain_mvm {
+                if mvm_config.chain_id == svm_config.chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected MVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                        svm_config.chain_id
+                    ));
+                }
+            }
+        }
+        for i in 0..self.connected_chain_svm.len() {
+            for j in (i + 1)..self.connected_chain_svm.len() {
+                if self.connected_chain_svm[i].chain_id == self.connected_chain_svm[j].chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected SVM chains '{}' and '{}' have the same chain ID {}. Each chain must have a unique chain ID.",
+                        self.connected_chain_svm[i].name, self.connected_chain_svm[j].name, self.connected_chain_svm[i].chain_id
+                    ));
+                }
             }
         }
 
-        // Check connected_chain_mvm vs connected_chain_evm
-        if let (Some(ref mvm_config), Some(ref evm_config)) = (&self.connected_chain_mvm, &self.connected_chain_evm) {
-            if mvm_config.chain_id == evm_config.chain_id {
+        // Check all EVM chains against hub, MVM, SVM, and each other
+        for evm_config in &self.connected_chain_evm {
+            if hub_chain_id == evm_config.chain_id {
                 return Err(anyhow::anyhow!(
-                    "Configuration error: Connected MVM chain and connected EVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    mvm_config.chain_id
+                    "Configuration error: Hub chain and connected EVM chain have the same chain ID {} (chain: '{}'). Each chain must have a unique chain ID.",
+                    hub_chain_id, evm_config.name
                 ));
             }
-        }
-
-        // Check connected_chain_mvm vs connected_chain_svm
-        if let (Some(ref mvm_config), Some(ref svm_config)) = (&self.connected_chain_mvm, &self.connected_chain_svm) {
-            if mvm_config.chain_id == svm_config.chain_id {
-                return Err(anyhow::anyhow!(
-                    "Configuration error: Connected MVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    mvm_config.chain_id
-                ));
+            for mvm_config in &self.connected_chain_mvm {
+                if mvm_config.chain_id == evm_config.chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected MVM chain and connected EVM chain have the same chain ID {} (chain: '{}'). Each chain must have a unique chain ID.",
+                        evm_config.chain_id, evm_config.name
+                    ));
+                }
+            }
+            for svm_config in &self.connected_chain_svm {
+                if evm_config.chain_id == svm_config.chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected EVM chain '{}' and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
+                        evm_config.name, evm_config.chain_id
+                    ));
+                }
             }
         }
-
-        // Check connected_chain_evm vs connected_chain_svm
-        if let (Some(ref evm_config), Some(ref svm_config)) = (&self.connected_chain_evm, &self.connected_chain_svm) {
-            if evm_config.chain_id == svm_config.chain_id {
-                return Err(anyhow::anyhow!(
-                    "Configuration error: Connected EVM chain and connected SVM chain have the same chain ID {}. Each chain must have a unique chain ID.",
-                    evm_config.chain_id
-                ));
+        for i in 0..self.connected_chain_evm.len() {
+            for j in (i + 1)..self.connected_chain_evm.len() {
+                if self.connected_chain_evm[i].chain_id == self.connected_chain_evm[j].chain_id {
+                    return Err(anyhow::anyhow!(
+                        "Configuration error: Connected EVM chains '{}' and '{}' have the same chain ID {}. Each chain must have a unique chain ID.",
+                        self.connected_chain_evm[i].name, self.connected_chain_evm[j].name, self.connected_chain_evm[i].chain_id
+                    ));
+                }
             }
         }
 
@@ -270,17 +294,17 @@ impl Config {
         if self.hub_chain.chain_id == chain_id {
             return Some("mvm");
         }
-        if let Some(ref mvm_config) = self.connected_chain_mvm {
+        for mvm_config in &self.connected_chain_mvm {
             if mvm_config.chain_id == chain_id {
                 return Some("mvm");
             }
         }
-        if let Some(ref evm_config) = self.connected_chain_evm {
+        for evm_config in &self.connected_chain_evm {
             if evm_config.chain_id == chain_id {
                 return Some("evm");
             }
         }
-        if let Some(ref svm_config) = self.connected_chain_svm {
+        for svm_config in &self.connected_chain_svm {
             if svm_config.chain_id == chain_id {
                 return Some("svm");
             }
@@ -338,7 +362,7 @@ impl Config {
                 intent_module_addr: "0x123".to_string(),
                 escrow_module_addr: None,
             },
-            connected_chain_mvm: None, // Optional connected Move VM chain configuration
+            connected_chain_mvm: vec![], // No connected MVM chains by default
             coordinator: CoordinatorConfig {
                 polling_interval_ms: 2000,
                 validation_timeout_ms: 30000,
@@ -348,8 +372,8 @@ impl Config {
                 port: 3333,
                 cors_origins: vec!["http://localhost:3333".to_string()],
             },
-            connected_chain_evm: None, // Optional connected EVM chain configuration
-            connected_chain_svm: None, // Optional connected SVM chain configuration
+            connected_chain_evm: vec![], // No connected EVM chains by default
+            connected_chain_svm: vec![], // No connected SVM chains by default
             acceptance: None, // Optional acceptance criteria
         }
     }

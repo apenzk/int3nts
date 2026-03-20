@@ -57,13 +57,13 @@ fn test_config_validation_success() {
     assert!(config.validate().is_ok());
 }
 
-/// What is tested: SolverConfig::validate() accepts multiple connected chains
-/// Why: Ensure multiple connected chains can be configured at once
+/// What is tested: SolverConfig::validate() accepts multiple connected chains of all types
+/// Why: Ensure MVM, EVM, and SVM connected chains can be configured together
 #[test]
 fn test_config_validation_multiple_connected_chains() {
     let mut config = create_test_config();
 
-    // Add an EVM connected chain alongside the default MVM chain
+    // Add EVM and SVM connected chains alongside the default MVM chain
     config.connected_chain.push(ConnectedChainConfig::Evm(EvmChainConfig {
         name: "connected-evm".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
@@ -74,11 +74,25 @@ fn test_config_validation_multiple_connected_chains() {
         outflow_validator_addr: None,
         gmp_endpoint_addr: None,
     }));
+    config.connected_chain.push(ConnectedChainConfig::Svm(SvmChainConfig {
+        name: "connected-svm".to_string(),
+        rpc_url: "http://127.0.0.1:8899".to_string(),
+        chain_id: 4,
+        escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
+        private_key_env: "SOLANA_SOLVER_PRIVATE_KEY".to_string(),
+        gmp_endpoint_program_id: None,
+        outflow_validator_program_id: None,
+    }));
 
     assert!(config.validate().is_ok());
-    assert!(config.get_mvm_config().is_some());
-    assert!(config.get_evm_config().is_some());
-    assert!(config.get_svm_config().is_none());
+    // Hub (chain_id=1) + 3 connected chain types are configured
+    assert_eq!(config.hub_chain.chain_id, 1);
+    assert!(config.get_connected_chain_by_id(2).is_some()); // connected MVM
+    assert!(config.get_connected_chain_by_id(3).is_some()); // connected EVM
+    assert!(config.get_connected_chain_by_id(4).is_some()); // connected SVM
+    assert!(config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Mvm(_))));
+    assert!(config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Evm(_))));
+    assert!(config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Svm(_))));
 }
 
 /// What is tested: SolverConfig::validate() rejects duplicate chain IDs

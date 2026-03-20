@@ -259,7 +259,7 @@ pub async fn setup_mock_server_with_registry_evm(
     let mut config = build_test_config_with_evm();
     config.hub_chain.rpc_url = mock_server.uri();
     // Clear MVM chain config so tests use EVM path
-    config.connected_chain_mvm = None;
+    config.connected_chain_mvm = vec![];
     (mock_server, config)
 }
 

@@ -128,29 +128,25 @@ export function getGmpConfigPda(programId: PublicKey): [PublicKey, number] {
  */
 export type CreateEscrowGmpParams = {
   gmpEndpointProgramId: PublicKey;
-  hubChainId: number;
   currentNonce: bigint;
 };
 
 /**
- * Read the current outbound nonce for a destination chain from the GMP endpoint.
+ * Read the global outbound nonce from the GMP endpoint.
  * Used to derive the message PDA for GMP Send CPI.
  */
 export async function readGmpOutboundNonce(
   connection: Connection,
   gmpEndpointProgramId: PublicKey,
-  hubChainId: number,
 ): Promise<bigint> {
-  const chainIdBytes = Buffer.alloc(4);
-  chainIdBytes.writeUInt32LE(hubChainId);
   const [noncePda] = PublicKey.findProgramAddressSync(
-    [Buffer.from('nonce_out'), chainIdBytes],
+    [Buffer.from('nonce_out')],
     gmpEndpointProgramId,
   );
   const accountInfo = await connection.getAccountInfo(noncePda);
-  if (accountInfo && accountInfo.data.length >= 13) {
-    // OutboundNonceAccount: discriminator(1) + dst_chain_id(4) + nonce(8) + bump(1)
-    return Buffer.from(accountInfo.data).readBigUInt64LE(5);
+  if (accountInfo && accountInfo.data.length >= 9) {
+    // OutboundNonceAccount: discriminator(1) + nonce(8) + bump(1)
+    return Buffer.from(accountInfo.data).readBigUInt64LE(1);
   }
   return BigInt(0);
 }
@@ -327,20 +323,18 @@ export function buildCreateEscrowInstruction(params: {
     const [gmpConfigPda] = getGmpConfigPda(programId);
 
     // GMP endpoint PDAs
-    const chainIdBytes = Buffer.alloc(4);
-    chainIdBytes.writeUInt32LE(gmp.hubChainId);
     const [gmpEndpointConfigPda] = PublicKey.findProgramAddressSync(
       [Buffer.from('config')],
       gmp.gmpEndpointProgramId,
     );
     const [gmpNonceOutPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('nonce_out'), chainIdBytes],
+      [Buffer.from('nonce_out')],
       gmp.gmpEndpointProgramId,
     );
     const nonceBytes = Buffer.alloc(8);
     nonceBytes.writeBigUInt64LE(gmp.currentNonce);
     const [messagePda] = PublicKey.findProgramAddressSync(
-      [Buffer.from('message'), chainIdBytes, nonceBytes],
+      [Buffer.from('message'), nonceBytes],
       gmp.gmpEndpointProgramId,
     );
 

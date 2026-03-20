@@ -277,7 +277,7 @@ impl SigningService {
             .strip_prefix("0x")
             .context("Module address must start with 0x")?
             .to_string();
-        let chain_num = 1u8; // Hub chain is always chain 1
+        let hub_rpc_url = self.config.hub_chain.rpc_url.clone();
 
         // Clone data for spawn_blocking
         let offered_token = draft_data.offered_token.clone();
@@ -324,7 +324,7 @@ impl SigningService {
                 &requester_addr,
                 &solver_hub_addr_clone,
                 fee_in_offered_token,
-                chain_num,
+                &hub_rpc_url,
                 e2e_mode,
             )
             .context("Failed to get intent hash")?;

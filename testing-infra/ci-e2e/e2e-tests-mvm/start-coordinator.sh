@@ -3,6 +3,7 @@
 # Start Coordinator for MVM E2E Tests
 #
 # Configures and starts the coordinator service (monitoring and negotiation, port 3333, NO keys).
+# Configures both MVM instances.
 
 set -e
 
@@ -21,7 +22,8 @@ log ""
 
 log " Configuring coordinator..."
 source "$PROJECT_ROOT/testing-infra/ci-e2e/chain-hub/configure-coordinator.sh"
-source "$PROJECT_ROOT/testing-infra/ci-e2e/chain-connected-mvm/configure-coordinator.sh"
+source "$PROJECT_ROOT/testing-infra/ci-e2e/chain-connected-mvm/configure-coordinator.sh" 2
+source "$PROJECT_ROOT/testing-infra/ci-e2e/chain-connected-mvm/configure-coordinator.sh" 3
 
 log ""
 log "   Starting coordinator service..."

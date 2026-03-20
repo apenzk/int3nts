@@ -14,8 +14,8 @@ chain_id = 1
 intent_module_addr = "0x123"
 
 # Connected EVM Chain Configuration
-# Include this section if you have a connected EVM chain (e.g. Base Sepolia)
-[connected_chain_evm]
+# Include one [[connected_chain_evm]] block per EVM chain (e.g. Base Sepolia, HyperEVM)
+[[connected_chain_evm]]
 name = "Connected EVM Chain"
 rpc_url = "http://127.0.0.1:8545"
 chain_id = 31337
@@ -24,8 +24,8 @@ gmp_endpoint_addr = "0x123"  # IntentGmp contract address for GMP message routin
 approver_evm_pubkey_hash = "0x123"  # EVM address derived from integrated-gmp ECDSA key (on-chain approver address)
 
 # Connected SVM Chain Configuration
-# Include this section if you have a connected Solana chain
-[connected_chain_svm]
+# Include one [[connected_chain_svm]] block per SVM chain (e.g. Solana Devnet, Eclipse)
+[[connected_chain_svm]]
 name = "Connected SVM Chain"
 rpc_url = "http://127.0.0.1:8899"
 chain_id = 1001

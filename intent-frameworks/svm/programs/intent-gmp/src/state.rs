@@ -94,14 +94,12 @@ impl RemoteGmpEndpoint {
     }
 }
 
-/// Nonce tracker for outbound messages (per destination chain).
-/// PDA seeds: ["nonce_out", dst_chain_id (as bytes)]
+/// Global nonce tracker for outbound messages (single sequence across all destinations).
+/// PDA seeds: ["nonce_out"]
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, PartialEq, Eq)]
 pub struct OutboundNonceAccount {
     /// Discriminator for account type
     pub discriminator: u8,
-    /// Destination chain endpoint ID
-    pub dst_chain_id: u32,
     /// Current nonce (incremented for each message sent)
     pub nonce: u64,
     /// Bump seed for PDA derivation
@@ -110,12 +108,11 @@ pub struct OutboundNonceAccount {
 
 impl OutboundNonceAccount {
     pub const DISCRIMINATOR: u8 = 4;
-    pub const SIZE: usize = 1 + 4 + 8 + 1; // 14 bytes
+    pub const SIZE: usize = 1 + 8 + 1; // 10 bytes
 
-    pub fn new(dst_chain_id: u32, bump: u8) -> Self {
+    pub fn new(bump: u8) -> Self {
         Self {
             discriminator: Self::DISCRIMINATOR,
-            dst_chain_id,
             nonce: 0,
             bump,
         }
@@ -196,7 +193,7 @@ impl RoutingConfig {
 }
 
 /// Stored outbound message for relay to read via getAccountInfo.
-/// PDA seeds: ["message", dst_chain_id (as bytes), nonce (as bytes)]
+/// PDA seeds: ["message", nonce (as bytes)]
 ///
 /// TODO: These accounts accumulate forever (~0.001 SOL rent each). Add a
 /// `CloseMessage` instruction that lets the relay (or admin) close the account

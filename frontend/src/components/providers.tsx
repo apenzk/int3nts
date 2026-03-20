@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react';
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   const svmEndpoint = useMemo(
-    () => process.env.NEXT_PUBLIC_SVM_RPC_URL || 'https://api.devnet.solana.com',
+    () => process.env.NEXT_PUBLIC_SOLANA_TESTNET_RPC_URL!,
     []
   );
   const svmWallets = useMemo(() => [new PhantomWalletAdapter()], []);

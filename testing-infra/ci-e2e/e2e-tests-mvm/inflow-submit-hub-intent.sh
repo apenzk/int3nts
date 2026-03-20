@@ -4,11 +4,16 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_mvm.sh"
+source "$SCRIPT_DIR/../chain-connected-mvm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "submit-hub-intent"
 cd "$PROJECT_ROOT"
+
+# Load MVM instance vars
+mvm_instance_vars "${MVM_INSTANCE:-2}"
+
+setup_logging "inflow-submit-hub-intent-mvm${MVM_INSTANCE}"
 
 # Verify services are running before proceeding
 verify_coordinator_running
@@ -25,15 +30,15 @@ INTENT_ID="0x$(openssl rand -hex 32)"
 # ============================================================================
 # SECTION 2: GET ADDRES AND CONFIGURATION
 # ============================================================================
-CONNECTED_CHAIN_ID=2
+CONNECTED_CHAIN_ID=$MVM_CHAIN_ID
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
-MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain2")
+MVMCON_MODULE_ADDR=$(get_profile_address "intent-account-chain${MVM_INSTANCE}")
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
-USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain2")
+USD_MVMCON_MODULE_ADDR=$(get_profile_address "test-tokens-chain${MVM_INSTANCE}")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
-REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain2")
-SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain2")
+REQUESTER_MVMCON_ADDR=$(get_profile_address "requester-chain${MVM_INSTANCE}")
+SOLVER_MVMCON_ADDR=$(get_profile_address "solver-chain${MVM_INSTANCE}")
 
 log ""
 log " Chain Information:"
@@ -70,7 +75,7 @@ fi
 log "     ✅ Got USDhub metadata on Hub: $USDHUB_METADATA_HUB"
 
 log "     Getting USDcon metadata on connected MVM..."
-USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "2")
+USD_MVMCON_ADDR=$(get_usdxyz_metadata_addr "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE")
 if [ -z "$USD_MVMCON_ADDR" ]; then
     log_and_echo "❌ Failed to get USDcon metadata on connected MVM"
     exit 1
@@ -90,7 +95,7 @@ log "       Desired metadata (hub): $DESIRED_METADATA_HUB"
 # Check and display initial balances using common function
 log ""
 display_balances_hub "0x$TEST_TOKENS_HUB"
-display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE"
 log_and_echo ""
 
 # ============================================================================
@@ -209,7 +214,7 @@ if [ $? -eq 0 ]; then
 
     sleep 2
     log "     - Verifying intent stored on-chain..."
-    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
+    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:1000/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("LimitOrderEvent")) | .data.intent_addr' | head -n 1)
 
     if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then
@@ -233,7 +238,7 @@ fi
 # ============================================================================
 log ""
 display_balances_hub "0x$TEST_TOKENS_HUB"
-display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR"
+display_balances_connected_mvm "0x$USD_MVMCON_MODULE_ADDR" "$MVM_INSTANCE"
 log_and_echo ""
 
 log ""

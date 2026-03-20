@@ -2,11 +2,41 @@
 
 # EVM-specific utilities for testing infrastructure scripts
 # This file MUST be sourced AFTER util.sh
-# Usage: 
+# Usage:
 #   source "$(dirname "$0")/../util.sh"
 #   source "$(dirname "$0")/utils.sh"
 #
 # Note: This file depends on functions from util.sh (log, log_and_echo, setup_project_root, etc.)
+
+# Derive all instance-specific values from instance number.
+# Sets: EVM_INSTANCE, EVM_PORT, EVM_CHAIN_ID, EVM_NETWORK, EVM_RPC_URL, EVM_PID_FILE, EVM_CHAIN_INFO_FILE
+# Usage: evm_instance_vars <instance_number>
+evm_instance_vars() {
+    local n="${1:-1}"
+    export EVM_INSTANCE="$n"
+    case "$n" in
+        2) export EVM_PORT=2000; export EVM_CHAIN_ID=2; export EVM_NETWORK=localhost-e2e-2 ;;
+        3) export EVM_PORT=3000; export EVM_CHAIN_ID=3; export EVM_NETWORK=localhost-e2e-3 ;;
+        *) echo "Unknown EVM instance: $n" >&2; exit 1 ;;
+    esac
+    export EVM_RPC_URL="http://127.0.0.1:$EVM_PORT"
+    if [ -z "$PROJECT_ROOT" ]; then
+        setup_project_root
+    fi
+    export EVM_PID_FILE="$PROJECT_ROOT/.tmp/hardhat-node-${n}.pid"
+    export EVM_CHAIN_INFO_FILE="$PROJECT_ROOT/.tmp/chain-info-evm${n}.env"
+}
+
+# Load chain info for a specific EVM instance.
+# Sources the instance-specific chain-info file and sets EVM_INSTANCE vars.
+# Usage: load_evm_chain_info [instance_number]
+load_evm_chain_info() {
+    local n="${1:-${EVM_INSTANCE:-2}}"
+    evm_instance_vars "$n"
+    if [ -f "$EVM_CHAIN_INFO_FILE" ]; then
+        source "$EVM_CHAIN_INFO_FILE"
+    fi
+}
 
 # Run Hardhat command with nix develop wrapper
 # Usage: run_hardhat_command <command> [env_vars]
@@ -45,11 +75,11 @@ run_hardhat_command() {
 # Check if EVM chain is running
 # Usage: check_evm_chain_running [port]
 # Example: check_evm_chain_running
-#          check_evm_chain_running "8545"
-# Checks if EVM chain is responding on the specified port (default: 8545)
+#          check_evm_chain_running "2000"
+# Checks if EVM chain is responding on the specified port (default: $EVM_PORT or 2000)
 # Returns 0 if chain is running, 1 if not
 check_evm_chain_running() {
-    local port="${1:-8545}"
+    local port="${1:-${EVM_PORT:-2000}}"
     
     if curl -s -X POST "http://127.0.0.1:${port}" \
         -H "Content-Type: application/json" \
@@ -69,7 +99,7 @@ check_evm_chain_running() {
 # Uses get-account-address.js script with ACCOUNT_INDEX environment variable
 get_hardhat_account_address() {
     local account_index="$1"
-    local network="${2:-localhost}"
+    local network="${2:-${EVM_NETWORK:-localhost}}"
     
     if [ -z "$account_index" ]; then
         log_and_echo "❌ ERROR: get_hardhat_account_address() requires an account index"
@@ -123,8 +153,8 @@ extract_escrow_contract_address() {
 
     local contract_addr=""
 
-    # First, try to get from chain-info.env (set by deploy-contracts.sh)
-    local chain_info_file="$PROJECT_ROOT/.tmp/chain-info.env"
+    # First, try to get from instance-specific chain-info file (set by deploy-contracts.sh)
+    local chain_info_file="${EVM_CHAIN_INFO_FILE:-$PROJECT_ROOT/.tmp/chain-info.env}"
     if [ -f "$chain_info_file" ]; then
         contract_addr=$(grep "^ESCROW_GMP_ADDR=" "$chain_info_file" 2>/dev/null | cut -d'=' -f2 | tr -d '\n')
     fi

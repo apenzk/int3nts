@@ -4,10 +4,11 @@ services:
   aptos-localnet-chain1:
     image: ${APTOS_DOCKER_IMAGE}
     container_name: aptos-localnet-chain1
-    network_mode: host
+    ports:
+      - "1000:8080"  # REST API on port 1000
+      - "1010:8081"  # Faucet on port 1010
     volumes:
       - aptos-data:/aptos/config
-      - /var/run/docker.sock:/var/run/docker.sock
     command: >
       sh -c "
         echo 'Starting Aptos Localnet Hub with faucet (fresh start)...' &&

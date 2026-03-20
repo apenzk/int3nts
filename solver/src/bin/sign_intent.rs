@@ -18,7 +18,7 @@
 //!   --expiry-time 1234567890 \
 //!   --issuer 0xalice \
 //!   --solver 0xbob \
-//!   --chain-num 1
+//!   --hub-rpc-url http://127.0.0.1:1000/v1
 //! ```
 
 use anyhow::{Context, Result};
@@ -29,9 +29,9 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 || args[1] == "--help" || args[1] == "-h" {
-        eprintln!("Usage: sign_intent --profile <profile> --chain-address <address> --offered-metadata <address> --offered-amount <u64> --offered-chain-id <u64> --desired-metadata <address> --desired-amount <u64> --desired-chain-id <u64> --expiry-time <u64> --issuer <address> --solver <address> --chain-num <1|2>");
+        eprintln!("Usage: sign_intent --profile <profile> --chain-address <address> --offered-metadata <address> --offered-amount <u64> --offered-chain-id <u64> --desired-metadata <address> --desired-amount <u64> --desired-chain-id <u64> --expiry-time <u64> --issuer <address> --solver <address> --hub-rpc-url <url>");
         eprintln!("\nExample:");
-        eprintln!("  sign_intent --profile bob-chain1 --chain-address 0x123 --offered-metadata 0xabc --offered-amount 1000000 --offered-chain-id 1 --desired-metadata 0xdef --desired-amount 1000000 --desired-chain-id 2 --expiry-time 1234567890 --issuer 0xalice --solver 0xbob --chain-num 1");
+        eprintln!("  sign_intent --profile bob-chain1 --chain-address 0x123 --offered-metadata 0xabc --offered-amount 1000000 --offered-chain-id 1 --desired-metadata 0xdef --desired-amount 1000000 --desired-chain-id 2 --expiry-time 1234567890 --issuer 0xalice --solver 0xbob --hub-rpc-url http://127.0.0.1:1000/v1");
         std::process::exit(1);
     }
 
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
     let mut issuer = None;
     let mut solver = None;
     let mut fee_in_offered_token: Option<u64> = None;
-    let mut chain_num = None;
+    let mut hub_rpc_url = None;
     let mut e2e_mode = false;
 
     let mut i = 1;
@@ -102,8 +102,8 @@ fn main() -> Result<()> {
                 fee_in_offered_token = Some(args[i + 1].parse().context("Invalid fee-in-offered-token")?);
                 i += 2;
             }
-            "--chain-num" => {
-                chain_num = Some(args[i + 1].parse().context("Invalid chain-num")?);
+            "--hub-rpc-url" => {
+                hub_rpc_url = Some(args[i + 1].clone());
                 i += 2;
             }
             "--e2e-mode" => {
@@ -129,7 +129,7 @@ fn main() -> Result<()> {
     let issuer = issuer.context("--issuer is required")?;
     let solver = solver.context("--solver is required")?;
     let fee_in_offered_token = fee_in_offered_token.context("--fee-in-offered-token is required")?;
-    let chain_num = chain_num.context("--chain-num is required")?;
+    let hub_rpc_url = hub_rpc_url.context("--hub-rpc-url is required")?;
 
     // Step 1: Call Move function to get the hash
     let hash = crypto::get_intent_hash(
@@ -145,7 +145,7 @@ fn main() -> Result<()> {
         &issuer,
         &solver,
         fee_in_offered_token,
-        chain_num,
+        &hub_rpc_url,
         e2e_mode,
     )?;
 

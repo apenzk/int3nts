@@ -15,8 +15,9 @@ source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 # Setup project root
 setup_project_root
 
-# Load chain info and intent info
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Load EVM instance vars and chain info
+evm_instance_vars "${EVM_INSTANCE:-2}"
+source "$EVM_CHAIN_INFO_FILE" 2>/dev/null || true
 
 # Load INTENT_ID - this will exit if missing
 log "   Loading intent info..."

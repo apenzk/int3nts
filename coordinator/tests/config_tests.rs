@@ -17,12 +17,12 @@ fn test_default_config_creation() {
     assert_eq!(config.hub_chain.name, "Hub Chain");
     assert_eq!(config.hub_chain.rpc_url, "http://127.0.0.1:8080");
     assert!(
-        config.connected_chain_mvm.is_none(),
-        "Default config should have no connected Move VM chain"
+        config.connected_chain_mvm.is_empty(),
+        "Default config should have no connected MVM chains"
     );
     assert!(
-        config.connected_chain_evm.is_none(),
-        "Default config should have no connected EVM chain"
+        config.connected_chain_evm.is_empty(),
+        "Default config should have no connected EVM chains"
     );
 }
 
@@ -33,16 +33,16 @@ fn test_connected_chain_mvm_with_values() {
     use coordinator::config::ChainConfig;
     let mut config = Config::default();
 
-    config.connected_chain_mvm = Some(ChainConfig {
+    config.connected_chain_mvm = vec![ChainConfig {
         name: "Connected Move VM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8082".to_string(),
         chain_id: 2,
         intent_module_addr: "0x123".to_string(),
         escrow_module_addr: Some("0x123".to_string()),
-    });
+    }];
 
     assert_eq!(
-        config.connected_chain_mvm.as_ref().unwrap().name,
+        config.connected_chain_mvm[0].name,
         "Connected Move VM Chain"
     );
 }
@@ -73,12 +73,12 @@ pairs = [
 fn test_config_validate_acceptance_svm_base58() {
     let mut config = Config::default();
     config.hub_chain.chain_id = 250;
-    config.connected_chain_svm = Some(SvmChainConfig {
+    config.connected_chain_svm = vec![SvmChainConfig {
         name: "SVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
         chain_id: 901,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
-    });
+    }];
     config.acceptance = Some(AcceptanceConfig {
         solver_url: "http://127.0.0.1:4444".to_string(),
         pairs: vec![TokenPairConfig {
@@ -99,29 +99,29 @@ fn test_config_validate_acceptance_svm_base58() {
 fn test_config_validation_multiple_connected_chains() {
     let mut config = Config::default();
 
-    config.connected_chain_mvm = Some(ChainConfig {
+    config.connected_chain_mvm = vec![ChainConfig {
         name: "MVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8082".to_string(),
         chain_id: 2,
         intent_module_addr: "0x123".to_string(),
         escrow_module_addr: Some("0x123".to_string()),
-    });
+    }];
 
-    config.connected_chain_evm = Some(EvmChainConfig {
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 31337,
         event_block_range: 1000,
-    });
+    }];
 
-    config.connected_chain_svm = Some(SvmChainConfig {
+    config.connected_chain_svm = vec![SvmChainConfig {
         name: "SVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
         chain_id: 901,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
-    });
+    }];
 
     let result = config.validate();
     assert!(result.is_ok(), "Should accept multiple connected chains");
@@ -153,13 +153,13 @@ fn test_config_serialization() {
 fn test_config_validate_hub_mvm_duplicate_chain_id() {
     let mut config = Config::default();
     config.hub_chain.chain_id = 100;
-    config.connected_chain_mvm = Some(ChainConfig {
+    config.connected_chain_mvm = vec![ChainConfig {
         name: "MVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8082".to_string(),
         chain_id: 100, // Same as hub
         intent_module_addr: "0x123".to_string(),
         escrow_module_addr: Some("0x123".to_string()),
-    });
+    }];
 
     let result = config.validate();
     assert!(result.is_err(), "Should reject duplicate chain IDs");
@@ -172,14 +172,14 @@ fn test_config_validate_hub_mvm_duplicate_chain_id() {
 fn test_config_validate_hub_evm_duplicate_chain_id() {
     let mut config = Config::default();
     config.hub_chain.chain_id = 100;
-    config.connected_chain_evm = Some(EvmChainConfig {
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 100,
         event_block_range: 1000, // Same as hub
-    });
+    }];
 
     let result = config.validate();
     assert!(result.is_err(), "Should reject duplicate chain IDs");
@@ -191,21 +191,21 @@ fn test_config_validate_hub_evm_duplicate_chain_id() {
 #[test]
 fn test_config_validate_mvm_evm_duplicate_chain_id() {
     let mut config = Config::default();
-    config.connected_chain_mvm = Some(ChainConfig {
+    config.connected_chain_mvm = vec![ChainConfig {
         name: "MVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8082".to_string(),
         chain_id: 100,
         intent_module_addr: "0x123".to_string(),
         escrow_module_addr: Some("0x123".to_string()),
-    });
-    config.connected_chain_evm = Some(EvmChainConfig {
+    }];
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 100,
         event_block_range: 1000, // Same as MVM
-    });
+    }];
 
     let result = config.validate();
     assert!(result.is_err(), "Should reject duplicate chain IDs");
@@ -218,21 +218,21 @@ fn test_config_validate_mvm_evm_duplicate_chain_id() {
 fn test_config_validate_unique_chain_ids() {
     let mut config = Config::default();
     config.hub_chain.chain_id = 1;
-    config.connected_chain_mvm = Some(ChainConfig {
+    config.connected_chain_mvm = vec![ChainConfig {
         name: "MVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8082".to_string(),
         chain_id: 2, // Different from hub
         intent_module_addr: "0x123".to_string(),
         escrow_module_addr: Some("0x123".to_string()),
-    });
-    config.connected_chain_evm = Some(EvmChainConfig {
+    }];
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 31337, // Different from hub and MVM
         event_block_range: 1000,
-    });
+    }];
 
     let result = config.validate();
     assert!(result.is_ok(), "Should accept unique chain IDs");

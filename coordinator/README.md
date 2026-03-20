@@ -39,7 +39,7 @@ cargo run --bin coordinator -- --help
 For running against testnets (Movement Bardock + Base Sepolia), use the provided script:
 
 ```bash
-./testing-infra/testnet/run-coordinator-local.sh
+./testing-infra/networks/testnet/run-coordinator-local.sh
 ```
 
 This script automatically uses the `--testnet` flag.

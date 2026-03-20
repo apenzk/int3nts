@@ -11,10 +11,11 @@
 //! 6. Solver calls fulfill_outflow_intent on hub to claim locked tokens
 
 use crate::chains::{ConnectedEvmClient, ConnectedMvmClient, ConnectedSvmClient, HubChainClient};
-use crate::config::SolverConfig;
+use crate::config::{ConnectedChainConfig, SolverConfig};
 use crate::service::liquidity::LiquidityMonitor;
 use crate::service::tracker::{IntentTracker, TrackedIntent};
 use anyhow::{Context, Result};
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info, warn};
@@ -25,12 +26,12 @@ pub struct OutflowService {
     config: SolverConfig,
     /// Intent tracker for tracking signed intents (shared with other services)
     tracker: Arc<IntentTracker>,
-    /// Optional connected MVM chain client
-    mvm_client: Option<ConnectedMvmClient>,
-    /// Optional connected EVM chain client
-    evm_client: Option<ConnectedEvmClient>,
-    /// Optional connected SVM chain client
-    svm_client: Option<ConnectedSvmClient>,
+    /// Connected MVM chain clients, keyed by chain ID
+    mvm_clients: HashMap<u64, ConnectedMvmClient>,
+    /// Connected EVM chain clients, keyed by chain ID
+    evm_clients: HashMap<u64, ConnectedEvmClient>,
+    /// Connected SVM chain clients, keyed by chain ID
+    svm_clients: HashMap<u64, ConnectedSvmClient>,
     /// Liquidity monitor for releasing budget after fulfillment
     liquidity_monitor: Arc<LiquidityMonitor>,
 }
@@ -53,59 +54,41 @@ impl OutflowService {
         liquidity_monitor: Arc<LiquidityMonitor>,
     ) -> Result<Self> {
         // Create connected chain clients for all configured chains
-        let mvm_client = config.get_mvm_config()
-            .map(|cfg| ConnectedMvmClient::new(cfg))
-            .transpose()?;
+        let mut mvm_clients = HashMap::new();
+        let mut evm_clients = HashMap::new();
+        let mut svm_clients = HashMap::new();
 
-        let evm_client = config.get_evm_config()
-            .map(|cfg| ConnectedEvmClient::new(cfg))
-            .transpose()?;
-
-        let svm_client = config.get_svm_config()
-            .map(|cfg| ConnectedSvmClient::new(cfg))
-            .transpose()?;
+        for chain in &config.connected_chain {
+            match chain {
+                ConnectedChainConfig::Mvm(cfg) => {
+                    mvm_clients.insert(cfg.chain_id, ConnectedMvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Evm(cfg) => {
+                    evm_clients.insert(cfg.chain_id, ConnectedEvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Svm(cfg) => {
+                    svm_clients.insert(cfg.chain_id, ConnectedSvmClient::new(cfg)?);
+                }
+            }
+        }
 
         Ok(Self {
             config,
             tracker,
-            mvm_client,
-            evm_client,
-            svm_client,
+            mvm_clients,
+            evm_clients,
+            svm_clients,
             liquidity_monitor,
         })
-    }
-    
-    /// Gets the chain ID for a connected chain type
-    fn get_chain_id(&self, chain_type: &str) -> Option<u64> {
-        match chain_type {
-            "mvm" => self.config.get_mvm_config().map(|c| c.chain_id),
-            "evm" => self.config.get_evm_config().map(|c| c.chain_id),
-            "svm" => self.config.get_svm_config().map(|c| c.chain_id),
-            _ => None,
-        }
     }
     
     /// Determines which connected chain to use for an outflow intent
     /// Returns ("mvm"|"evm"|"svm", chain_id) or None if no matching chain
     fn get_target_chain_for_intent(&self, intent: &TrackedIntent) -> Option<(&'static str, u64)> {
         let desired_chain_id = intent.draft_data.desired_chain_id;
-        
-        if let Some(chain_id) = self.get_chain_id("mvm") {
-            if chain_id == desired_chain_id {
-                return Some(("mvm", chain_id));
-            }
-        }
-        if let Some(chain_id) = self.get_chain_id("evm") {
-            if chain_id == desired_chain_id {
-                return Some(("evm", chain_id));
-            }
-        }
-        if let Some(chain_id) = self.get_chain_id("svm") {
-            if chain_id == desired_chain_id {
-                return Some(("svm", chain_id));
-            }
-        }
-        None
+        self.config
+            .get_connected_chain_by_id(desired_chain_id)
+            .map(|c| (c.chain_type(), c.chain_id()))
     }
 
     /// Polls for pending outflow intents and executes fulfillments on connected chain
@@ -223,9 +206,10 @@ impl OutflowService {
     async fn execute_mvm_gmp_fulfillment(
         &self,
         intent: &TrackedIntent,
+        chain_id: u64,
     ) -> Result<String> {
-        let client = self.mvm_client.as_ref()
-            .context("MVM client not configured")?;
+        let client = self.mvm_clients.get(&chain_id)
+            .context(format!("No MVM client for chain ID {}", chain_id))?;
         let desired_token = &intent.draft_data.desired_token;
         let poll_interval = Duration::from_secs(2);
         let expiry_time = intent.expiry_time;
@@ -277,9 +261,10 @@ impl OutflowService {
     async fn execute_svm_gmp_fulfillment(
         &self,
         intent: &TrackedIntent,
+        chain_id: u64,
     ) -> Result<String> {
-        let client = self.svm_client.as_ref()
-            .context("SVM client not configured")?;
+        let client = self.svm_clients.get(&chain_id)
+            .context(format!("No SVM client for chain ID {}", chain_id))?;
         let desired_token = &intent.draft_data.desired_token;
         let poll_interval = Duration::from_secs(2);
         let expiry_time = intent.expiry_time;
@@ -331,9 +316,10 @@ impl OutflowService {
     async fn execute_evm_gmp_fulfillment(
         &self,
         intent: &TrackedIntent,
+        chain_id: u64,
     ) -> Result<String> {
-        let client = self.evm_client.as_ref()
-            .context("EVM client not configured")?;
+        let client = self.evm_clients.get(&chain_id)
+            .context(format!("No EVM client for chain ID {}", chain_id))?;
         let desired_token = &intent.draft_data.desired_token;
         let poll_interval = Duration::from_secs(2);
         let expiry_time = intent.expiry_time;
@@ -461,13 +447,13 @@ impl OutflowService {
         _recipient: &str,
     ) -> Result<String> {
         // Determine target chain based on intent's desired_chain_id
-        let (chain_type, _) = self.get_target_chain_for_intent(intent)
+        let (chain_type, chain_id) = self.get_target_chain_for_intent(intent)
             .context("No configured connected chain matches intent's desired_chain_id")?;
 
         match chain_type {
-            "mvm" => self.execute_mvm_gmp_fulfillment(intent).await,
-            "evm" => self.execute_evm_gmp_fulfillment(intent).await,
-            "svm" => self.execute_svm_gmp_fulfillment(intent).await,
+            "mvm" => self.execute_mvm_gmp_fulfillment(intent, chain_id).await,
+            "evm" => self.execute_evm_gmp_fulfillment(intent, chain_id).await,
+            "svm" => self.execute_svm_gmp_fulfillment(intent, chain_id).await,
             _ => anyhow::bail!("Unknown chain type: {}", chain_type),
         }
     }

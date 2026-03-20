@@ -1,11 +1,7 @@
 #!/bin/bash
 
 # Setup EVM Chain and Test Requester/Solver Accounts
-# This script:
-# 1. Sets up Hardhat local EVM node
-# 2. Verifies Requester and Solver accounts (Hardhat default accounts 0 and 1)
-# 3. Tests basic transfers between Requester and Solver
-# Run this from the host machine
+# Accepts instance number as argument (default: 1)
 
 set -e
 
@@ -16,10 +12,14 @@ source "$SCRIPT_DIR/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "setup-evm-requester-solver"
+
+# Accept instance number as argument (default: 1)
+evm_instance_vars "${1:-1}"
+
+setup_logging "setup-evm${EVM_INSTANCE}-requester-solver"
 cd "$PROJECT_ROOT"
 
-log " Requester and Solver Account Testing - EVM CHAIN"
+log " Requester and Solver Account Testing - EVM CHAIN (instance $EVM_INSTANCE)"
 log "=============================================="
 log_and_echo " All output logged to: $LOG_FILE"
 
@@ -33,8 +33,8 @@ sleep 5
 
 # Verify EVM chain is running
 log " Verifying EVM chain is running..."
-if ! check_evm_chain_running; then
-    log_and_echo "❌ Error: EVM chain failed to start on port 8545"
+if ! check_evm_chain_running "$EVM_PORT"; then
+    log_and_echo "❌ Error: EVM chain failed to start on port $EVM_PORT"
     exit 1
 fi
 
@@ -52,8 +52,8 @@ log "   Solver            = Account 2 (signer index 2)"
 log ""
 log " Getting Requester and Solver addresses..."
 
-REQUESTER_ADDR=$(get_hardhat_account_address "1")
-SOLVER_ADDR=$(get_hardhat_account_address "2")
+REQUESTER_ADDR=$(get_hardhat_account_address "1" "$EVM_NETWORK")
+SOLVER_ADDR=$(get_hardhat_account_address "2" "$EVM_NETWORK")
 
 log "   ✅ Requester (Account 1): $REQUESTER_ADDR"
 log "   ✅ Solver (Account 2):   $SOLVER_ADDR"
@@ -67,7 +67,7 @@ log ""
 log " Checking initial balances..."
 
 cd intent-frameworks/evm
-BALANCES_OUTPUT=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "npx hardhat run scripts/get-accounts.js" 2>&1)
+BALANCES_OUTPUT=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "npx hardhat run scripts/get-accounts.js --network $EVM_NETWORK" 2>&1)
 
 if [ $? -ne 0 ]; then
     log_and_echo "❌ Error: Failed to get account balances"
@@ -93,13 +93,9 @@ log ""
 log " All EVM chain setup and testing complete!"
 log ""
 log " Summary:"
-log "   EVM Chain:     http://127.0.0.1:8545"
-log "   Chain ID:      31337"
+log "   EVM Chain:     $EVM_RPC_URL"
+log "   Chain ID:      $EVM_CHAIN_ID"
 log "   Requester (Acc 1): $REQUESTER_ADDR"
 log "   Solver (Acc 2):   $SOLVER_ADDR"
 log ""
-log " Useful commands:"
-log "   Stop chain:    ./testing-infra/ci-e2e/chain-connected-evm/stop-chain.sh"
-log ""
 log " Script completed!"
-

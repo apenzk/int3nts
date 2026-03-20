@@ -2,15 +2,19 @@
 
 # Wait for escrow auto-release for SVM E2E tests
 # Polls escrow state until released (auto-released when FulfillmentProof arrives)
+# Respects SVM_INSTANCE env var for multi-instance testing.
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
+source "$SCRIPT_DIR/../chain-connected-svm/utils.sh"
 
 setup_project_root
 
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Load SVM instance vars
+svm_instance_vars "${SVM_INSTANCE:-2}"
+source "$SVM_CHAIN_INFO_FILE" 2>/dev/null || true
 
 log "   Loading intent info..."
 load_intent_info "INTENT_ID"
@@ -22,14 +26,12 @@ if [ -z "$INTENT_ID" ]; then
 fi
 
 if [ -z "$SVM_PROGRAM_ID" ]; then
-    log_and_echo "❌ PANIC: SVM_PROGRAM_ID not set in chain-info.env"
+    log_and_echo "❌ PANIC: SVM_PROGRAM_ID not set in chain-info-svm${SVM_INSTANCE}.env"
     display_service_logs "Missing SVM_PROGRAM_ID"
     exit 1
 fi
 
-SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}"
-
-log_and_echo "⏳ Waiting for escrow auto-release..."
+log_and_echo "⏳ Waiting for escrow auto-release (instance $SVM_INSTANCE)..."
 log "   Intent ID: $INTENT_ID"
 log "   Program ID: $SVM_PROGRAM_ID"
 

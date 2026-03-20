@@ -20,19 +20,22 @@ svm_cmd() {
         setup_project_root
     fi
     # Filter nix develop banners from stdout while preserving the command status.
+    # Save and restore the caller's errexit state to avoid overriding their set +e.
     local status
+    local caller_errexit=0
+    [[ $- == *e* ]] && caller_errexit=1
     set +e
     NIX_CONFIG="warn-dirty = false" nix develop "$PROJECT_ROOT/nix" -c bash -c "$cmd" \
         | sed -e '/^\[nix\] Dev shell ready:/d' -e '/^warning: Git tree/d'
     status=${PIPESTATUS[0]}
-    set -e
+    [ "$caller_errexit" -eq 1 ] && set -e
     return "$status"
 }
 
 # Check if SVM chain is running
 # Usage: check_svm_chain_running [rpc_url]
 check_svm_chain_running() {
-    local rpc_url="${1:-http://127.0.0.1:8899}"
+    local rpc_url="${1:-http://127.0.0.1:2000}"
     if curl -s -X POST "$rpc_url" \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getHealth","params":[],"id":1}' \
@@ -101,7 +104,7 @@ svm_keypair_to_base58() {
 airdrop_svm() {
     local pubkey="$1"
     local amount="${2:-10}"
-    local rpc_url="${3:-http://127.0.0.1:8899}"
+    local rpc_url="${3:-http://127.0.0.1:2000}"
     svm_cmd "solana airdrop \"$amount\" \"$pubkey\" --url \"$rpc_url\" >/dev/null"
 }
 
@@ -109,7 +112,7 @@ airdrop_svm() {
 # Usage: create_svm_mint <payer_keypair> [rpc_url]
 create_svm_mint() {
     local payer_keypair="$1"
-    local rpc_url="${2:-http://127.0.0.1:8899}"
+    local rpc_url="${2:-http://127.0.0.1:2000}"
     svm_cmd "spl-token create-token --decimals 6 --url \"$rpc_url\" --fee-payer \"$payer_keypair\" --mint-authority \"$payer_keypair\" \
         | awk '/Creating token/ {print \$3}'" | tail -n 1
 }
@@ -120,7 +123,7 @@ create_svm_token_account() {
     local mint="$1"
     local owner="$2"
     local payer_keypair="$3"
-    local rpc_url="${4:-http://127.0.0.1:8899}"
+    local rpc_url="${4:-http://127.0.0.1:2000}"
     local ata
     ata=$(get_svm_associated_token_address "$mint" "$owner" "$rpc_url")
     svm_cmd "spl-token create-account \"$mint\" --owner \"$owner\" --url \"$rpc_url\" --fee-payer \"$payer_keypair\" >/dev/null"
@@ -132,7 +135,7 @@ create_svm_token_account() {
 get_svm_associated_token_address() {
     local mint="$1"
     local owner="$2"
-    local rpc_url="${3:-http://127.0.0.1:8899}"
+    local rpc_url="${3:-http://127.0.0.1:2000}"
     svm_cmd "spl-token address --verbose --owner \"$owner\" --token \"$mint\" --url \"$rpc_url\" \
         | awk '/Associated token address:/ {print \$NF} /Address:/ {print \$NF}'" | tail -n 1
 }
@@ -144,6 +147,6 @@ mint_svm_tokens() {
     local amount="$2"
     local account="$3"
     local payer_keypair="$4"
-    local rpc_url="${5:-http://127.0.0.1:8899}"
+    local rpc_url="${5:-http://127.0.0.1:2000}"
     svm_cmd "spl-token mint \"$mint\" \"$amount\" \"$account\" --url \"$rpc_url\" --fee-payer \"$payer_keypair\" --mint-authority \"$payer_keypair\""
 }

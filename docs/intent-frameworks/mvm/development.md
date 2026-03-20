@@ -206,7 +206,7 @@ aptos move publish --named-addresses mvmt_intent=0x<your_address> --skip-fetch-l
 
 ### Testnet Deployment
 
-For deploying to Movement Bardock Testnet, see the testnet deployment scripts in `testing-infra/testnet/`.
+For deploying to Movement Bardock Testnet, see the testnet deployment scripts in `testing-infra/networks/testnet/`.
 
 ## Development Workflow
 

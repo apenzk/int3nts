@@ -14,15 +14,18 @@ source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 setup_project_root
 cd "$PROJECT_ROOT"
 
+# Load EVM instance vars
+evm_instance_vars "${EVM_INSTANCE:-2}"
+source "$EVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
 # Resolve chain addresses for the second draft
-CONNECTED_CHAIN_ID=31337
+CONNECTED_CHAIN_ID=$EVM_CHAIN_ID
 HUB_CHAIN_ID=1
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 USDHUB_METADATA_HUB=$(get_usdxyz_metadata_addr "0x$TEST_TOKENS_HUB" "1")
 
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
 EVM_TOKEN_ADDR_NO_PREFIX="${USD_EVM_ADDR#0x}"
 EVM_TOKEN_ADDR_LOWER=$(echo "$EVM_TOKEN_ADDR_NO_PREFIX" | tr '[:upper:]' '[:lower:]')
 EVM_TOKEN_METADATA="0x000000000000000000000000${EVM_TOKEN_ADDR_LOWER}"

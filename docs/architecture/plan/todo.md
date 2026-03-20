@@ -9,6 +9,7 @@
 
 ## Naming Consistency
 
+- **Chain type nomenclature**: First audit the codebase to validate whether 4 canonical chain types (**hub**, **mvm**, **evm**, **svm**) is the right model — hub is always MVM but is distinct from connected MVM chains. Only after confirming the model makes sense, introduce and enforce it across config structs, client types, service routing, tests, docs, variable names, and comments.
 - Align entity names across VMs (MVM, EVM, SVM) and E2E test scripts
 - Current inconsistencies: `approver_evm_pubkey_hash` vs `relay address`, `APPROVER_ADDR` vs `RELAY_ETH_ADDRESS`, Hardhat account indices vs Aptos profiles vs Solana key-pair files
 - Define canonical role names (deployer, requester, solver, relay) and use them consistently in configs, scripts, variable names, and log messages

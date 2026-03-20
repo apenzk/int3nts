@@ -40,14 +40,14 @@ fn test_evm_chain_config_structure() {
 }
 
 /// 2. Test: Connected Chain EVM with Values
-/// Verifies that connected_chain_evm can be set to Some(EvmChainConfig) with actual values.
+/// Verifies that connected_chain_evm can be populated with actual values.
 /// Why: The EVM chain config must be settable for multi-chain deployments.
 #[test]
 fn test_connected_chain_evm_with_values() {
     use integrated_gmp::config::EvmChainConfig;
     let mut config = Config::default();
 
-    config.connected_chain_evm = Some(EvmChainConfig {
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "Connected EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
@@ -55,10 +55,10 @@ fn test_connected_chain_evm_with_values() {
         approver_evm_pubkey_hash: DUMMY_APPROVER_EVM_PUBKEY_HASH.to_string(),
         gmp_endpoint_addr: None,
         outflow_validator_addr: None,
-    });
+    }];
 
-    assert!(config.connected_chain_evm.is_some());
-    let evm_config = config.connected_chain_evm.as_ref().unwrap();
+    assert!(!config.connected_chain_evm.is_empty());
+    let evm_config = &config.connected_chain_evm[0];
     assert_eq!(evm_config.name, "Connected EVM Chain");
     assert_eq!(evm_config.rpc_url, "http://127.0.0.1:8545");
     assert_eq!(
@@ -86,8 +86,8 @@ fn test_evm_config_serialization() {
     let deserialized: Config = toml::from_str(&toml).expect("Should deserialize from TOML");
 
     // Verify EVM config fields
-    assert!(deserialized.connected_chain_evm.is_some());
-    let evm_config = deserialized.connected_chain_evm.as_ref().unwrap();
+    assert!(!deserialized.connected_chain_evm.is_empty());
+    let evm_config = &deserialized.connected_chain_evm[0];
     assert_eq!(evm_config.name, "Connected EVM Chain");
     assert_eq!(evm_config.rpc_url, "http://127.0.0.1:8545");
     assert_eq!(
@@ -109,11 +109,11 @@ fn test_evm_chain_config_with_all_fields() {
     let config = build_test_config_with_evm();
 
     assert!(
-        config.connected_chain_evm.is_some(),
+        !config.connected_chain_evm.is_empty(),
         "EVM chain should be configured"
     );
 
-    let evm_config = config.connected_chain_evm.as_ref().unwrap();
+    let evm_config = &config.connected_chain_evm[0];
     assert!(!evm_config.name.is_empty(), "Name should be set");
     assert!(!evm_config.rpc_url.is_empty(), "RPC URL should be set");
     assert!(
@@ -148,10 +148,10 @@ fn test_evm_config_loading() {
     let config = build_test_config_with_evm();
 
     // Verify config structure is valid
-    assert!(config.connected_chain_evm.is_some());
+    assert!(!config.connected_chain_evm.is_empty());
 
     // Verify all required fields are present
-    let evm_config = config.connected_chain_evm.as_ref().unwrap();
+    let evm_config = &config.connected_chain_evm[0];
     assert!(!evm_config.name.is_empty());
     assert!(!evm_config.rpc_url.is_empty());
     assert!(!evm_config.escrow_contract_addr.is_empty());
@@ -160,5 +160,5 @@ fn test_evm_config_loading() {
 
     // Verify config can be cloned (tests structure validity)
     let cloned_config = config.clone();
-    assert!(cloned_config.connected_chain_evm.is_some());
+    assert!(!cloned_config.connected_chain_evm.is_empty());
 }

@@ -374,9 +374,8 @@ export function useIntentHandlers(deps: IntentHandlerDeps) {
         const svmChainCfg = CHAIN_CONFIGS[effectiveOfferedToken.chain];
         const connection = getSvmConnection(svmChainCfg.rpcUrl);
         const gmpEndpointId = new PublicKey(getSvmGmpEndpointId(CHAIN_CONFIGS, effectiveOfferedToken.chain));
-        const hubChainId = getHubChainConfig(CHAIN_CONFIGS).chainId;
-        console.log('SVM Escrow: Reading GMP nonce for hub chain', hubChainId);
-        const currentNonce = await readGmpOutboundNonce(connection, gmpEndpointId, hubChainId);
+        console.log('SVM Escrow: Reading GMP global outbound nonce');
+        const currentNonce = await readGmpOutboundNonce(connection, gmpEndpointId);
         console.log('SVM Escrow: Current GMP outbound nonce:', currentNonce.toString());
 
         const createIx = buildCreateEscrowInstruction({
@@ -389,7 +388,6 @@ export function useIntentHandlers(deps: IntentHandlerDeps) {
           programId: new PublicKey(svmChainCfg.svmProgramId!),
           gmpParams: {
             gmpEndpointProgramId: gmpEndpointId,
-            hubChainId,
             currentNonce,
           },
         });

@@ -39,7 +39,7 @@ cargo run --bin integrated-gmp -- --help
 For running against testnets (Movement Bardock + Base Sepolia), use the provided script:
 
 ```bash
-./testing-infra/testnet/run-integrated-gmp-local.sh
+./testing-infra/networks/testnet/run-integrated-gmp-local.sh
 ```
 
-This script automatically uses the `--testnet` flag and loads keys from `testing-infra/testnet/.env.testnet`.
+This script automatically uses the `--testnet` flag and loads keys from `testing-infra/networks/testnet/.env.testnet`.

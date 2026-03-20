@@ -44,7 +44,7 @@ cat > "$COORDINATOR_E2E_CI_TESTING_CONFIG" << EOF
 
 [hub_chain]
 name = "Hub Chain"
-rpc_url = "http://127.0.0.1:8080"
+rpc_url = "http://127.0.0.1:1000"
 chain_id = 1
 intent_module_addr = "0x$HUB_MODULE_ADDR"
 

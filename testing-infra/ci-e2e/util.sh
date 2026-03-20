@@ -201,7 +201,7 @@ save_intent_info() {
 # Usage: load_intent_info [required_vars]
 #   required_vars: comma-separated list of required variables (e.g., "INTENT_ID,HUB_INTENT_ADDR")
 #   If not provided, only INTENT_ID is required
-#   If INTENT_ID is already set, skips loading (allows override via env var)
+#   Always reloads from file to support multi-instance test runs
 # Loads from ${PROJECT_ROOT}/.tmp/intent-info.env
 load_intent_info() {
     if [ -z "$PROJECT_ROOT" ]; then
@@ -210,12 +210,6 @@ load_intent_info() {
 
     local required_vars="${1:-INTENT_ID}"
     INTENT_INFO_FILE="${PROJECT_ROOT}/.tmp/intent-info.env"
-
-    # If INTENT_ID is already set and only INTENT_ID is required, skip loading
-    if [ "$required_vars" = "INTENT_ID" ] && [ -n "$INTENT_ID" ]; then
-        log "   ✅ INTENT_ID already set, skipping load"
-        return 0
-    fi
 
     if [ ! -f "$INTENT_INFO_FILE" ]; then
         log_and_echo "❌ ERROR: intent-info.env not found at $INTENT_INFO_FILE"

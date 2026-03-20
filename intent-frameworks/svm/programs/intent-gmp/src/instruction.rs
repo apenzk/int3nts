@@ -83,11 +83,11 @@ pub enum NativeGmpInstruction {
     ///
     /// Accounts expected:
     /// 0. `[]` Config account (PDA: ["config"])
-    /// 1. `[writable]` Outbound nonce account (PDA: ["nonce_out", dst_chain_id])
+    /// 1. `[writable]` Outbound nonce account (PDA: ["nonce_out"])
     /// 2. `[signer]` Sender (the program/user sending the message, for authorization)
     /// 3. `[signer]` Payer (pays for account creation)
     /// 4. `[]` System program
-    /// 5. `[writable]` Message account (PDA: ["message", dst_chain_id, nonce])
+    /// 5. `[writable]` Message account (PDA: ["message", nonce])
     ///    Caller derives this from the current nonce value in the nonce_out account.
     Send {
         /// Destination chain endpoint ID (e.g., Movement = 30325)

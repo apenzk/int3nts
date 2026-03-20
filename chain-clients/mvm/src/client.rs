@@ -461,10 +461,11 @@ impl MvmClient {
             solver_registry_addr.len()
         );
 
-        let solver_addr_normalized = solver_addr
+        let solver_addr_stripped = solver_addr
             .strip_prefix("0x")
             .unwrap_or(solver_addr)
             .to_lowercase();
+        let solver_addr_normalized = format!("{:0>64}", solver_addr_stripped);
 
         tracing::debug!(
             "Normalized solver_addr='{}' -> normalized='{}' (len: {})",
@@ -590,10 +591,11 @@ impl MvmClient {
         solver_addr: &str,
         solver_registry_addr: &str,
     ) -> Result<Option<String>> {
-        let solver_addr_normalized = solver_addr
+        let solver_addr_stripped = solver_addr
             .strip_prefix("0x")
             .unwrap_or(solver_addr)
             .to_lowercase();
+        let solver_addr_normalized = format!("{:0>64}", solver_addr_stripped);
 
         let resources = self.get_resources(solver_registry_addr).await?;
 
@@ -664,10 +666,11 @@ impl MvmClient {
         solver_addr: &str,
         solver_registry_addr: &str,
     ) -> Result<Option<String>> {
-        let solver_addr_normalized = solver_addr
+        let solver_addr_stripped = solver_addr
             .strip_prefix("0x")
             .unwrap_or(solver_addr)
             .to_lowercase();
+        let solver_addr_normalized = format!("{:0>64}", solver_addr_stripped);
 
         let resources = self.get_resources(solver_registry_addr).await?;
 
@@ -787,7 +790,8 @@ impl MvmClient {
             .filter_map(|entry| {
                 let entry_obj = entry.as_object()?;
                 let key = entry_obj.get("key")?.as_str()?;
-                let key_normalized = key.strip_prefix("0x").unwrap_or(key).to_lowercase();
+                let key_without_prefix = key.strip_prefix("0x").unwrap_or(key).to_lowercase();
+                let key_normalized = format!("{:0>64}", key_without_prefix);
                 Some((key.to_string(), key_normalized))
             })
             .collect();
@@ -803,7 +807,8 @@ impl MvmClient {
         let solver_entry = data_array.iter().find_map(|entry| {
             let entry_obj = entry.as_object()?;
             let key = entry_obj.get("key")?.as_str()?;
-            let key_normalized = key.strip_prefix("0x").unwrap_or(key).to_lowercase();
+            let key_without_prefix = key.strip_prefix("0x").unwrap_or(key).to_lowercase();
+            let key_normalized = format!("{:0>64}", key_without_prefix);
 
             tracing::debug!(
                 "Comparing - Looking for: '{}' (normalized: '{}', len: {}) vs Registry key: '{}' (normalized: '{}', len: {}) -> Match: {}",

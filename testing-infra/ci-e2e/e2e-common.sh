@@ -229,10 +229,23 @@ e2e_setup_chains() {
 
     ./testing-infra/ci-e2e/chain-hub/setup-chain.sh
     ./testing-infra/ci-e2e/chain-hub/setup-requester-solver.sh
-    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-chain.sh
-    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-requester-solver.sh
+
+    # Generate shared solver keys for chains that need them
+    mkdir -p "$PROJECT_ROOT/.tmp"
+    case "$E2E_CHAIN" in
+        mvm) openssl rand -hex 32 | sed 's/^/0x/' > "$PROJECT_ROOT/.tmp/solver-mvm-shared-key.hex" ;;
+        svm) ensure_svm_keypair "$PROJECT_ROOT/.tmp/solver-svm-shared-key.json" ;;
+    esac
+
+    # Setup two connected chain instances for multi-chain testing
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-chain.sh 2
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-requester-solver.sh 2
     ./testing-infra/ci-e2e/chain-hub/deploy-contracts.sh
-    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/deploy-contracts.sh
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/deploy-contracts.sh 2
+
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-chain.sh 3
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/setup-requester-solver.sh 3
+    ./testing-infra/ci-e2e/chain-connected-${E2E_CHAIN}/deploy-contracts.sh 3
 }
 
 # ------------------------------------------------------------------------------

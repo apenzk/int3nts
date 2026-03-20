@@ -333,47 +333,33 @@ impl ConnectedSvmClient {
         let token_mint = Pubkey::try_from(&requirements_data[73..105])
             .context("Failed to parse token_mint from requirements")?;
 
-        // Read config to get hub_chain_id for GMP nonce derivation
-        let config_data = self.rpc_client
-            .get_account_data(&config_pda)
-            .context("Failed to fetch outflow config account")?;
-        
-        // Parse config: discriminator(1) + admin(32) + gmp_endpoint(32) + hub_chain_id(4) + hub_gmp_endpoint_addr(32) + bump(1)
-        if config_data.len() < 102 {
-            anyhow::bail!("Config account data too short");
-        }
-        let hub_chain_id = u32::from_le_bytes(
-            config_data[65..69].try_into().context("Failed to parse hub_chain_id")?
-        );
-
         // Derive token accounts (ATAs)
         let solver_token = get_associated_token_address(&solver.pubkey(), &token_mint)?;
         let recipient_token = get_associated_token_address(&recipient, &token_mint)?;
 
         // Derive GMP endpoint PDAs
-        let chain_id_bytes = hub_chain_id.to_le_bytes();
         let (gmp_config_pda, _) = Pubkey::find_program_address(
             &[b"config"],
             &gmp_endpoint_id,
         );
         let (gmp_nonce_out_pda, _) = Pubkey::find_program_address(
-            &[b"nonce_out", &chain_id_bytes],
+            &[b"nonce_out"],
             &gmp_endpoint_id,
         );
 
         // Read nonce account to derive message PDA.
-        // GMP Send creates a message account at ["message", chain_id, nonce].
+        // GMP Send creates a message account at ["message", nonce].
         // The nonce is the *current* value (before increment).
         let current_nonce: u64 = match self.rpc_client.get_account_data(&gmp_nonce_out_pda) {
-            Ok(data) if data.len() >= 13 => {
-                // OutboundNonceAccount: discriminator(1) + dst_chain_id(4) + nonce(8) + bump(1)
-                u64::from_le_bytes(data[5..13].try_into().unwrap())
+            Ok(data) if data.len() >= 9 => {
+                // OutboundNonceAccount: discriminator(1) + nonce(8) + bump(1)
+                u64::from_le_bytes(data[1..9].try_into().unwrap())
             }
             _ => 0, // Account doesn't exist yet; first Send will use nonce=0
         };
         let nonce_bytes = current_nonce.to_le_bytes();
         let (message_pda, _) = Pubkey::find_program_address(
-            &[b"message", &chain_id_bytes, &nonce_bytes],
+            &[b"message", &nonce_bytes],
             &gmp_endpoint_id,
         );
 

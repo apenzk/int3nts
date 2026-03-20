@@ -101,7 +101,8 @@ async fn test_is_escrow_released_error() {
         EvmClient::new(&mock_server.uri(), DUMMY_ESCROW_CONTRACT_ADDR).unwrap();
     let result = client.is_escrow_released(DUMMY_INTENT_ID).await;
     assert!(result.is_err());
-    assert!(result.unwrap_err().to_string().contains("isReleased failed"));
+    let err = format!("{:#}", result.unwrap_err());
+    assert!(err.contains("execution reverted"), "unexpected error: {}", err);
 }
 
 // ============================================================================

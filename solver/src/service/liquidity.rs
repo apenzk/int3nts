@@ -57,9 +57,12 @@ pub struct LiquidityMonitor {
     config: LiquidityMonitorConfig,
     solver_config: SolverConfig,
     hub_client: HubChainClient,
-    mvm_client: Option<ConnectedMvmClient>,
-    evm_client: Option<ConnectedEvmClient>,
-    svm_client: Option<ConnectedSvmClient>,
+    /// Connected MVM chain clients, keyed by chain ID
+    mvm_clients: HashMap<u64, ConnectedMvmClient>,
+    /// Connected EVM chain clients, keyed by chain ID
+    evm_clients: HashMap<u64, ConnectedEvmClient>,
+    /// Connected SVM chain clients, keyed by chain ID
+    svm_clients: HashMap<u64, ConnectedSvmClient>,
     /// Solver wallet address on each chain, keyed by chain_id.
     solver_addresses: HashMap<u64, String>,
 }
@@ -116,18 +119,23 @@ impl LiquidityMonitor {
 
         // Create chain clients
         let hub_client = HubChainClient::new(&solver_config.hub_chain)?;
-        let mvm_client = solver_config
-            .get_mvm_config()
-            .map(ConnectedMvmClient::new)
-            .transpose()?;
-        let evm_client = solver_config
-            .get_evm_config()
-            .map(ConnectedEvmClient::new)
-            .transpose()?;
-        let svm_client = solver_config
-            .get_svm_config()
-            .map(ConnectedSvmClient::new)
-            .transpose()?;
+        let mut mvm_clients = HashMap::new();
+        let mut evm_clients = HashMap::new();
+        let mut svm_clients = HashMap::new();
+
+        for chain in &solver_config.connected_chain {
+            match chain {
+                ConnectedChainConfig::Mvm(cfg) => {
+                    mvm_clients.insert(cfg.chain_id, ConnectedMvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Evm(cfg) => {
+                    evm_clients.insert(cfg.chain_id, ConnectedEvmClient::new(cfg)?);
+                }
+                ConnectedChainConfig::Svm(cfg) => {
+                    svm_clients.insert(cfg.chain_id, ConnectedSvmClient::new(cfg)?);
+                }
+            }
+        }
 
         // Initialize tracking state from thresholds and acceptance pairs
         let mut initial_state = HashMap::new();
@@ -167,9 +175,9 @@ impl LiquidityMonitor {
             config: liquidity_config,
             solver_config,
             hub_client,
-            mvm_client,
-            evm_client,
-            svm_client,
+            mvm_clients,
+            evm_clients,
+            svm_clients,
             solver_addresses,
         })
     }
@@ -417,18 +425,18 @@ impl LiquidityMonitor {
         match chain_config {
             ConnectedChainConfig::Mvm(_) => {
                 let client = self
-                    .mvm_client
-                    .as_ref()
-                    .context("MVM client not available")?;
+                    .mvm_clients
+                    .get(&chain_token.chain_id)
+                    .context(format!("No MVM client for chain ID {}", chain_token.chain_id))?;
                 client
                     .get_token_balance(solver_addr, &chain_token.token)
                     .await
             }
             ConnectedChainConfig::Evm(_) => {
                 let client = self
-                    .evm_client
-                    .as_ref()
-                    .context("EVM client not available")?;
+                    .evm_clients
+                    .get(&chain_token.chain_id)
+                    .context(format!("No EVM client for chain ID {}", chain_token.chain_id))?;
                 if chain_token.token == gas_token_for_chain_type("evm")? {
                     client.get_native_balance(solver_addr).await
                 } else {
@@ -439,9 +447,9 @@ impl LiquidityMonitor {
             }
             ConnectedChainConfig::Svm(_) => {
                 let client = self
-                    .svm_client
-                    .as_ref()
-                    .context("SVM client not available")?;
+                    .svm_clients
+                    .get(&chain_token.chain_id)
+                    .context(format!("No SVM client for chain ID {}", chain_token.chain_id))?;
                 if chain_token.token == gas_token_for_chain_type("svm")? {
                     let owner_b58 = to_base58_pubkey(solver_addr)?;
                     client.get_native_balance(&owner_b58)

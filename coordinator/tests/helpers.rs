@@ -135,13 +135,13 @@ pub fn build_test_config_with_mvm() -> Config {
             intent_module_addr: "0x1".to_string(),
             escrow_module_addr: None,
         },
-        connected_chain_mvm: Some(ChainConfig {
+        connected_chain_mvm: vec![ChainConfig {
             name: "connected".to_string(),
             rpc_url: "http://127.0.0.1:18082".to_string(),
             chain_id: 2,
             intent_module_addr: "0x2".to_string(),
             escrow_module_addr: Some("0x2".to_string()),
-        }),
+        }],
         coordinator: CoordinatorConfig {
             polling_interval_ms: 1000,
             validation_timeout_ms: 1000,
@@ -151,8 +151,8 @@ pub fn build_test_config_with_mvm() -> Config {
             port: 3999,
             cors_origins: vec![],
         },
-        connected_chain_evm: None, // No connected EVM chain for unit tests
-        connected_chain_svm: None, // No connected SVM chain for unit tests
+        connected_chain_evm: vec![], // No connected EVM chains for unit tests
+        connected_chain_svm: vec![], // No connected SVM chains for unit tests
         acceptance: None, // No acceptance criteria for unit tests
     }
 }
@@ -162,14 +162,14 @@ pub fn build_test_config_with_mvm() -> Config {
 #[allow(dead_code)]
 pub fn build_test_config_with_evm() -> Config {
     let mut config = build_test_config_with_mvm();
-    config.connected_chain_evm = Some(EvmChainConfig {
+    config.connected_chain_evm = vec![EvmChainConfig {
         name: "Connected EVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8545".to_string(),
         escrow_contract_addr: DUMMY_ESCROW_CONTRACT_ADDR_EVM.to_string(),
         outflow_validator_contract_addr: "0x0000000000000000000000000000000000000010".to_string(),
         chain_id: 31337,
         event_block_range: 1000,
-    });
+    }];
     config
 }
 
@@ -178,12 +178,12 @@ pub fn build_test_config_with_evm() -> Config {
 #[allow(dead_code)]
 pub fn build_test_config_with_svm() -> Config {
     let mut config = build_test_config_with_mvm();
-    config.connected_chain_svm = Some(SvmChainConfig {
+    config.connected_chain_svm = vec![SvmChainConfig {
         name: "Connected SVM Chain".to_string(),
         rpc_url: "http://127.0.0.1:8899".to_string(),
         chain_id: 901,
         escrow_program_id: DUMMY_SVM_ESCROW_PROGRAM_ID.to_string(),
-    });
+    }];
     config
 }
 

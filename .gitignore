@@ -22,7 +22,7 @@ dev-debug.log
 .env
 .env.*
 !.env.*.example
-testing-infra/testnet/.env.testnet
+testing-infra/networks/testnet/.env.testnet
 
 # Testnet and CI config files (contain sensitive keys)
 solver/config/solver_testnet.toml
@@ -36,6 +36,7 @@ integrated-gmp/config/integrated-gmp-e2e-ci-testing.toml
 testing-infra/ci-e2e/.integrated-gmp-keys.env
 
 # Editor and OS files
+.cursor/
 .idea
 *.suo
 *.ntvs*

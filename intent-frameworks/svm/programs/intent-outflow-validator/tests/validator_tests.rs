@@ -455,15 +455,14 @@ fn create_fulfill_intent_ix_with_gmp(
 
     // GMP endpoint accounts for Send CPI
     let (gmp_config_pda, _) = Pubkey::find_program_address(&[gmp_seeds::CONFIG_SEED], &gmp_endpoint);
-    let chain_id_bytes = hub_chain_id.to_le_bytes();
     let (nonce_out_pda, _) = Pubkey::find_program_address(
-        &[gmp_seeds::NONCE_OUT_SEED, &chain_id_bytes],
+        &[gmp_seeds::NONCE_OUT_SEED],
         &gmp_endpoint,
     );
     // Message PDA for nonce=0 (first outbound message in tests)
     let nonce_bytes = 0u64.to_le_bytes();
     let (message_pda, _) = Pubkey::find_program_address(
-        &[gmp_seeds::MESSAGE_SEED, &chain_id_bytes, &nonce_bytes],
+        &[gmp_seeds::MESSAGE_SEED, &nonce_bytes],
         &gmp_endpoint,
     );
 

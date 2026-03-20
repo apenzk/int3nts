@@ -9,8 +9,13 @@ source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "inflow-submit-hub-intent-evm"
 cd "$PROJECT_ROOT"
+
+# Load EVM instance vars
+evm_instance_vars "${EVM_INSTANCE:-2}"
+source "$EVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
+setup_logging "inflow-submit-hub-intent-evm${EVM_INSTANCE}"
 
 # Verify services are running before proceeding
 verify_coordinator_running
@@ -21,8 +26,8 @@ verify_solver_registered
 # Generate a random intent_id that will be used for both hub and escrow
 INTENT_ID="0x$(openssl rand -hex 32)"
 
-# EVM mode: CONNECTED_CHAIN_ID=31337 (matches Hardhat default network chain ID)
-CONNECTED_CHAIN_ID=31337
+# EVM mode: use chain ID from evm_instance_vars
+CONNECTED_CHAIN_ID=$EVM_CHAIN_ID
 
 # Get addresses
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
@@ -41,8 +46,7 @@ if [ -z "$REQUESTER_EVM_ADDR" ]; then
     exit 1
 fi
 
-# Get USDcon EVM address
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Get USDcon EVM address (loaded from chain-info-evm${EVM_INSTANCE}.env above)
 USD_EVM_ADDR="${USD_EVM_ADDR:-}"
 
 log ""
@@ -195,6 +199,24 @@ log "     Signature: ${RETRIEVED_SIGNATURE:0:20}..."
 if [ -z "$RETRIEVED_SOLVER_EVM" ] || [ "$RETRIEVED_SOLVER_EVM" = "null" ]; then
     log_and_echo "❌ ERROR: Solver EVM address not in signature response"
     log_and_echo "   The solver must register with an EVM address for inflow intents"
+    log_and_echo ""
+    log_and_echo " Diagnostics: coordinator log (last 50 lines):"
+    log_and_echo "   ----------------------------------------"
+    if [ -f "$PROJECT_ROOT/.tmp/e2e-tests/coordinator.log" ]; then
+        tail -50 "$PROJECT_ROOT/.tmp/e2e-tests/coordinator.log" | while IFS= read -r line; do log_and_echo "   $line"; done
+    else
+        log_and_echo "   (coordinator log not found)"
+    fi
+    log_and_echo "   ----------------------------------------"
+    log_and_echo ""
+    log_and_echo " Diagnostics: solver log (last 50 lines):"
+    log_and_echo "   ----------------------------------------"
+    if [ -f "$PROJECT_ROOT/.tmp/e2e-tests/solver.log" ]; then
+        tail -50 "$PROJECT_ROOT/.tmp/e2e-tests/solver.log" | while IFS= read -r line; do log_and_echo "   $line"; done
+    else
+        log_and_echo "   (solver log not found)"
+    fi
+    log_and_echo "   ----------------------------------------"
     exit 1
 fi
 log "     Solver EVM address: $RETRIEVED_SOLVER_EVM"
@@ -228,7 +250,7 @@ if [ $? -eq 0 ]; then
     # Verify intent was stored on-chain by checking Requester's latest transaction
     sleep 2
     log "     - Verifying intent stored on-chain..."
-    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
+    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:1000/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("LimitOrderEvent")) | .data.intent_addr' | head -n 1)
     
     if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then

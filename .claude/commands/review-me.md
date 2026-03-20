@@ -23,6 +23,21 @@ Understand:
 - Which frameworks (MVM/EVM/SVM)?
 - Are tests involved?
 
+## Step 1b: Verify Extension Checklists (AUTOMATED - DO NOT SKIP)
+
+If any test files were added, removed, or modified:
+
+1. Find the relevant `extension-checklist.md` for the component (e.g., `integrated-gmp/tests/extension-checklist.md`, `chain-clients/extension-checklist.md`, `solver/tests/extension-checklist.md`)
+2. Read the checklist file
+3. Compare it against the actual test functions in the changed test files
+4. **FAIL immediately** if:
+   - A new test file exists that is not listed in the checklist
+   - Tests were added/removed but the checklist was not updated
+   - Test numbering in the checklist doesn't match the code
+   - Section headers in test files don't appear in the checklist
+
+This is not a question to ask the user — verify it yourself by reading the files.
+
 ## Step 2: Ask Critical Questions
 
 Based on the changes, ask the user questions in these categories:
@@ -30,7 +45,6 @@ Based on the changes, ask the user questions in these categories:
 ### Completeness
 
 - Did you implement this across all relevant frameworks (MVM/EVM/SVM)?
-- Did you update all extension-checklist.md files?
 - Are there related files that should also be updated?
 
 ### Testing

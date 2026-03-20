@@ -68,6 +68,6 @@ fn main() {
     println!("INTEGRATED_GMP_SVM_ADDR={}", svm_address);
     println!();
     println!("Update these files with the values above:");
-    println!("  - testing-infra/testnet/.env.testnet                       (all values)");
+    println!("  - testing-infra/networks/testnet/.env.testnet                       (all values)");
     println!("  - integrated-gmp/config/integrated-gmp_testnet.toml        (private_key, public_key, approver_evm_pubkey_hash)");
 }

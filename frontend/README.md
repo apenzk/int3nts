@@ -34,21 +34,32 @@ npm start
 
 ## Environment Variables
 
-Create a `.env.local` file:
+Create a `.env.local` file. All chain env vars follow the pattern `NEXT_PUBLIC_{CHAIN}_{TESTNET|MAINNET}_{THING}`.
 
 ```bash
 NEXT_PUBLIC_COORDINATOR_URL=http://localhost:3333
-NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS=0x<your-movement-module-address>
-NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS=0x<your-base-escrow-address>
-```
 
-Optional RPC and program ID overrides (defaults are in `src/config/chains.ts`):
+# Testnet
+NEXT_PUBLIC_MOVEMENT_TESTNET_RPC_URL=https://testnet.movementnetwork.xyz/v1
+NEXT_PUBLIC_MOVEMENT_TESTNET_INTENT_CONTRACT_ADDRESS=0x<address>
+NEXT_PUBLIC_BASE_TESTNET_RPC_URL=https://base-sepolia.g.alchemy.com/v2/<key>
+NEXT_PUBLIC_BASE_TESTNET_ESCROW_CONTRACT_ADDRESS=0x<address>
+NEXT_PUBLIC_BASE_TESTNET_OUTFLOW_VALIDATOR_ADDRESS=0x<address>
+NEXT_PUBLIC_ETH_TESTNET_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+NEXT_PUBLIC_SOLANA_TESTNET_RPC_URL=https://api.devnet.solana.com
+NEXT_PUBLIC_SOLANA_TESTNET_PROGRAM_ID=<program-id>
+NEXT_PUBLIC_SOLANA_TESTNET_OUTFLOW_PROGRAM_ID=<program-id>
+NEXT_PUBLIC_SOLANA_TESTNET_GMP_ENDPOINT_ID=<program-id>
 
-```bash
-NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz
-NEXT_PUBLIC_EVM_RPC=https://...
-NEXT_PUBLIC_SVM_RPC_URL=https://api.devnet.solana.com
-NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
+# Mainnet
+NEXT_PUBLIC_MOVEMENT_MAINNET_RPC_URL=https://mainnet.movementnetwork.xyz/v1
+NEXT_PUBLIC_MOVEMENT_MAINNET_INTENT_CONTRACT_ADDRESS=0x<address>
+NEXT_PUBLIC_BASE_MAINNET_RPC_URL=https://mainnet.base.org
+NEXT_PUBLIC_BASE_MAINNET_ESCROW_CONTRACT_ADDRESS=0x<address>
+NEXT_PUBLIC_BASE_MAINNET_OUTFLOW_VALIDATOR_ADDRESS=0x<address>
+NEXT_PUBLIC_HYPERLIQUID_MAINNET_RPC_URL=https://api.hyperliquid.xyz/evm
+NEXT_PUBLIC_HYPERLIQUID_MAINNET_ESCROW_CONTRACT_ADDRESS=0x<address>
+NEXT_PUBLIC_HYPERLIQUID_MAINNET_OUTFLOW_VALIDATOR_ADDRESS=0x<address>
 ```
 
 ## Tech Stack

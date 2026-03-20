@@ -7,6 +7,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_svm.sh"
+source "$SCRIPT_DIR/../chain-connected-svm/utils.sh"
 
 setup_project_root
 setup_logging "inflow-submit-escrow-svm"
@@ -17,10 +18,12 @@ if ! load_intent_info "INTENT_ID"; then
     exit 1
 fi
 
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Load SVM instance vars
+svm_instance_vars "${SVM_INSTANCE:-2}"
+source "$SVM_CHAIN_INFO_FILE" 2>/dev/null || true
 
 if [ -z "$USD_SVM_MINT_ADDR" ] || [ -z "$REQUESTER_SVM_TOKEN_ACCOUNT" ] || [ -z "$SOLVER_SVM_PUBKEY" ] || [ -z "$SVM_PROGRAM_ID" ]; then
-    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh and deploy-contracts.sh first."
+    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh and deploy-contracts.sh $SVM_INSTANCE first."
     exit 1
 fi
 
@@ -31,11 +34,10 @@ SVM_EXPIRY="$(date -d "+10 minutes" +%s)"
 # WAIT FOR GMP DELIVERY OF INTENT REQUIREMENTS
 # ============================================================================
 log ""
-log "   Waiting for GMP relay to deliver IntentRequirements to SVM chain..."
+log "   Waiting for GMP relay to deliver IntentRequirements to SVM chain (instance $SVM_INSTANCE)..."
 log "   (Hub intent creation sends requirements via GMP - relay must deliver them first)"
 
 CLI_BIN="$PROJECT_ROOT/intent-frameworks/svm/target/debug/intent_escrow_cli"
-SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}"
 
 GMP_DELIVERED=0
 for attempt in $(seq 1 30); do
@@ -68,7 +70,7 @@ log "   Amount: $SVM_AMOUNT"
 # Export all environment variables needed by create-escrow.sh
 # (needed because the script re-executes itself via nix develop)
 
-# SPL token mint address for the escrowed token (from chain-info.env)
+# SPL token mint address for the escrowed token (from chain-info file)
 export USD_SVM_MINT_ADDR="$USD_SVM_MINT_ADDR"
 # Requester's associated token account holding the tokens to escrow
 export SVM_REQUESTER_TOKEN="$REQUESTER_SVM_TOKEN_ACCOUNT"
@@ -87,7 +89,7 @@ export SVM_GMP_ENDPOINT_ID="$SVM_GMP_ENDPOINT_ID"
 # Chain ID of the hub (Movement) for GMP routing
 export HUB_CHAIN_ID="1"
 # Solana RPC endpoint URL
-export SVM_RPC_URL="${SVM_RPC_URL:-http://127.0.0.1:8899}"
+export SVM_RPC_URL="$SVM_RPC_URL"
 # Path to keypair file for transaction fees
 export SVM_PAYER_KEYPAIR="$SVM_PAYER_KEYPAIR"
 # Path to requester's keypair file (signs the escrow creation)

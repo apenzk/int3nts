@@ -9,8 +9,13 @@ source "$SCRIPT_DIR/../chain-connected-evm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "inflow-submit-escrow"
 cd "$PROJECT_ROOT"
+
+# Load EVM instance vars
+evm_instance_vars "${EVM_INSTANCE:-2}"
+source "$EVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
+setup_logging "inflow-submit-escrow-evm${EVM_INSTANCE}"
 
 # ============================================================================
 # SECTION 1: LOAD DEPENDENCIES
@@ -23,9 +28,7 @@ fi
 # SECTION 2: GET ADDRESSES AND CONFIGURATION
 # ============================================================================
 
-# Load chain info (includes GMP contract addresses)
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
-
+# Contract addresses loaded from chain-info-evm${EVM_INSTANCE}.env above
 ESCROW_GMP_ADDR="${ESCROW_GMP_ADDR:-}"
 USD_EVM_ADDR="${USD_EVM_ADDR:-}"
 TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
@@ -118,7 +121,7 @@ log "     Amount: 1000000 (1 USDcon)"
 
 # Use GMP-based escrow: validates against IntentRequirements received from hub
 USDCON_AMOUNT="1000000"  # 1 USDcon = 1_000_000 (6 decimals)
-ESCROW_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/create-escrow-gmp.js --network localhost" "ESCROW_GMP_ADDR='$ESCROW_GMP_ADDR' TOKEN_ADDR='$USD_EVM_ADDR' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
+ESCROW_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/create-escrow-gmp.js --network $EVM_NETWORK" "ESCROW_GMP_ADDR='$ESCROW_GMP_ADDR' TOKEN_ADDR='$USD_EVM_ADDR' INTENT_ID_EVM='$INTENT_ID_EVM' AMOUNT='$USDCON_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
 ESCROW_EXIT_CODE=$?
 
 log "   DEBUG: Escrow transaction output:"

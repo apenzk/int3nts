@@ -46,16 +46,19 @@ fund_and_verify_account() {
     local rest_port
     local faucet_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
-        faucet_port="8081"
+        rest_port="1000"
+        faucet_port="1010"
     elif [ "$chain_num" = "2" ]; then
-        rest_port="8082"
-        faucet_port="8083"
+        rest_port="2000"
+        faucet_port="2010"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
+        faucet_port="3010"
     else
-        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1 or 2)"
+        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1, 2, or 3)"
         exit 1
     fi
-    
+
     log "Funding $account_label..."
     local address=$(get_profile_address "$profile")
     local tx_hash=$(curl -s -X POST "http://127.0.0.1:${faucet_port}/mint?address=${address}&amount=100000000" | jq -r '.[0]')
@@ -104,42 +107,53 @@ fund_and_verify_account() {
 }
 
 # Initialize Aptos profile
-# Usage: init_aptos_profile <profile_name> <chain_number> [log_file]
+# Usage: init_aptos_profile <profile_name> <chain_number> [log_file] [private_key]
 # Example: init_aptos_profile "requester-chain1" "1"
-#          init_aptos_profile "requester-chain2" "2"
+#          init_aptos_profile "solver-chain3" "3" "$LOG_FILE" "0xabcdef..."
 # Creates an Aptos profile for the specified chain:
-#   - Hub: uses --network local (ports 8080/8081)
-#   - Chain 2 (connected): uses --network custom with --rest-url and --faucet-url (ports 8082/8083)
+#   - Hub: uses --network local (ports 1000/1010)
+#   - Chain 2 (connected): uses --network custom with --rest-url and --faucet-url (ports 2000/2010)
+#   - Chain 3 (connected): uses --network custom with --rest-url and --faucet-url (ports 3000/3010)
+# If private_key is provided, uses --private-key flag (same keypair across chains).
 # If log_file is provided, redirects output there; otherwise uses LOG_FILE if set
 init_aptos_profile() {
     local profile="$1"
     local chain_num="$2"
     local log_file="${3:-$LOG_FILE}"
-    
+    local private_key="$4"
+
     if [ -z "$profile" ]; then
         log_and_echo "❌ ERROR: init_aptos_profile() requires a profile name"
         exit 1
     fi
-    
+
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: init_aptos_profile() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: init_aptos_profile() requires a chain number (1, 2, or 3)"
         exit 1
     fi
-    
-    if [ "$chain_num" != "1" ] && [ "$chain_num" != "2" ]; then
-        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1 or 2)"
-        exit 1
-    fi
-    
-    local aptos_cmd
+
+    # Build network flags based on chain number
+    local network_flags
     if [ "$chain_num" = "1" ]; then
-        # Hub: use local network
-        aptos_cmd="printf \"\\n\" | aptos init --profile $profile --network local --assume-yes"
+        network_flags="--network custom --rest-url http://127.0.0.1:1000 --faucet-url http://127.0.0.1:1010"
+    elif [ "$chain_num" = "2" ]; then
+        network_flags="--network custom --rest-url http://127.0.0.1:2000 --faucet-url http://127.0.0.1:2010"
+    elif [ "$chain_num" = "3" ]; then
+        network_flags="--network custom --rest-url http://127.0.0.1:3000 --faucet-url http://127.0.0.1:3010"
     else
-        # Chain 2 (connected): use custom network with specific ports
-        aptos_cmd="printf \"\\n\" | aptos init --profile $profile --network custom --rest-url http://127.0.0.1:8082 --faucet-url http://127.0.0.1:8083 --assume-yes"
+        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1, 2, or 3)"
+        exit 1
     fi
-    
+
+    local aptos_cmd
+    if [ -n "$private_key" ]; then
+        # Use provided key (no stdin prompt needed)
+        aptos_cmd="aptos init --profile $profile $network_flags --private-key $private_key --assume-yes"
+    else
+        # Generate random key (press enter to skip private key prompt)
+        aptos_cmd="printf \"\\n\" | aptos init --profile $profile $network_flags --assume-yes"
+    fi
+
     if [ -n "$log_file" ]; then
         if eval "$aptos_cmd >> \"$log_file\" 2>&1"; then
             log "✅ Profile $profile created successfully on Chain $chain_num"
@@ -187,8 +201,8 @@ cleanup_aptos_profile() {
 # Example: wait_for_mvm_chain_ready "1"
 #          wait_for_mvm_chain_ready "2" "30" "5"
 # Waits for both REST API and faucet to be ready:
-#   - Hub: checks ports 8080 (REST) and 8081 (faucet)
-#   - Chain 2: checks ports 8082 (REST) and 8083 (faucet)
+#   - Hub: checks ports 1000 (REST) and 1010 (faucet)
+#   - Chain 2: checks ports 2000 (REST) and 2010 (faucet)
 # Default: 30 attempts with 5 second intervals
 # Returns 0 if chain is ready, exits with error if timeout
 wait_for_mvm_chain_ready() {
@@ -197,25 +211,26 @@ wait_for_mvm_chain_ready() {
     local sleep_seconds="${3:-5}"
     
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: wait_for_mvm_chain_ready() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: wait_for_mvm_chain_ready() requires a chain number (1, 2, or 3)"
         exit 1
     fi
-    
-    if [ "$chain_num" != "1" ] && [ "$chain_num" != "2" ]; then
-        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1 or 2)"
-        exit 1
-    fi
-    
+
     local rest_port
     local faucet_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
-        faucet_port="8081"
+        rest_port="1000"
+        faucet_port="1010"
+    elif [ "$chain_num" = "2" ]; then
+        rest_port="2000"
+        faucet_port="2010"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
+        faucet_port="3010"
     else
-        rest_port="8082"
-        faucet_port="8083"
+        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1, 2, or 3)"
+        exit 1
     fi
-    
+
     log "   - Waiting for Chain $chain_num services..."
     for i in $(seq 1 "$max_attempts"); do
         if curl -s "http://127.0.0.1:${rest_port}/v1/ledger/info" >/dev/null 2>&1 && \
@@ -239,32 +254,33 @@ wait_for_mvm_chain_ready() {
 # Verifies both REST API and faucet are responding correctly:
 #   - REST API: checks http://127.0.0.1:<rest_port>/v1
 #   - Faucet: checks http://127.0.0.1:<faucet_port>/ should return "tap:ok"
-#   - Hub: ports 8080 (REST) and 8081 (faucet)
-#   - Chain 2: ports 8082 (REST) and 8083 (faucet)
+#   - Hub: ports 1000 (REST) and 1010 (faucet)
+#   - Chain 2: ports 2000 (REST) and 2010 (faucet)
 # Exits with error if any service is not responding correctly
 verify_mvm_chain_services() {
     local chain_num="$1"
     
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: verify_mvm_chain_services() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: verify_mvm_chain_services() requires a chain number (1, 2, or 3)"
         exit 1
     fi
-    
-    if [ "$chain_num" != "1" ] && [ "$chain_num" != "2" ]; then
-        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1 or 2)"
-        exit 1
-    fi
-    
+
     local rest_port
     local faucet_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
-        faucet_port="8081"
+        rest_port="1000"
+        faucet_port="1010"
+    elif [ "$chain_num" = "2" ]; then
+        rest_port="2000"
+        faucet_port="2010"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
+        faucet_port="3010"
     else
-        rest_port="8082"
-        faucet_port="8083"
+        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1, 2, or 3)"
+        exit 1
     fi
-    
+
     # Verify REST API
     log "   - Verifying Chain $chain_num REST API..."
     if ! curl -s "http://127.0.0.1:${rest_port}/v1" > /dev/null; then
@@ -288,7 +304,7 @@ verify_mvm_chain_services() {
 # Extract APT metadata address from Aptos chain
 # Usage: extract_apt_metadata <profile> <chain_addr> <account_addr> <chain_num> [log_file]
 # Returns: metadata address via stdout, exits on error
-# chain_num: 1 for Hub (port 8080), 2 for Chain 2 (connected, port 8082)
+# chain_num: 1 for Hub (port 1000), 2 for Chain 2 (connected, port 2000)
 extract_apt_metadata() {
     local profile="$1"
     local chain_addr="$2"
@@ -312,21 +328,21 @@ extract_apt_metadata() {
     fi
     
     if [ -z "$chain_num" ]; then
-        log_and_echo "❌ ERROR: extract_apt_metadata() requires a chain number (1 or 2)"
+        log_and_echo "❌ ERROR: extract_apt_metadata() requires a chain number (1, 2, or 3)"
         exit 1
     fi
-    
-    if [ "$chain_num" != "1" ] && [ "$chain_num" != "2" ]; then
-        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1 or 2)"
-        exit 1
-    fi
-    
+
     # Determine REST API port based on chain number
     local rest_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
+        rest_port="1000"
+    elif [ "$chain_num" = "2" ]; then
+        rest_port="2000"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
     else
-        rest_port="8082"
+        log_and_echo "❌ ERROR: Invalid chain number: $chain_num (must be 1, 2, or 3)"
+        exit 1
     fi
     
     # Run aptos move command to get APT metadata
@@ -562,11 +578,15 @@ get_usdxyz_metadata_addr() {
     
     local rest_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
+        rest_port="1000"
+    elif [ "$chain_num" = "2" ]; then
+        rest_port="2000"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
     else
-        rest_port="8082"
+        rest_port="2000"
     fi
-    
+
     # Call the view function to get metadata
     local metadata=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
         -H 'Content-Type: application/json' \
@@ -604,11 +624,15 @@ get_usdxyz_balance() {
     
     local rest_port
     if [ "$chain_num" = "1" ]; then
-        rest_port="8080"
+        rest_port="1000"
+    elif [ "$chain_num" = "2" ]; then
+        rest_port="2000"
+    elif [ "$chain_num" = "3" ]; then
+        rest_port="3000"
     else
-        rest_port="8082"
+        rest_port="2000"
     fi
-    
+
     # Use || true to allow PANIC check to run if get_profile_address fails
     local account_addr=$(get_profile_address "$profile" 2>/dev/null) || true
     if [ -z "$account_addr" ]; then
@@ -697,27 +721,31 @@ display_balances_hub() {
 }
 
 # Display balances for Chain 2 (Connected Move VM)
-# Usage: display_balances_connected_mvm [test_tokens_addr]
+# Usage: display_balances_connected_mvm [test_tokens_addr] [chain_num]
 # Fetches and displays Requester and Solver balances on the Connected Move VM chain
 # If test_tokens_addr is provided, also displays USDcon balances (PANICS if lookup fails)
-# Only displays if Chain 2 profiles exist (skips silently if they don't)
+# chain_num defaults to MVM_INSTANCE or 2
+# Only displays if chain profiles exist (skips silently if they don't)
 display_balances_connected_mvm() {
     local test_tokens_addr="$1"
-    
-    # Check if Chain 2 profiles exist
-    if ! aptos config show-profiles 2>/dev/null | jq -r ".[\"Result\"][\"requester-chain2\"]" 2>/dev/null | grep -q "."; then
+    local chain_num="${2:-${MVM_INSTANCE:-2}}"
+    local req_profile="requester-chain${chain_num}"
+    local sol_profile="solver-chain${chain_num}"
+
+    # Check if chain profiles exist
+    if ! aptos config show-profiles 2>/dev/null | jq -r ".[\"Result\"][\"$req_profile\"]" 2>/dev/null | grep -q "."; then
         return 0  # Silently skip if profiles don't exist
     fi
-    
-    local requester2=$(aptos account balance --profile requester-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-    local solver2=$(aptos account balance --profile solver-chain2 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
-    
-    log_and_echo "   Chain 2 (Connected MVM):"
-    
+
+    local requester_bal=$(aptos account balance --profile "$req_profile" 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+    local solver_bal=$(aptos account balance --profile "$sol_profile" 2>/dev/null | jq -r '.Result[0].balance // 0' || echo "0")
+
+    log_and_echo "   Chain $chain_num (Connected MVM):"
+
     if [ -n "$test_tokens_addr" ]; then
-        local requester_usdcon=$(get_usdxyz_balance "requester-chain2" "2" "$test_tokens_addr")
-        local solver_usdcon=$(get_usdxyz_balance "solver-chain2" "2" "$test_tokens_addr")
-        
+        local requester_usdcon=$(get_usdxyz_balance "$req_profile" "$chain_num" "$test_tokens_addr")
+        local solver_usdcon=$(get_usdxyz_balance "$sol_profile" "$chain_num" "$test_tokens_addr")
+
         # PANIC if we passed a token address but couldn't get balances
         if [ -z "$requester_usdcon" ] || [ -z "$solver_usdcon" ]; then
             log_and_echo "❌ PANIC: display_balances_connected_mvm failed to get USDcon balances"
@@ -726,12 +754,12 @@ display_balances_connected_mvm() {
             log_and_echo "   solver_usdcon: '$solver_usdcon'"
             exit 1
         fi
-        
-        log_and_echo "      Requester: $requester2 Octas APT, $requester_usdcon 10e-6.USDcon"
-        log_and_echo "      Solver:   $solver2 Octas APT, $solver_usdcon 10e-6.USDcon"
+
+        log_and_echo "      Requester: $requester_bal Octas APT, $requester_usdcon 10e-6.USDcon"
+        log_and_echo "      Solver:   $solver_bal Octas APT, $solver_usdcon 10e-6.USDcon"
     else
-        log_and_echo "      Requester: $requester2 Octas"
-        log_and_echo "      Solver:   $solver2 Octas"
+        log_and_echo "      Requester: $requester_bal Octas"
+        log_and_echo "      Solver:   $solver_bal Octas"
     fi
 }
 
@@ -832,7 +860,7 @@ verify_solver_registered() {
     if [ -z "$profile" ]; then
         profile="${SOLVER_PROFILE:-solver-chain1}"
     fi
-    
+
     # Auto-detect chain_addr if not provided
     if [ -z "$chain_addr" ]; then
         chain_addr="${MOVEMENT_INTENT_MODULE_ADDR:-}"
@@ -845,7 +873,7 @@ verify_solver_registered() {
             chain_addr=$(get_profile_address "intent-account-chain1" 2>/dev/null || echo "")
         fi
     fi
-    
+
     # Auto-detect solver_addr if not provided
     if [ -z "$solver_addr" ]; then
         solver_addr=$(get_profile_address "$profile" 2>/dev/null || echo "")
@@ -866,75 +894,43 @@ verify_solver_registered() {
     chain_addr="${chain_addr#0x}"
 
     log "     Verifying solver is registered in registry..."
-    
-    # Call the entry function to check registration status
-    # The function emits an event - we'll check the event to see if solver is registered
-    local temp_file=$(mktemp)
-    local rpc_url=$(aptos config show-profiles | jq -r ".[\"Result\"][\"$profile\"].rest_url" 2>/dev/null || echo "http://127.0.0.1:8080")
-    local solver_addr_hex="0x${solver_addr}"
-    
-    if [ -n "$log_file" ]; then
-        aptos move run --profile "$profile" --assume-yes \
-            --function-id "0x${chain_addr}::solver_registry::check_solver_registered" \
-            --args "address:0x${solver_addr}" \
-            > "$temp_file" 2>&1
-        local exit_code=$?
-        cat "$temp_file" | tee -a "$log_file" > /dev/null
-    else
-        aptos move run --profile "$profile" --assume-yes \
-            --function-id "0x${chain_addr}::solver_registry::check_solver_registered" \
-            --args "address:0x${solver_addr}" \
-            > "$temp_file" 2>&1
-        local exit_code=$?
-    fi
-    
-    # Check if the command succeeded
-    if [ $exit_code -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to query solver registry"
-        log_and_echo "   Solver address: 0x${solver_addr}"
-        log_and_echo "   Registry address: 0x${chain_addr}"
-        log_and_echo "   Command result:"
-        cat "$temp_file" | while IFS= read -r line; do
-            log_and_echo "     $line"
-        done
-        rm -f "$temp_file"
-        exit 1
-    fi
-    
-    # Wait a moment for transaction to be processed
-    sleep 2
-    
-    # Query the event from the transaction to check if solver is registered
-    # Get the latest transaction from the account that called the function
-    local tx_result=$(curl -s "${rpc_url}/v1/accounts/${solver_addr_hex}/transactions?limit=1" 2>/dev/null)
-    local public_key_length=$(echo "$tx_result" | jq -r '.[0].events[]? | select(.type | contains("SolverRegistered")) | .data.public_key | length' 2>/dev/null)
-    
-    rm -f "$temp_file"
-    
-    # If public_key has length > 0, solver is registered
-    if [ -n "$public_key_length" ] && [ "$public_key_length" != "null" ] && [ "$public_key_length" -gt 0 ]; then
+
+    # Use the #[view] function via REST API (no transaction needed)
+    # Hub chain is always on port 1000
+    local rest_port="1000"
+    local view_result=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
+        -H 'Content-Type: application/json' \
+        -d "{
+            \"function\": \"0x${chain_addr}::solver_registry::is_registered\",
+            \"type_arguments\": [],
+            \"arguments\": [\"0x${solver_addr}\"]
+        }" 2>/dev/null)
+
+    local is_registered=$(echo "$view_result" | jq -r '.[0]' 2>/dev/null)
+
+    if [ "$is_registered" = "true" ]; then
         log "     ✅ Solver is registered in registry"
     else
         log_and_echo "❌ ERROR: Solver is not registered in registry"
         log_and_echo "   Solver address: 0x${solver_addr}"
         log_and_echo "   Registry address: 0x${chain_addr}"
+        log_and_echo "   View response: ${view_result}"
         log_and_echo ""
         log_and_echo "   Available registered solvers:"
-        list_all_solvers "$profile" "$chain_addr" "$log_file"
+        list_all_solvers "$chain_addr" "$log_file"
         exit 1
     fi
 }
 
 # List all registered solvers from the solver registry
-# Usage: list_all_solvers <profile> <chain_addr> [log_file]
+# Usage: list_all_solvers <chain_addr> [log_file]
 # Outputs all registered solvers with their details
 list_all_solvers() {
-    local profile="$1"
-    local chain_addr="$2"
-    local log_file="${3:-$LOG_FILE}"
+    local chain_addr="$1"
+    local log_file="${2:-$LOG_FILE}"
 
-    if [ -z "$profile" ] || [ -z "$chain_addr" ]; then
-        log_and_echo "❌ ERROR: list_all_solvers() requires profile and chain_addr"
+    if [ -z "$chain_addr" ]; then
+        log_and_echo "❌ ERROR: list_all_solvers() requires chain_addr"
         exit 1
     fi
 
@@ -943,115 +939,51 @@ list_all_solvers() {
     # Remove 0x prefix if present
     chain_addr="${chain_addr#0x}"
 
-    # Get RPC URL for the profile
-    local rpc_url=$(aptos config show-profiles | jq -r ".[\"Result\"][\"$profile\"].rest_url" 2>/dev/null || echo "http://127.0.0.1:8080")
-    
-    # Call the Move entry function to list all solvers
-    local temp_file=$(mktemp)
-    local caller_addr=$(aptos config show-profiles | jq -r ".[\"Result\"][\"$profile\"].account" 2>/dev/null)
-    
-    if [ -z "$caller_addr" ] || [ "$caller_addr" = "null" ]; then
-        log_and_echo "❌ ERROR: Could not get caller address for profile: $profile"
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Call the Move entry function
-    if [ -n "$log_file" ]; then
-        aptos move run --profile "$profile" --assume-yes \
-            --function-id "0x${chain_addr}::solver_registry::list_all_solvers" \
-            > "$temp_file" 2>&1
-        local exit_code=$?
-        cat "$temp_file" | tee -a "$log_file" > /dev/null
-    else
-        aptos move run --profile "$profile" --assume-yes \
-            --function-id "0x${chain_addr}::solver_registry::list_all_solvers" \
-            > "$temp_file" 2>&1
-        local exit_code=$?
-    fi
-    
-    if [ $exit_code -ne 0 ]; then
-        log_and_echo "❌ ERROR: Failed to call list_all_solvers function"
-        if [ -n "$log_file" ]; then
-            log_and_echo "   Log file contents:"
-            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-            cat "$temp_file"
-            log_and_echo "   + + + + + + + + + + + + + + + + + + + +"
-        fi
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Extract transaction hash from output
-    local tx_hash=$(grep -i "transaction hash" "$temp_file" | head -1 | awk '{print $NF}' | tr -d '\n' || echo "")
-    
-    if [ -z "$tx_hash" ]; then
-        # Try alternative format
-        tx_hash=$(grep -oE '[0-9a-f]{64}' "$temp_file" | head -1 || echo "")
-    fi
-    
-    # Wait for transaction to be processed
-    sleep 2
-    
-    # Query events from the specific transaction
-    local events=""
-    if [ -n "$tx_hash" ]; then
-        local tx_result=$(curl -s "${rpc_url}/v1/transactions/by_hash/${tx_hash}" 2>/dev/null)
-        events=$(echo "$tx_result" | jq -r '.events[]? | select(.type | contains("SolverRegistered"))' 2>/dev/null)
-    fi
-    
-    # Fallback: query from account's latest transaction if tx_hash not found
-    if [ -z "$events" ] || [ "$events" = "null" ]; then
-        local tx_result=$(curl -s "${rpc_url}/v1/accounts/${caller_addr}/transactions?limit=1" 2>/dev/null)
-        events=$(echo "$tx_result" | jq -r '.[0].events[]? | select(.type | contains("SolverRegistered"))' 2>/dev/null)
-    fi
-    
-    rm -f "$temp_file"
-    
-    if [ -z "$events" ] || [ "$events" = "null" ]; then
+    # Use the #[view] function via REST API (no transaction needed)
+    # Hub chain is always on port 1000
+    local rest_port="1000"
+    local addrs_result=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
+        -H 'Content-Type: application/json' \
+        -d "{
+            \"function\": \"0x${chain_addr}::solver_registry::list_all_solver_addresses\",
+            \"type_arguments\": [],
+            \"arguments\": []
+        }" 2>/dev/null)
+
+    local solver_addrs=$(echo "$addrs_result" | jq -r '.[0]' 2>/dev/null)
+    local solver_count=$(echo "$solver_addrs" | jq 'length' 2>/dev/null)
+
+    if [ -z "$solver_count" ] || [ "$solver_count" = "0" ] || [ "$solver_count" = "null" ]; then
         log_and_echo "   No solvers registered in the registry"
         return 0
     fi
-    
-    # Count solvers (events with non-empty public_key indicate registered solvers)
-    local solver_count=$(echo "$events" | jq -s '[.[] | select(.data.public_key != null and (.data.public_key | length) > 0)] | length' 2>/dev/null)
-    
-    if [ "$solver_count" = "0" ] || [ -z "$solver_count" ]; then
-        log_and_echo "   No solvers registered in the registry"
-        return 0
-    fi
-    
+
     log_and_echo "   Found ${solver_count} registered solver(s):"
     log_and_echo ""
-    
-    # Parse and display each solver
-    echo "$events" | jq -s '[.[] | select(.data.public_key != null and (.data.public_key | length) > 0)]' 2>/dev/null | jq -c '.[]' 2>/dev/null | while IFS= read -r event; do
-        local solver_addr=$(echo "$event" | jq -r '.data.solver // empty' 2>/dev/null)
-        local public_key=$(echo "$event" | jq -r '.data.public_key // []' 2>/dev/null)
-        local mvm_addr=$(echo "$event" | jq -r '.data.connected_chain_mvm_addr.vec[0] // "None"' 2>/dev/null)
-        local evm_addr=$(echo "$event" | jq -r '.data.connected_chain_evm_addr.vec[0] // "None"' 2>/dev/null)
-        local svm_addr=$(echo "$event" | jq -r '.data.connected_chain_svm_addr.vec[0] // "None"' 2>/dev/null)
-        local registered_at=$(echo "$event" | jq -r '.data.timestamp // 0' 2>/dev/null)
-        
-        if [ -n "$solver_addr" ] && [ "$solver_addr" != "null" ]; then
-            log_and_echo "   Solver: ${solver_addr}"
-            local pk_length=$(echo "$public_key" | jq 'length' 2>/dev/null || echo "0")
-            log_and_echo "     Public Key: ${public_key:0:20}... (${pk_length} bytes)"
-            if [ "$mvm_addr" != "None" ] && [ "$mvm_addr" != "null" ] && [ "$mvm_addr" != "" ]; then
-                log_and_echo "     Connected Chain MVM Address: ${mvm_addr}"
-            else
-                log_and_echo "     Connected Chain MVM Address: None"
-            fi
-            if [ "$evm_addr" != "None" ] && [ "$evm_addr" != "null" ] && [ "$evm_addr" != "" ]; then
-                log_and_echo "     Connected Chain EVM Address: ${evm_addr}"
-            else
-                log_and_echo "     Connected Chain EVM Address: None"
-            fi
-            if [ "$svm_addr" != "None" ] && [ "$svm_addr" != "null" ] && [ "$svm_addr" != "" ]; then
-                log_and_echo "     Connected Chain SVM Address: ${svm_addr}"
-            else
-                log_and_echo "     Connected Chain SVM Address: None"
-            fi
+
+    # Query details for each solver via get_solver_info view function
+    echo "$solver_addrs" | jq -r '.[]' 2>/dev/null | while IFS= read -r addr; do
+        local info_result=$(curl -s "http://127.0.0.1:${rest_port}/v1/view" \
+            -H 'Content-Type: application/json' \
+            -d "{
+                \"function\": \"0x${chain_addr}::solver_registry::get_solver_info\",
+                \"type_arguments\": [],
+                \"arguments\": [\"${addr}\"]
+            }" 2>/dev/null)
+
+        local is_reg=$(echo "$info_result" | jq -r '.[0]' 2>/dev/null)
+        if [ "$is_reg" = "true" ]; then
+            local public_key=$(echo "$info_result" | jq -r '.[1]' 2>/dev/null)
+            local mvm_addr=$(echo "$info_result" | jq -r '.[2].vec[0] // "None"' 2>/dev/null)
+            local evm_addr=$(echo "$info_result" | jq -r '.[3].vec[0] // "None"' 2>/dev/null)
+            local svm_addr=$(echo "$info_result" | jq -r '.[4].vec[0] // "None"' 2>/dev/null)
+            local registered_at=$(echo "$info_result" | jq -r '.[5]' 2>/dev/null)
+
+            log_and_echo "   Solver: ${addr}"
+            log_and_echo "     Public Key: ${public_key:0:20}..."
+            log_and_echo "     Connected Chain MVM Address: ${mvm_addr}"
+            log_and_echo "     Connected Chain EVM Address: ${evm_addr}"
+            log_and_echo "     Connected Chain SVM Address: ${svm_addr}"
             log_and_echo "     Registered At: ${registered_at}"
             log_and_echo ""
         fi

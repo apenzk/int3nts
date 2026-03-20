@@ -7,33 +7,33 @@ This guide contains testing and validation commands for Docker-based localnets.
 ### Service Health Checks for Multiple Chains
 
 ```bash
-# Hub (ports 8080/8081)
-curl -s http://127.0.0.1:8080/v1/ledger/info
-curl -s http://127.0.0.1:8081/
+# Hub (ports 1000/1010)
+curl -s http://127.0.0.1:1000/v1/ledger/info
+curl -s http://127.0.0.1:1010/
 
-# Chain 2 (ports 8082/8083)
-curl -s http://127.0.0.1:8082/v1/ledger/info
-curl -s http://127.0.0.1:8083/
+# Chain 2 (ports 2000/2010)
+curl -s http://127.0.0.1:2000/v1/ledger/info
+curl -s http://127.0.0.1:2010/
 ```
 
 ### Multi-Chain Account Funding
 
 ```bash
 # Fund account on Hub
-curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000"
+curl -X POST "http://127.0.0.1:1010/mint?address=<ACCOUNT_ADDR>&amount=100000000"
 
 # Fund account on Chain 2
-curl -X POST "http://127.0.0.1:8083/mint?address=<ACCOUNT_ADDR>&amount=100000000"
+curl -X POST "http://127.0.0.1:2010/mint?address=<ACCOUNT_ADDR>&amount=100000000"
 ```
 
 ### Multi-Chain Balance Verification
 
 ```bash
 # Check balance on Hub
-curl -s "http://127.0.0.1:8080/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
+curl -s "http://127.0.0.1:1000/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
 
 # Check balance on Chain 2
-curl -s "http://127.0.0.1:8082/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
+curl -s "http://127.0.0.1:2000/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
 ```
 
 ## Service Health Checks
@@ -42,20 +42,20 @@ curl -s "http://127.0.0.1:8082/v1/accounts/<FA_STORE_ADDR>/resources" | jq '.[] 
 
 ```bash
 # Basic API health check
-curl -s http://127.0.0.1:8080/v1/ledger/info
+curl -s http://127.0.0.1:1000/v1/ledger/info
 
 # Extract key chain information
-curl -s http://127.0.0.1:8080/v1
+curl -s http://127.0.0.1:1000/v1
 
 # Check node role and status
-curl -s http://127.0.0.1:8080/v1/ledger/info
+curl -s http://127.0.0.1:1000/v1/ledger/info
 ```
 
 ### Faucet Service Status
 
 ```bash
 # Check faucet health
-curl -s http://127.0.0.1:8081/
+curl -s http://127.0.0.1:1010/
 
 # Should return "tap:ok" if healthy
 ```
@@ -66,21 +66,21 @@ curl -s http://127.0.0.1:8081/
 
 ```bash
 # Fund an account via faucet API
-curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000"
+curl -X POST "http://127.0.0.1:1010/mint?address=<ACCOUNT_ADDR>&amount=100000000"
 
 # Example with specific address
 SENDER=0x85eb5517a0e7fbd349ecd71794c940695f2a8c3a3f120a32aa57087c6997d81d
-TX_HASH=$(curl -s -X POST "http://127.0.0.1:8081/mint?address=${SENDER}&amount=100000000" | jq -r '.[0]')
+TX_HASH=$(curl -s -X POST "http://127.0.0.1:1010/mint?address=${SENDER}&amount=100000000" | jq -r '.[0]')
 ```
 
 ### Transaction Verification
 
 ```bash
 # Check transaction status
-curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq '.success, .vm_status'
+curl -s "http://127.0.0.1:1000/v1/transactions/by_hash/${TX_HASH}" | jq '.success, .vm_status'
 
 # Find FA store address from transaction events
-curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store'
+curl -s "http://127.0.0.1:1000/v1/transactions/by_hash/${TX_HASH}" | jq '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store'
 ```
 
 ## Fungible Asset System (FA)
@@ -91,11 +91,11 @@ curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq '.events
 
 ```bash
 # Check actual on-chain balance via FA store (replace STORE_ADDR with actual address)
-curl -s "http://127.0.0.1:8080/v1/accounts/<STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
+curl -s "http://127.0.0.1:1000/v1/accounts/<STORE_ADDR>/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
 
 # Complete example: Get FA store and check balance
-FA_STORE=$(curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq -r '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store')
-curl -s "http://127.0.0.1:8080/v1/accounts/${FA_STORE}/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
+FA_STORE=$(curl -s "http://127.0.0.1:1000/v1/transactions/by_hash/${TX_HASH}" | jq -r '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store')
+curl -s "http://127.0.0.1:1000/v1/accounts/${FA_STORE}/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
 ```
 
 ### Key Differences from Traditional CoinStore
@@ -148,8 +148,8 @@ aptos account balance --profile bob
 # 8. Optional: Verify on-chain balances (FA system)
 # Get the transaction hash from step 6 output, then:
 TX_HASH="0x53858ac187dc7c92b51fc43d58c1135e42425aaad7a2aa6c4e4fd14ac0e3eaf1"
-FA_STORE=$(curl -s "http://127.0.0.1:8080/v1/transactions/by_hash/${TX_HASH}" | jq -r '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store')
-curl -s "http://127.0.0.1:8080/v1/accounts/${FA_STORE}/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
+FA_STORE=$(curl -s "http://127.0.0.1:1000/v1/transactions/by_hash/${TX_HASH}" | jq -r '.events[] | select(.type=="0x1::fungible_asset::Deposit").data.store')
+curl -s "http://127.0.0.1:1000/v1/accounts/${FA_STORE}/resources" | jq '.[] | select(.type=="0x1::fungible_asset::FungibleStore").data.balance'
 ```
 
 ## Troubleshooting
@@ -163,10 +163,10 @@ If `aptos init` hangs during funding:
 ps aux | grep "aptos node"
 
 # Check validator status
-curl -s http://127.0.0.1:8080/v1 | grep -E '"chain_id"|"block_height"'
+curl -s http://127.0.0.1:1000/v1 | grep -E '"chain_id"|"block_height"'
 
 # Manual funding via faucet API (use address=, not auth_key=)
-curl -X POST "http://127.0.0.1:8081/mint?address=<ACCOUNT_ADDR>&amount=100000000"
+curl -X POST "http://127.0.0.1:1010/mint?address=<ACCOUNT_ADDR>&amount=100000000"
 ```
 
 ### Port Conflicts
@@ -175,8 +175,8 @@ If you get port conflicts:
 
 ```bash
 # Check what's using the ports
-lsof -i :8080
-lsof -i :8081
+lsof -i :1000
+lsof -i :1010
 
 # Kill existing processes
 pkill -f "aptos node"

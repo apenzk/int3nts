@@ -1,0 +1,39 @@
+# Mainnet Assets Configuration
+#
+# This file contains chain metadata and contract addresses for mainnet chains.
+# Used by deployment and configuration scripts.
+#
+# Format:
+#   [chain_name]
+#   asset_name = "contract_address"
+#   asset_name_decimals = 6  # Optional: specify decimals if different from standard
+
+# =============================================================================
+# MOVEMENT MAINNET
+# =============================================================================
+
+[movement_mainnet]
+chain_id = 250
+# rpc_url set via env
+native_token = "MOVE"
+native_token_decimals = 8
+
+# =============================================================================
+# BASE MAINNET
+# =============================================================================
+
+[base_mainnet]
+chain_id = 8453
+rpc_url = "https://mainnet.base.org"
+native_token = "ETH"
+native_token_decimals = 18
+
+# =============================================================================
+# HYPERLIQUID MAINNET (HyperEVM)
+# =============================================================================
+
+[hyperliquid_mainnet]
+chain_id = 999
+rpc_url = "https://api.hyperliquid.xyz/evm"
+native_token = "HYPE"
+native_token_decimals = 18

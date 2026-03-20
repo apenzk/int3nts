@@ -67,15 +67,7 @@ See the [component README](../../frontend/README.md) for installation and develo
 
 ## Environment Variables
 
-```bash
-NEXT_PUBLIC_COORDINATOR_URL=http://localhost:3333
-NEXT_PUBLIC_INTENT_CONTRACT_ADDRESS=0x<your-movement-module-address>
-NEXT_PUBLIC_BASE_ESCROW_CONTRACT_ADDRESS=0x<your-base-escrow-address>
-NEXT_PUBLIC_HUB_RPC=https://testnet.movementnetwork.xyz
-NEXT_PUBLIC_EVM_RPC=https://...
-NEXT_PUBLIC_SVM_RPC_URL=https://api.devnet.solana.com
-NEXT_PUBLIC_SVM_PROGRAM_ID=<your-svm-program-id>
-```
+See [frontend/README.md](../../frontend/README.md#environment-variables) for the full list of env vars.
 
 ## Features
 

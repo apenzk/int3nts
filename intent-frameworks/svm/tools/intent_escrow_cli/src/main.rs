@@ -230,15 +230,14 @@ fn handle_create_escrow(
         .transpose()?
         .unwrap_or(1);
 
-    // Read current outbound nonce for message PDA derivation (0 if no messages sent yet)
+    // Read current global outbound nonce for message PDA derivation (0 if no messages sent yet)
     let current_nonce = if let Some(gmp_program) = gmp_endpoint {
-        let chain_id_bytes = hub_chain_id.to_le_bytes();
         let (nonce_pda, _) =
-            Pubkey::find_program_address(&[b"nonce_out", &chain_id_bytes], &gmp_program);
+            Pubkey::find_program_address(&[b"nonce_out"], &gmp_program);
         match client.get_account_data(&nonce_pda) {
-            Ok(data) if data.len() >= 13 => {
-                // OutboundNonceAccount: disc(1) + dst_chain_id(4) + nonce(8)
-                u64::from_le_bytes(data[5..13].try_into().unwrap_or([0; 8]))
+            Ok(data) if data.len() >= 9 => {
+                // OutboundNonceAccount: disc(1) + nonce(8)
+                u64::from_le_bytes(data[1..9].try_into().unwrap_or([0; 8]))
             }
             _ => 0,
         }
@@ -675,12 +674,11 @@ fn build_create_escrow_ix(
         // GMP Send expects: config, nonce_out, sender, payer, system_program, message_account
         let (gmp_endpoint_config, _) =
             Pubkey::find_program_address(&[b"config"], &gmp_program);
-        let chain_id_bytes = hub_chain_id.to_le_bytes();
         let (gmp_nonce_out, _) =
-            Pubkey::find_program_address(&[b"nonce_out", &chain_id_bytes], &gmp_program);
+            Pubkey::find_program_address(&[b"nonce_out"], &gmp_program);
         let nonce_bytes = current_nonce.to_le_bytes();
         let (gmp_message, _) =
-            Pubkey::find_program_address(&[b"message", &chain_id_bytes, &nonce_bytes], &gmp_program);
+            Pubkey::find_program_address(&[b"message", &nonce_bytes], &gmp_program);
 
         accounts.push(AccountMeta::new_readonly(gmp_endpoint_config, false)); // GMP config
         accounts.push(AccountMeta::new(gmp_nonce_out, false)); // GMP nonce (writable for init/update)

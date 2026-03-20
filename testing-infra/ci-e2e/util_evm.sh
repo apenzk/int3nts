@@ -27,7 +27,7 @@ get_usdcon_balance_evm() {
         setup_project_root
     fi
     
-    local balance_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && TOKEN_ADDR='$token_addr' ACCOUNT='$account' npx hardhat run scripts/get-token-balance.js --network localhost" 2>&1)
+    local balance_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && TOKEN_ADDR='$token_addr' ACCOUNT='$account' npx hardhat run scripts/get-token-balance.js --network ${EVM_NETWORK:-localhost}" 2>&1)
     local balance=$(echo "$balance_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n')
     
     if [ -z "$balance" ]; then
@@ -49,7 +49,7 @@ display_balances_connected_evm() {
     local usdcon_addr="$1"
     
     # Check if EVM chain is running
-    if ! curl -s -X POST http://127.0.0.1:8545 \
+    if ! curl -s -X POST "http://127.0.0.1:${EVM_PORT:-2000}" \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
         >/dev/null 2>&1; then
@@ -64,15 +64,15 @@ display_balances_connected_evm() {
     
     # Use the actual script files instead of inline heredoc (Hardhat doesn't support inline scripts)
     # Account 0 = deployer, Account 1 = Requester, Account 2 = Solver
-    local requester_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+    local requester_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-balance.js --network ${EVM_NETWORK:-localhost}" 2>&1)
     local requester_evm=$(echo "$requester_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
     
-    local solver_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network localhost" 2>&1)
+    local solver_evm_output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-balance.js --network ${EVM_NETWORK:-localhost}" 2>&1)
     local solver_evm=$(echo "$solver_evm_output" | grep -E '^[0-9]+$' | tail -1 | tr -d '\n' || echo "0")
     
     # Get account addresses for USDcon balance lookup
-    local requester_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
-    local solver_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-address.js --network localhost" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
+    local requester_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=1 npx hardhat run scripts/get-account-address.js --network ${EVM_NETWORK:-localhost}" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
+    local solver_addr=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ACCOUNT_INDEX=2 npx hardhat run scripts/get-account-address.js --network ${EVM_NETWORK:-localhost}" 2>&1 | grep -E '^0x[a-fA-F0-9]{40}$' | head -1)
     
     cd "$PROJECT_ROOT"
     
@@ -135,7 +135,7 @@ has_requirements() {
         setup_project_root
     fi
 
-    local output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_GMP_ADDR='$escrow_gmp_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-has-requirements.js --network localhost" 2>&1)
+    local output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_GMP_ADDR='$escrow_gmp_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-has-requirements.js --network ${EVM_NETWORK:-localhost}" 2>&1)
 
     # Check for "hasRequirements: true" or "hasRequirements: false" in output
     if echo "$output" | grep -q "hasRequirements: true"; then
@@ -166,7 +166,7 @@ is_released_evm() {
         setup_project_root
     fi
 
-    local output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_GMP_ADDR='$escrow_gmp_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-is-released.js --network localhost" 2>&1)
+    local output=$(nix develop "$PROJECT_ROOT/nix" -c bash -c "cd '$PROJECT_ROOT/intent-frameworks/evm' && ESCROW_GMP_ADDR='$escrow_gmp_addr' INTENT_ID_EVM='$intent_id_evm' npx hardhat run scripts/get-is-released.js --network ${EVM_NETWORK:-localhost}" 2>&1)
 
     # Check for "isReleased: true" or "isReleased: false" in output
     if echo "$output" | grep -q "isReleased: true"; then

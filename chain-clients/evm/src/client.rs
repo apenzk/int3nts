@@ -8,7 +8,7 @@ use reqwest::Client;
 use sha3::{Digest, Keccak256};
 use std::time::Duration;
 
-use crate::types::{EscrowCreatedEvent, EvmLog, JsonRpcRequest, JsonRpcResponse};
+use crate::types::{EscrowCreatedEvent, EvmLog};
 
 /// Client for communicating with EVM-compatible blockchain nodes via JSON-RPC
 pub struct EvmClient {
@@ -21,7 +21,7 @@ pub struct EvmClient {
 }
 
 impl EvmClient {
-    /// Creates a new EVM client for the given node URL
+    /// Creates a new EVM client for the given node URL and escrow contract address.
     pub fn new(node_url: &str, escrow_contract_addr: &str) -> Result<Self> {
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -36,6 +36,12 @@ impl EvmClient {
         })
     }
 
+    /// Creates a new EVM client without an escrow contract address.
+    /// Used by consumers that only need generic RPC access (e.g., GmpEvmClient).
+    pub fn new_rpc_only(node_url: &str) -> Result<Self> {
+        Self::new(node_url, "")
+    }
+
     /// Returns the base URL of this client
     pub fn base_url(&self) -> &str {
         &self.base_url
@@ -46,59 +52,147 @@ impl EvmClient {
         &self.escrow_contract_addr
     }
 
-    /// Gets the current block number via eth_blockNumber
-    pub async fn get_block_number(&self) -> Result<u64> {
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "eth_blockNumber".to_string(),
-            params: vec![],
-            id: 1,
+    // ========================================================================
+    // Generic JSON-RPC
+    // ========================================================================
+
+    /// Generic JSON-RPC call with 15-second timeout.
+    pub async fn json_rpc<T: serde::de::DeserializeOwned>(
+        &self,
+        method: &str,
+        params: Vec<serde_json::Value>,
+    ) -> Result<T> {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": 1,
+        });
+
+        let rpc_future = async {
+            let resp = self
+                .client
+                .post(&self.base_url)
+                .json(&request)
+                .send()
+                .await
+                .with_context(|| {
+                    format!("Failed to send {} request to {}", method, self.base_url)
+                })?;
+            resp.json::<serde_json::Value>()
+                .await
+                .with_context(|| {
+                    format!("Failed to parse {} response from {}", method, self.base_url)
+                })
         };
 
-        let response: JsonRpcResponse<String> = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to send eth_blockNumber request to {}",
-                    self.base_url
-                )
-            })?
-            .json()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to parse eth_blockNumber response from {}",
-                    self.base_url
-                )
-            })?;
+        let response: serde_json::Value =
+            tokio::time::timeout(Duration::from_secs(15), rpc_future)
+                .await
+                .map_err(|_| {
+                    anyhow::anyhow!(
+                        "Timed out after 15s waiting for {} from {}",
+                        method,
+                        self.base_url
+                    )
+                })??;
 
-        if let Some(error) = response.error {
-            return Err(anyhow::anyhow!(
-                "JSON-RPC error from {}: {} (code: {})",
+        if let Some(error) = response.get("error") {
+            let code = error.get("code").and_then(|c| c.as_i64()).unwrap_or(0);
+            let message = error
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown error");
+            anyhow::bail!(
+                "JSON-RPC error from {} ({}): {} (code: {})",
                 self.base_url,
-                error.message,
-                error.code
-            ));
+                method,
+                message,
+                code
+            );
         }
 
-        let block_number_hex = response
-            .result
-            .ok_or_else(|| anyhow::anyhow!("No result in eth_blockNumber response"))?;
+        let result = response
+            .get("result")
+            .ok_or_else(|| anyhow::anyhow!("No result in {} response from {}", method, self.base_url))?
+            .clone();
 
-        let block_number = u64::from_str_radix(
-            block_number_hex
-                .strip_prefix("0x")
-                .unwrap_or(&block_number_hex),
-            16,
-        )
-        .context("Failed to parse block number")?;
-
-        Ok(block_number)
+        serde_json::from_value(result).with_context(|| {
+            format!("Failed to deserialize {} result from {}", method, self.base_url)
+        })
     }
+
+    // ========================================================================
+    // Generic RPC methods
+    // ========================================================================
+
+    /// Gets the current block number via eth_blockNumber
+    pub async fn get_block_number(&self) -> Result<u64> {
+        let block_hex: String = self.json_rpc("eth_blockNumber", vec![]).await?;
+        let clean = block_hex.strip_prefix("0x").unwrap_or(&block_hex);
+        u64::from_str_radix(clean, 16).context("Failed to parse block number")
+    }
+
+    /// Generic eth_call to a contract.
+    pub async fn eth_call(&self, to: &str, data: &str) -> Result<String> {
+        self.json_rpc(
+            "eth_call",
+            vec![
+                serde_json::json!({ "to": to, "data": data }),
+                serde_json::json!("latest"),
+            ],
+        )
+        .await
+    }
+
+    /// Query event logs via eth_getLogs.
+    pub async fn get_logs(&self, filter: serde_json::Value) -> Result<Vec<EvmLog>> {
+        self.json_rpc("eth_getLogs", vec![filter]).await
+    }
+
+    /// Get the pending transaction count (nonce) for an address.
+    pub async fn get_transaction_count(&self, address: &str) -> Result<u64> {
+        let hex: String = self
+            .json_rpc(
+                "eth_getTransactionCount",
+                vec![serde_json::json!(address), serde_json::json!("pending")],
+            )
+            .await?;
+        let clean = hex.strip_prefix("0x").unwrap_or(&hex);
+        u64::from_str_radix(clean, 16).context("Failed to parse transaction count")
+    }
+
+    /// Get the current gas price.
+    pub async fn gas_price(&self) -> Result<u64> {
+        let hex: String = self.json_rpc("eth_gasPrice", vec![]).await?;
+        let clean = hex.strip_prefix("0x").unwrap_or(&hex);
+        u64::from_str_radix(clean, 16).context("Failed to parse gas price")
+    }
+
+    /// Broadcast a signed raw transaction, returns the transaction hash.
+    pub async fn send_raw_transaction(&self, raw_tx: &str) -> Result<String> {
+        self.json_rpc(
+            "eth_sendRawTransaction",
+            vec![serde_json::json!(raw_tx)],
+        )
+        .await
+    }
+
+    /// Get a transaction receipt, returns None if not yet mined.
+    pub async fn get_transaction_receipt(
+        &self,
+        tx_hash: &str,
+    ) -> Result<Option<serde_json::Value>> {
+        self.json_rpc(
+            "eth_getTransactionReceipt",
+            vec![serde_json::json!(tx_hash)],
+        )
+        .await
+    }
+
+    // ========================================================================
+    // Escrow-specific methods (require escrow_contract_addr)
+    // ========================================================================
 
     /// Queries EVM chain for EscrowCreated events via eth_getLogs
     pub async fn get_escrow_created_events(
@@ -127,42 +221,7 @@ impl EvmClient {
             "toBlock": to_block_str,
         });
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "eth_getLogs".to_string(),
-            params: vec![filter],
-            id: 1,
-        };
-
-        let response: JsonRpcResponse<Vec<EvmLog>> = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .with_context(|| {
-                format!("Failed to send eth_getLogs request to {}", self.base_url)
-            })?
-            .json()
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to parse eth_getLogs response from {}",
-                    self.base_url
-                )
-            })?;
-
-        if let Some(error) = response.error {
-            return Err(anyhow::anyhow!(
-                "JSON-RPC error from {}: {} (code: {})",
-                self.base_url,
-                error.message,
-                error.code
-            ));
-        }
-
-        let logs = response.result
-            .context("No result in eth_getLogs response")?;
+        let logs: Vec<EvmLog> = self.get_logs(filter).await?;
         let mut events = Vec::new();
 
         for log in logs {
@@ -218,41 +277,8 @@ impl EvmClient {
         let account_padded = format!("{:0>64}", account_clean);
         let calldata = format!("0x{}{}", selector, account_padded);
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "eth_call".to_string(),
-            params: vec![
-                serde_json::json!({
-                    "to": token_normalized,
-                    "data": calldata,
-                }),
-                serde_json::json!("latest"),
-            ],
-            id: 1,
-        };
-
-        let response: JsonRpcResponse<String> = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send eth_call for balanceOf")?
-            .json()
-            .await
-            .context("Failed to parse eth_call balanceOf response")?;
-
-        if let Some(error) = response.error {
-            anyhow::bail!(
-                "eth_call balanceOf failed: {} (code: {})",
-                error.message,
-                error.code
-            );
-        }
-
-        let result = response
-            .result
-            .context("No result in balanceOf response")?;
+        let result: String = self.eth_call(&token_normalized, &calldata).await
+            .context("Failed eth_call for balanceOf")?;
 
         let clean = result.strip_prefix("0x").unwrap_or(&result);
         if clean.is_empty() || clean == "0" {
@@ -279,40 +305,17 @@ impl EvmClient {
     pub async fn get_native_balance(&self, account_addr: &str) -> Result<u128> {
         let account_normalized = normalize_evm_address(account_addr)?;
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "eth_getBalance".to_string(),
-            params: vec![
-                serde_json::json!(account_normalized),
-                serde_json::json!("latest"),
-            ],
-            id: 1,
-        };
+        let hex: String = self
+            .json_rpc(
+                "eth_getBalance",
+                vec![
+                    serde_json::json!(account_normalized),
+                    serde_json::json!("latest"),
+                ],
+            )
+            .await?;
 
-        let response: JsonRpcResponse<String> = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send eth_getBalance request")?
-            .json()
-            .await
-            .context("Failed to parse eth_getBalance response")?;
-
-        if let Some(error) = response.error {
-            anyhow::bail!(
-                "eth_getBalance failed: {} (code: {})",
-                error.message,
-                error.code
-            );
-        }
-
-        let result = response
-            .result
-            .context("No result in eth_getBalance response")?;
-
-        let clean = result.strip_prefix("0x").unwrap_or(&result);
+        let clean = hex.strip_prefix("0x").unwrap_or(&hex);
         if clean.is_empty() || clean == "0" {
             return Ok(0);
         }
@@ -335,40 +338,8 @@ impl EvmClient {
         let intent_id_padded = format!("{:0>64}", intent_id_clean);
         let calldata = format!("0x{}{}", selector, intent_id_padded);
 
-        let request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            method: "eth_call".to_string(),
-            params: vec![
-                serde_json::json!({
-                    "to": self.escrow_contract_addr,
-                    "data": calldata,
-                }),
-                serde_json::json!("latest"),
-            ],
-            id: 1,
-        };
-
-        let response: JsonRpcResponse<String> = self
-            .client
-            .post(&self.base_url)
-            .json(&request)
-            .send()
-            .await
-            .context("Failed to send eth_call for isReleased")?
-            .json()
-            .await
-            .context("Failed to parse eth_call isReleased response")?;
-
-        if let Some(error) = response.error {
-            anyhow::bail!(
-                "eth_call isReleased failed: {} (code: {})",
-                error.message,
-                error.code
-            );
-        }
-
-        let result = response.result
-            .context("No result in eth_call isReleased response")?;
+        let result: String = self.eth_call(&self.escrow_contract_addr.clone(), &calldata).await
+            .context("Failed eth_call for isReleased")?;
 
         // ABI bool: 32 bytes, last byte is 0x01 (true) or 0x00 (false)
         let clean = result.strip_prefix("0x").unwrap_or(&result);

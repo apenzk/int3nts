@@ -1,30 +1,33 @@
 #!/bin/bash
 
 # Deploy SVM intent_inflow_escrow, intent-gmp, and intent-outflow-validator programs
+# Accepts instance number as argument (default: 2).
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source "$SCRIPT_DIR/../util.sh"
-source "$SCRIPT_DIR/../util_svm.sh"
+source "$SCRIPT_DIR/utils.sh"
 
 setup_project_root
-setup_logging "deploy-svm-programs"
+
+# Accept instance number as argument
+svm_instance_vars "${1:-2}"
+
+setup_logging "deploy-svm-programs${SVM_INSTANCE}"
 cd "$PROJECT_ROOT"
 
-log " Deploying SVM programs (intent_inflow_escrow, intent-gmp, intent-outflow-validator)..."
+log " Deploying SVM programs (instance $SVM_INSTANCE)..."
 log_and_echo " All output logged to: $LOG_FILE"
 
-SVM_RPC_URL="http://127.0.0.1:8899"
-SVM_CHAIN_ID=901
-CHAIN_INFO="$PROJECT_ROOT/.tmp/chain-info.env"
-
-if [ -f "$CHAIN_INFO" ]; then
-    source "$CHAIN_INFO"
+# Load hub module address from shared chain-info (written by chain-hub/deploy-contracts.sh)
+source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
+# Load per-instance SVM chain info (written by setup-requester-solver.sh)
+if [ -f "$SVM_CHAIN_INFO_FILE" ]; then
+    source "$SVM_CHAIN_INFO_FILE"
 fi
 
 if [ -z "$SVM_PAYER_KEYPAIR" ]; then
-    log_and_echo "❌ ERROR: SVM_PAYER_KEYPAIR not found. Run setup-requester-solver.sh first."
+    log_and_echo "❌ ERROR: SVM_PAYER_KEYPAIR not found. Run setup-requester-solver.sh $SVM_INSTANCE first."
     exit 1
 fi
 
@@ -43,7 +46,15 @@ if [ ! -f "$ESCROW_KEYPAIR" ]; then
     svm_cmd "solana-keygen new --no-bip39-passphrase --silent -o \"$ESCROW_KEYPAIR\""
 fi
 
+set +e
 svm_cmd "solana program deploy --url \"$SVM_RPC_URL\" --keypair \"$SVM_PAYER_KEYPAIR\" \"$ESCROW_SO\" --program-id \"$ESCROW_KEYPAIR\"" >> "$LOG_FILE" 2>&1
+deploy_status=$?
+set -e
+if [ "$deploy_status" -ne 0 ]; then
+    log_and_echo "❌ intent_inflow_escrow deploy failed (exit $deploy_status). Last 50 lines of log:"
+    tail -50 "$LOG_FILE" | while IFS= read -r line; do log_and_echo "   $line"; done
+    exit "$deploy_status"
+fi
 SVM_PROGRAM_ID=$(svm_cmd "solana address -k \"$ESCROW_KEYPAIR\"" | tail -n 1)
 log "   ✅ intent_inflow_escrow deployed: $SVM_PROGRAM_ID"
 
@@ -60,7 +71,15 @@ if [ ! -f "$GMP_KEYPAIR" ]; then
     svm_cmd "solana-keygen new --no-bip39-passphrase --silent -o \"$GMP_KEYPAIR\""
 fi
 
+set +e
 svm_cmd "solana program deploy --url \"$SVM_RPC_URL\" --keypair \"$SVM_PAYER_KEYPAIR\" \"$GMP_SO\" --program-id \"$GMP_KEYPAIR\"" >> "$LOG_FILE" 2>&1
+deploy_status=$?
+set -e
+if [ "$deploy_status" -ne 0 ]; then
+    log_and_echo "❌ intent-gmp deploy failed (exit $deploy_status). Last 50 lines of log:"
+    tail -50 "$LOG_FILE" | while IFS= read -r line; do log_and_echo "   $line"; done
+    exit "$deploy_status"
+fi
 SVM_GMP_ENDPOINT_ID=$(svm_cmd "solana address -k \"$GMP_KEYPAIR\"" | tail -n 1)
 log "   ✅ intent-gmp deployed: $SVM_GMP_ENDPOINT_ID"
 
@@ -77,7 +96,15 @@ if [ ! -f "$OUTFLOW_KEYPAIR" ]; then
     svm_cmd "solana-keygen new --no-bip39-passphrase --silent -o \"$OUTFLOW_KEYPAIR\""
 fi
 
+set +e
 svm_cmd "solana program deploy --url \"$SVM_RPC_URL\" --keypair \"$SVM_PAYER_KEYPAIR\" \"$OUTFLOW_SO\" --program-id \"$OUTFLOW_KEYPAIR\"" >> "$LOG_FILE" 2>&1
+deploy_status=$?
+set -e
+if [ "$deploy_status" -ne 0 ]; then
+    log_and_echo "❌ intent-outflow-validator deploy failed (exit $deploy_status). Last 50 lines of log:"
+    tail -50 "$LOG_FILE" | while IFS= read -r line; do log_and_echo "   $line"; done
+    exit "$deploy_status"
+fi
 SVM_OUTFLOW_VALIDATOR_ID=$(svm_cmd "solana address -k \"$OUTFLOW_KEYPAIR\"" | tail -n 1)
 log "   ✅ intent-outflow-validator deployed: $SVM_OUTFLOW_VALIDATOR_ID"
 
@@ -304,7 +331,7 @@ log "   ✅ GMP routing configured for IntentRequirements multi-destination deli
 # Configure hub chain to trust SVM connected chain
 # ============================================================================
 log ""
-log " Configuring hub chain to trust SVM connected chain..."
+log " Configuring hub chain to trust SVM connected chain (instance $SVM_INSTANCE)..."
 
 if [ -n "$HUB_MODULE_ADDR" ]; then
     # Both SVM programs (intent-outflow-validator and intent-inflow-escrow) use the
@@ -317,7 +344,7 @@ if [ -n "$HUB_MODULE_ADDR" ]; then
     if aptos move run --profile intent-account-chain1 --assume-yes \
         --function-id ${HUB_MODULE_ADDR}::intent_gmp::set_remote_gmp_endpoint_addr \
         --args u32:$SVM_CHAIN_ID "hex:${SVM_GMP_ENDPOINT_HEX}" >> "$LOG_FILE" 2>&1; then
-        log "   ✅ Hub intent_gmp now trusts SVM GMP endpoint"
+        log "   ✅ Hub intent_gmp now trusts SVM GMP endpoint (chain $SVM_CHAIN_ID)"
     else
         log "   ️ Could not set remote GMP endpoint on hub (ignoring)"
     fi
@@ -326,7 +353,7 @@ if [ -n "$HUB_MODULE_ADDR" ]; then
     if aptos move run --profile intent-account-chain1 --assume-yes \
         --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::set_remote_gmp_endpoint_addr \
         --args u32:$SVM_CHAIN_ID "hex:${SVM_GMP_ENDPOINT_HEX}" >> "$LOG_FILE" 2>&1; then
-        log "   ✅ Hub intent_gmp_hub now trusts SVM GMP endpoint"
+        log "   ✅ Hub intent_gmp_hub now trusts SVM GMP endpoint (chain $SVM_CHAIN_ID)"
     else
         log "   ️ Could not set remote GMP endpoint in intent_gmp_hub (ignoring)"
     fi
@@ -354,7 +381,7 @@ log "   ✅ Integrated-GMP relay funded on SVM"
 # ============================================================================
 log ""
 log " Saving chain info..."
-cat >> "$CHAIN_INFO" << EOF
+cat >> "$SVM_CHAIN_INFO_FILE" << EOF
 SVM_PROGRAM_ID=$SVM_PROGRAM_ID
 SVM_GMP_ENDPOINT_ID=$SVM_GMP_ENDPOINT_ID
 SVM_OUTFLOW_VALIDATOR_ID=$SVM_OUTFLOW_VALIDATOR_ID
@@ -362,7 +389,7 @@ SVM_CHAIN_ID=$SVM_CHAIN_ID
 EOF
 
 log ""
-log "✅ SVM programs deploy + init complete"
+log "✅ SVM programs deploy + init complete (instance $SVM_INSTANCE)"
 log "   - intent_inflow_escrow: $SVM_PROGRAM_ID"
 log "   - intent-gmp: $SVM_GMP_ENDPOINT_ID"
 log "   - intent-outflow-validator: $SVM_OUTFLOW_VALIDATOR_ID"

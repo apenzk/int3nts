@@ -5,11 +5,17 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source "$SCRIPT_DIR/../util.sh"
 source "$SCRIPT_DIR/../util_mvm.sh"
 source "$SCRIPT_DIR/../util_svm.sh"
+source "$SCRIPT_DIR/../chain-connected-svm/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "submit-hub-intent-svm-inflow"
 cd "$PROJECT_ROOT"
+
+# Load SVM instance vars
+svm_instance_vars "${SVM_INSTANCE:-2}"
+source "$SVM_CHAIN_INFO_FILE" 2>/dev/null || true
+
+setup_logging "submit-hub-intent-svm-inflow${SVM_INSTANCE}"
 
 verify_coordinator_running
 verify_integrated_gmp_running
@@ -18,7 +24,8 @@ verify_solver_registered
 
 INTENT_ID="0x$(openssl rand -hex 32)"
 
-CONNECTED_CHAIN_ID=901
+# SVM mode: use chain ID from svm_instance_vars
+CONNECTED_CHAIN_ID=$SVM_CHAIN_ID
 HUB_CHAIN_ID=1
 
 HUB_MODULE_ADDR=$(get_profile_address "intent-account-chain1")
@@ -26,10 +33,8 @@ TEST_TOKENS_HUB=$(get_profile_address "test-tokens-chain1")
 REQUESTER_HUB_ADDR=$(get_profile_address "requester-chain1")
 SOLVER_HUB_ADDR=$(get_profile_address "solver-chain1")
 
-source "$PROJECT_ROOT/.tmp/chain-info.env" 2>/dev/null || true
-
 if [ -z "$REQUESTER_SVM_PUBKEY" ] || [ -z "$SOLVER_SVM_PUBKEY" ] || [ -z "$USD_SVM_MINT_ADDR" ]; then
-    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh first."
+    log_and_echo "❌ ERROR: Missing SVM chain info. Run chain-connected-svm/setup-requester-solver.sh $SVM_INSTANCE first."
     exit 1
 fi
 
@@ -37,7 +42,7 @@ REQUESTER_SVM_ADDR=$(svm_pubkey_to_hex "$REQUESTER_SVM_PUBKEY")
 SOLVER_SVM_ADDR=$(svm_pubkey_to_hex "$SOLVER_SVM_PUBKEY")
 
 log ""
-log " Chain Information:"
+log " Chain Information (instance $SVM_INSTANCE):"
 log "   Hub Module Address:                    $HUB_MODULE_ADDR"
 log "   Requester Hub:                         $REQUESTER_HUB_ADDR"
 log "   Solver Hub:                            $SOLVER_HUB_ADDR"
@@ -128,7 +133,7 @@ aptos move run --profile requester-chain1 --assume-yes \
 if [ $? -eq 0 ]; then
     log "     ✅ Request-intent created on Hub!"
     sleep 2
-    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:8080/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
+    HUB_INTENT_ADDR=$(curl -s "http://127.0.0.1:1000/v1/accounts/${REQUESTER_HUB_ADDR}/transactions?limit=1" | \
         jq -r '.[0].events[] | select(.type | contains("LimitOrderEvent")) | .data.intent_addr' | head -n 1)
     if [ -n "$HUB_INTENT_ADDR" ] && [ "$HUB_INTENT_ADDR" != "null" ]; then
         log "     ✅ Hub intent stored at: $HUB_INTENT_ADDR"

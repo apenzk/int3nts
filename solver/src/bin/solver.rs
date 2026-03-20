@@ -22,7 +22,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use solver::{
     chains::HubChainClient,
-    config::SolverConfig,
+    config::{ConnectedChainConfig, SolverConfig},
     crypto::{get_private_key_from_profile, sign_intent_hash},
     api::run_acceptance_server,
     service::{InflowService, IntentTracker, LiquidityMonitor, OutflowService, SigningService},
@@ -99,14 +99,19 @@ async fn main() -> Result<()> {
     let (_signature, public_key_bytes) = sign_intent_hash(&dummy_hash, &private_key)
         .context("Failed to derive public key from private key")?;
     
-    // Get expected addresses for all configured connected chains from environment variables
-    let expected_mvm_addr: Option<String> = if config.get_mvm_config().is_some() {
+    // Get expected addresses for all configured connected chains from environment variables.
+    // One address per VM type is shared across all chains of that type.
+    let has_mvm = config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Mvm(_)));
+    let has_evm = config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Evm(_)));
+    let has_svm = config.connected_chain.iter().any(|c| matches!(c, ConnectedChainConfig::Svm(_)));
+
+    let expected_mvm_addr: Option<String> = if has_mvm {
         std::env::var("SOLVER_MVMCON_ADDR").ok()
     } else {
         None
     };
-    
-    let expected_evm_addr: Vec<u8> = if config.get_evm_config().is_some() {
+
+    let expected_evm_addr: Vec<u8> = if has_evm {
         let addr_str = std::env::var("SOLVER_EVM_ADDR").context(
             "SOLVER_EVM_ADDR env var is required when an EVM connected chain is configured"
         )?;
@@ -117,8 +122,8 @@ async fn main() -> Result<()> {
     } else {
         vec![]
     };
-    
-    let expected_svm_addr: Vec<u8> = if config.get_svm_config().is_some() {
+
+    let expected_svm_addr: Vec<u8> = if has_svm {
         let addr_str = std::env::var("SOLVER_SVM_ADDR").context(
             "SOLVER_SVM_ADDR env var is required when an SVM connected chain is configured"
         )?;
@@ -129,22 +134,22 @@ async fn main() -> Result<()> {
     } else {
         vec![]
     };
-    
+
     // Log expected addresses for registration
     info!("Expected registration addresses:");
     if !expected_evm_addr.is_empty() {
         info!("  EVM: 0x{}", hex::encode(&expected_evm_addr));
-    } else if config.get_evm_config().is_some() {
+    } else if has_evm {
         info!("  EVM: (not set - SOLVER_EVM_ADDR env var missing)");
     }
     if !expected_svm_addr.is_empty() {
         info!("  SVM: 0x{}", hex::encode(&expected_svm_addr));
-    } else if config.get_svm_config().is_some() {
+    } else if has_svm {
         info!("  SVM: (not set - SOLVER_SVM_ADDR env var missing)");
     }
     if let Some(ref addr) = expected_mvm_addr {
         info!("  MVM: {}", addr);
-    } else if config.get_mvm_config().is_some() {
+    } else if has_mvm {
         info!("  MVM: (not set - SOLVER_MVMCON_ADDR env var missing)");
     }
     

@@ -5,8 +5,8 @@ services:
     image: ${APTOS_DOCKER_IMAGE}
     container_name: aptos-localnet-chain2
     ports:
-      - "8082:8080"  # REST API on port 8082
-      - "8083:8081"  # Faucet on port 8083
+      - "2000:8080"  # REST API on port 2000
+      - "2010:8081"  # Faucet on port 2010
     volumes:
       - aptos-data-chain2:/aptos/config
     command: >

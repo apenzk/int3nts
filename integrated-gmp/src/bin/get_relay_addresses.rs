@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     println!("INTEGRATED_GMP_SVM_ADDR={}", svm_addr);
     println!();
     println!("Update these files with the values above:");
-    println!("  - testing-infra/testnet/.env.testnet  (all three addresses)");
+    println!("  - testing-infra/networks/testnet/.env.testnet  (all three addresses)");
     println!("  - integrated-gmp/config/integrated-gmp_testnet.toml  (approver_evm_pubkey_hash)");
 
     Ok(())

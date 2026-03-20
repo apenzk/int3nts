@@ -40,39 +40,6 @@ pub struct SolverConfig {
 }
 
 impl SolverConfig {
-    /// Get connected MVM chain config if configured
-    pub fn get_mvm_config(&self) -> Option<&MvmChainConfig> {
-        self.connected_chain.iter().find_map(|c| {
-            if let ConnectedChainConfig::Mvm(cfg) = c {
-                Some(cfg)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Get connected EVM chain config if configured
-    pub fn get_evm_config(&self) -> Option<&EvmChainConfig> {
-        self.connected_chain.iter().find_map(|c| {
-            if let ConnectedChainConfig::Evm(cfg) = c {
-                Some(cfg)
-            } else {
-                None
-            }
-        })
-    }
-
-    /// Get connected SVM chain config if configured
-    pub fn get_svm_config(&self) -> Option<&SvmChainConfig> {
-        self.connected_chain.iter().find_map(|c| {
-            if let ConnectedChainConfig::Svm(cfg) = c {
-                Some(cfg)
-            } else {
-                None
-            }
-        })
-    }
-
     /// Get connected chain config by chain ID
     pub fn get_connected_chain_by_id(&self, chain_id: u64) -> Option<&ConnectedChainConfig> {
         self.connected_chain.iter().find(|c| c.chain_id() == chain_id)

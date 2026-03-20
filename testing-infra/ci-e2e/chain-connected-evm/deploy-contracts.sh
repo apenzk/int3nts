@@ -8,20 +8,24 @@ source "$SCRIPT_DIR/utils.sh"
 
 # Setup project root and logging
 setup_project_root
-setup_logging "deploy-contract"
+
+# Accept instance number as argument (default: 1)
+evm_instance_vars "${1:-1}"
+
+setup_logging "deploy-contract-evm${EVM_INSTANCE}"
 cd "$PROJECT_ROOT"
 
-log " EVM CHAIN - DEPLOY GMP CONTRACTS"
+log " EVM CHAIN - DEPLOY GMP CONTRACTS (instance $EVM_INSTANCE)"
 log "==================================="
 log_and_echo " All output logged to: $LOG_FILE"
 
 log ""
-log " Deploying GMP contracts to EVM chain..."
+log " Deploying GMP contracts to EVM chain (instance $EVM_INSTANCE)..."
 log "============================================="
 
 # Check if Hardhat node is running
-if ! check_evm_chain_running; then
-    log_and_echo "❌ Hardhat node is not running. Please run testing-infra/ci-e2e/chain-connected-evm/setup-chain.sh first"
+if ! check_evm_chain_running "$EVM_PORT"; then
+    log_and_echo "❌ Hardhat node is not running on port $EVM_PORT. Please run setup-chain.sh $EVM_INSTANCE first"
     exit 1
 fi
 
@@ -54,7 +58,7 @@ mkdir -p "$(dirname "$TEMP_CONFIG")"
 cat > "$TEMP_CONFIG" << 'TMPEOF'
 [hub_chain]
 name = "placeholder"
-rpc_url = "http://127.0.0.1:8080"
+rpc_url = "http://127.0.0.1:1000"
 chain_id = 1
 intent_module_addr = "0x1"
 
@@ -93,12 +97,12 @@ fi
 
 log "   Relay ETH Address: $RELAY_ETH_ADDRESS"
 log "   Hub Chain ID: 1"
-log "   RPC URL: http://127.0.0.1:8545"
+log "   RPC URL: $EVM_RPC_URL"
 
 # Deploy GMP contracts
 log ""
 log " Deploying GMP contracts..."
-DEPLOY_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/deploy.js --network localhost" "HUB_CHAIN_ID='1' MOVEMENT_INTENT_MODULE_ADDR='$HUB_MODULE_ADDR' RELAY_ADDRESS='$RELAY_ETH_ADDRESS'" 2>&1 | tee -a "$LOG_FILE")
+DEPLOY_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/deploy.js --network $EVM_NETWORK" "HUB_CHAIN_ID='1' MOVEMENT_INTENT_MODULE_ADDR='$HUB_MODULE_ADDR' RELAY_ADDRESS='$RELAY_ETH_ADDRESS'" 2>&1 | tee -a "$LOG_FILE")
 
 # Extract contract addresses from output
 GMP_ENDPOINT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep "IntentGmp:" | awk '{print $NF}' | tr -d '\n')
@@ -120,9 +124,9 @@ log "   IntentOutflowValidator: $OUTFLOW_VALIDATOR_ADDR"
 
 # Deploy USDcon token
 log ""
-log " Deploying USDcon token to EVM chain..."
+log " Deploying USDcon token to EVM chain (instance $EVM_INSTANCE)..."
 
-USDCON_OUTPUT=$(run_hardhat_command "npx hardhat run test-scripts/deploy-usdcon.js --network localhost" 2>&1 | tee -a "$LOG_FILE")
+USDCON_OUTPUT=$(run_hardhat_command "npx hardhat run test-scripts/deploy-usdcon.js --network $EVM_NETWORK" 2>&1 | tee -a "$LOG_FILE")
 # Extract token address from Hardhat output (line containing 'deployed to:')
 USD_EVM_ADDR=$(echo "$USDCON_OUTPUT" | grep "deployed to:" | awk '{print $NF}' | tr -d '\n')
 
@@ -133,30 +137,30 @@ fi
 
 log "   ✅ USDcon deployed to: $USD_EVM_ADDR"
 
-# Save contract addresses for other scripts
-echo "GMP_ENDPOINT_ADDR=$GMP_ENDPOINT_ADDR" >> "$PROJECT_ROOT/.tmp/chain-info.env"
-echo "ESCROW_GMP_ADDR=$ESCROW_GMP_ADDR" >> "$PROJECT_ROOT/.tmp/chain-info.env"
-echo "OUTFLOW_VALIDATOR_ADDR=$OUTFLOW_VALIDATOR_ADDR" >> "$PROJECT_ROOT/.tmp/chain-info.env"
-echo "USD_EVM_ADDR=$USD_EVM_ADDR" >> "$PROJECT_ROOT/.tmp/chain-info.env"
-echo "RELAY_ETH_ADDRESS=$RELAY_ETH_ADDRESS" >> "$PROJECT_ROOT/.tmp/chain-info.env"
+# Save contract addresses to instance-specific file
+echo "GMP_ENDPOINT_ADDR=$GMP_ENDPOINT_ADDR" > "$EVM_CHAIN_INFO_FILE"
+echo "ESCROW_GMP_ADDR=$ESCROW_GMP_ADDR" >> "$EVM_CHAIN_INFO_FILE"
+echo "OUTFLOW_VALIDATOR_ADDR=$OUTFLOW_VALIDATOR_ADDR" >> "$EVM_CHAIN_INFO_FILE"
+echo "USD_EVM_ADDR=$USD_EVM_ADDR" >> "$EVM_CHAIN_INFO_FILE"
+echo "RELAY_ETH_ADDRESS=$RELAY_ETH_ADDRESS" >> "$EVM_CHAIN_INFO_FILE"
 
 # Fund the relay's ECDSA-derived address with 1 ETH for gas
 log "   Funding relay address ($RELAY_ETH_ADDRESS) with 1 ETH..."
-curl -s -X POST http://127.0.0.1:8545 \
+curl -s -X POST "$EVM_RPC_URL" \
     -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"hardhat_setBalance\",\"params\":[\"$RELAY_ETH_ADDRESS\",\"0xDE0B6B3A7640000\"],\"id\":1}" > /dev/null
 log "   ✅ Relay funded"
 
 # Mint USDcon to Requester and Solver (accounts 1 and 2)
 log ""
-log " Minting USDcon to Requester and Solver on EVM chain..."
+log " Minting USDcon to Requester and Solver on EVM chain (instance $EVM_INSTANCE)..."
 
-REQUESTER_EVM_ADDR=$(get_hardhat_account_address "1")
-SOLVER_EVM_ADDR=$(get_hardhat_account_address "2")
+REQUESTER_EVM_ADDR=$(get_hardhat_account_address "1" "$EVM_NETWORK")
+SOLVER_EVM_ADDR=$(get_hardhat_account_address "2" "$EVM_NETWORK")
 USDCON_MINT_AMOUNT="2000000"  # 2 USDcon (6 decimals = 2_000_000)
 
 log "   - Minting $USDCON_MINT_AMOUNT 10e-6.USDcon to Requester ($REQUESTER_EVM_ADDR)..."
-MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDR='$USD_EVM_ADDR' RECIPIENT='$REQUESTER_EVM_ADDR' AMOUNT='$USDCON_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
+MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network $EVM_NETWORK" "TOKEN_ADDR='$USD_EVM_ADDR' RECIPIENT='$REQUESTER_EVM_ADDR' AMOUNT='$USDCON_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
 if echo "$MINT_OUTPUT" | grep -q "SUCCESS"; then
     log "   ✅ Minted USDcon to Requester"
 else
@@ -165,7 +169,7 @@ else
 fi
 
 log "   - Minting $USDCON_MINT_AMOUNT 10e-6.USDcon to Solver ($SOLVER_EVM_ADDR)..."
-MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network localhost" "TOKEN_ADDR='$USD_EVM_ADDR' RECIPIENT='$SOLVER_EVM_ADDR' AMOUNT='$USDCON_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
+MINT_OUTPUT=$(run_hardhat_command "npx hardhat run scripts/mint-token.js --network $EVM_NETWORK" "TOKEN_ADDR='$USD_EVM_ADDR' RECIPIENT='$SOLVER_EVM_ADDR' AMOUNT='$USDCON_MINT_AMOUNT'" 2>&1 | tee -a "$LOG_FILE")
 if echo "$MINT_OUTPUT" | grep -q "SUCCESS"; then
     log "   ✅ Minted USDcon to Solver"
 else
@@ -173,24 +177,21 @@ else
     exit 1
 fi
 
-log_and_echo "✅ USDcon minted to Requester and Solver on EVM chain (2 USDcon each)"
+log_and_echo "✅ USDcon minted to Requester and Solver on EVM chain instance $EVM_INSTANCE (2 USDcon each)"
 
 # Configure hub chain to trust EVM connected chain
 log ""
-log " Configuring hub chain to trust EVM connected chain..."
+log " Configuring hub chain to trust EVM connected chain (chain_id=$EVM_CHAIN_ID)..."
 
-# Get the EVM chain's "address" for hub trust config
-# For EVM, we use the IntentGmp contract address as the remote GMP endpoint
-# (IntentGmp is the GMP endpoint that sends/receives cross-chain messages)
 GMP_ENDPOINT_ADDR_CLEAN=$(echo "$GMP_ENDPOINT_ADDR" | sed 's/^0x//')
 # Pad to 64 hex characters (32 bytes)
 GMP_ENDPOINT_ADDR_PADDED=$(printf "%064s" "$GMP_ENDPOINT_ADDR_CLEAN" | tr ' ' '0')
 
-# Set remote GMP endpoint on hub for connected EVM chain (chain_id=31337)
+# Set remote GMP endpoint on hub for connected EVM chain
 if aptos move run --profile intent-account-chain1 --assume-yes \
     --function-id ${HUB_MODULE_ADDR}::intent_gmp::set_remote_gmp_endpoint_addr \
-    --args u32:31337 "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
-    log "   ✅ Hub now trusts EVM connected chain (chain_id=31337, addr=$GMP_ENDPOINT_ADDR)"
+    --args u32:$EVM_CHAIN_ID "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
+    log "   ✅ Hub now trusts EVM connected chain (chain_id=$EVM_CHAIN_ID, addr=$GMP_ENDPOINT_ADDR)"
 else
     log "   ️ Could not set remote GMP endpoint on hub (ignoring)"
 fi
@@ -198,7 +199,7 @@ fi
 # Also set remote GMP endpoint in intent_gmp_hub for EVM chain
 if aptos move run --profile intent-account-chain1 --assume-yes \
     --function-id ${HUB_MODULE_ADDR}::intent_gmp_hub::set_remote_gmp_endpoint_addr \
-    --args u32:31337 "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
+    --args u32:$EVM_CHAIN_ID "hex:${GMP_ENDPOINT_ADDR_PADDED}" >> "$LOG_FILE" 2>&1; then
     log "   ✅ Hub intent_gmp_hub now trusts EVM connected chain"
 else
     log "   ️ Could not set remote GMP endpoint in intent_gmp_hub (ignoring)"
@@ -208,27 +209,16 @@ fi
 display_balances_connected_evm "$USD_EVM_ADDR"
 
 log ""
-log " EVM GMP DEPLOYMENT COMPLETE!"
+log " EVM GMP DEPLOYMENT COMPLETE (instance $EVM_INSTANCE)!"
 log "=============================="
 log "GMP Contracts:"
 log "   IntentGmp: $GMP_ENDPOINT_ADDR"
 log "   IntentInflowEscrow: $ESCROW_GMP_ADDR"
 log "   IntentOutflowValidator: $OUTFLOW_VALIDATOR_ADDR"
 log "EVM Chain:"
-log "   RPC URL:  http://127.0.0.1:8545"
-log "   Chain ID: 31337"
+log "   RPC URL:  $EVM_RPC_URL"
+log "   Chain ID: $EVM_CHAIN_ID"
 log "   USDcon Token: $USD_EVM_ADDR"
 log "   Relay Address: $RELAY_ETH_ADDRESS"
 log ""
-log "Configuration:"
-log "   Hub Chain ID: 1"
-log "   Hub GMP Endpoint Address: $HUB_GMP_ENDPOINT_ADDR"
-log ""
-log " API Examples:"
-log "   Check EVM Chain:    curl -X POST http://127.0.0.1:8545 -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}'"
-log ""
-log " Useful commands:"
-log "   Stop EVM chain:  ./testing-infra/ci-e2e/chain-connected-evm/stop-chain.sh"
-log ""
 log " EVM GMP deployment script completed!"
-

@@ -22,34 +22,32 @@ impl GmpSvmClient {
         Ok(Self { svm_client })
     }
 
-    /// Read the outbound nonce for a destination chain from the GMP program.
-    /// PDA seeds: ["nonce_out", dst_chain_id.to_le_bytes()]
+    /// Read the global outbound nonce from the GMP program.
+    /// PDA seeds: ["nonce_out"]
     /// Returns the nonce value (next nonce to be assigned), or 0 if the account doesn't exist.
     pub async fn get_outbound_nonce(
         &self,
         gmp_program_id: &Pubkey,
-        dst_chain_id: u32,
     ) -> Result<u64> {
-        let chain_id_bytes = dst_chain_id.to_le_bytes();
         let gmp_program_id = to_solana_program_pubkey(gmp_program_id);
         let (nonce_pda, _) =
             chain_clients_svm::solana_program::pubkey::Pubkey::find_program_address(
-                &[b"nonce_out", &chain_id_bytes],
+                &[b"nonce_out"],
                 &gmp_program_id,
             );
 
         let data = self.svm_client.get_raw_account_data(&nonce_pda).await?;
         let Some(data) = data else {
-            return Ok(0); // No nonce account = no messages sent to this chain
+            return Ok(0); // No nonce account = no messages sent yet
         };
 
-        // OutboundNonceAccount layout: disc(1) + dst_chain_id(4) + nonce(8) + bump(1) = 14 bytes
-        if data.len() < 13 {
+        // OutboundNonceAccount layout: disc(1) + nonce(8) + bump(1) = 10 bytes
+        if data.len() < 9 {
             anyhow::bail!("OutboundNonceAccount too short: {} bytes", data.len());
         }
 
         let nonce = u64::from_le_bytes(
-            data[5..13]
+            data[1..9]
                 .try_into()
                 .context("Failed to parse nonce bytes")?,
         );
@@ -57,20 +55,18 @@ impl GmpSvmClient {
     }
 
     /// Read a stored outbound message from the GMP program.
-    /// PDA seeds: ["message", dst_chain_id.to_le_bytes(), nonce.to_le_bytes()]
+    /// PDA seeds: ["message", nonce.to_le_bytes()]
     /// Returns the parsed message, or None if the account doesn't exist.
     pub async fn get_message_data(
         &self,
         gmp_program_id: &Pubkey,
-        dst_chain_id: u32,
         nonce: u64,
     ) -> Result<Option<SvmOutboundMessage>> {
-        let chain_id_bytes = dst_chain_id.to_le_bytes();
         let nonce_bytes = nonce.to_le_bytes();
         let gmp_program_id = to_solana_program_pubkey(gmp_program_id);
         let (message_pda, _) =
             chain_clients_svm::solana_program::pubkey::Pubkey::find_program_address(
-                &[b"message", &chain_id_bytes, &nonce_bytes],
+                &[b"message", &nonce_bytes],
                 &gmp_program_id,
             );
 
