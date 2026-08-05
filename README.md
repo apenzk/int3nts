@@ -1,8 +1,5 @@
 # int3nts
 
-> **⚠️ EXPERIMENTAL - NOT PRODUCTION READY**  
-> This framework is currently in active development and is **not ready for production use**. Use at your own risk. APIs, interfaces, and implementations may change without notice.
-
 A framework for creating cross-chain intents with the following components
 
 - [intent-frameworks](docs/intent-frameworks/README.md)
